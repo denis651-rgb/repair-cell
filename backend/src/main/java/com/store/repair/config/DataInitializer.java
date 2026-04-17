@@ -6,32 +6,41 @@ import com.store.repair.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
-import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 @Component
-@Profile("dev")
 @RequiredArgsConstructor
 public class DataInitializer implements CommandLineRunner {
 
     private final UsuarioRepository usuarioRepository;
     private final PasswordEncoder passwordEncoder;
 
-    @Value("${app.dev.seed-admin.enabled:false}")
-    private boolean seedAdminEnabled;
+    @Value("${app.bootstrap-admin.enabled:false}")
+    private boolean bootstrapAdminEnabled;
+
+    @Value("${app.bootstrap-admin.username:admin}")
+    private String bootstrapUsername;
+
+    @Value("${app.bootstrap-admin.password:admin123}")
+    private String bootstrapPassword;
+
+    @Value("${app.bootstrap-admin.nombre:Administrador Principal}")
+    private String bootstrapNombre;
 
     @Override
     public void run(String... args) {
-        if (!seedAdminEnabled) {
+        if (!bootstrapAdminEnabled) {
             return;
         }
 
-        if (usuarioRepository.findByUsername("admin").isEmpty()) {
+        String username = bootstrapUsername == null || bootstrapUsername.isBlank() ? "admin" : bootstrapUsername.trim();
+
+        if (usuarioRepository.findByUsername(username).isEmpty()) {
             Usuario admin = Usuario.builder()
-                    .username("admin")
-                    .password(passwordEncoder.encode("admin123"))
-                    .nombre("Administrador Principal")
+                    .username(username)
+                    .password(passwordEncoder.encode(bootstrapPassword))
+                    .nombre(bootstrapNombre)
                     .rol(Rol.ADMIN)
                     .activo(true)
                     .build();

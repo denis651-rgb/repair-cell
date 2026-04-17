@@ -3,17 +3,16 @@ package com.store.repair.service;
 import com.store.repair.config.SanitizadorTexto;
 import com.store.repair.domain.Cliente;
 import com.store.repair.domain.Dispositivo;
-import com.store.repair.domain.EntradaContable;
 import com.store.repair.domain.EstadoReparacion;
 import com.store.repair.domain.OrdenReparacion;
 import com.store.repair.domain.ParteOrdenReparacion;
 import com.store.repair.domain.ProductoInventario;
-import com.store.repair.domain.TipoEntrada;
 import com.store.repair.domain.TipoFuenteParte;
 import com.store.repair.domain.TipoMovimientoStock;
 import com.store.repair.dto.OrdenReparacionRequest;
 import com.store.repair.dto.ParteOrdenReparacionRequest;
 import com.store.repair.repository.OrdenReparacionRepository;
+import com.store.repair.util.OrdenMontoUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.Page;
@@ -22,7 +21,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -105,21 +103,17 @@ public class OrdenReparacionService {
 
         if (estado == EstadoReparacion.ENTREGADO && orden.getEntregadoEn() == null) {
             orden.setEntregadoEn(LocalDateTime.now());
-
-            if (orden.getCostoFinal() != null && orden.getCostoFinal() > 0) {
-                accountingService.save(EntradaContable.builder()
-                        .tipoEntrada(TipoEntrada.ENTRADA)
-                        .categoria("REPARACION")
-                        .descripcion("Orden de reparación entregada " + orden.getNumeroOrden())
-                        .monto(orden.getCostoFinal())
-                        .moduloRelacionado("ORDEN_REPARACION")
-                        .relacionadoId(orden.getId())
-                        .fechaEntrada(LocalDate.now())
-                        .build());
-            }
         }
 
         OrdenReparacion result = repository.save(orden);
+
+        if (estado == EstadoReparacion.ENTREGADO) {
+            double montoContable = OrdenMontoUtils.resolveMontoVisible(result);
+            if (montoContable > 0) {
+                accountingService.saveRepairOrderIncome(result, montoContable);
+            }
+        }
+
         historyService.logChange(id, estadoAnterior, estado.name(), "Cambio de estado");
         return result;
     }

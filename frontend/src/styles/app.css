@@ -32,6 +32,7 @@ body {
   margin: 0;
   font-family: 'Inter', sans-serif;
   color: var(--text);
+  overflow-y: auto;
   background:
     radial-gradient(circle at top left, rgba(47, 125, 87, 0.14), transparent 24%),
     radial-gradient(circle at top right, rgba(20, 67, 50, 0.1), transparent 18%),
@@ -84,11 +85,13 @@ textarea {
 .app-shell {
   display: flex;
   min-height: 100vh;
+  align-items: stretch;
 }
 
 .main-wrapper {
   flex: 1;
   min-width: 0;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
@@ -110,6 +113,7 @@ textarea {
   position: sticky;
   top: 0;
   height: 100vh;
+  overflow-y: auto;
   z-index: 1000;
   backdrop-filter: blur(18px);
   box-shadow: 18px 0 42px rgba(15, 34, 38, 0.05);
@@ -339,22 +343,23 @@ textarea {
   position: sticky;
   top: 0;
   z-index: 50;
-  min-height: 92px;
+  min-height: 68px;
   background: rgba(252, 251, 249, 0.8);
   border-bottom: 1px solid rgba(15, 78, 53, 0.08);
   backdrop-filter: blur(16px);
-  padding: 16px 28px;
+  padding: 10px 22px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
+  gap: 12px;
 }
 
 .top-bar-left,
 .top-bar-actions {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .top-bar-left {
@@ -363,26 +368,26 @@ textarea {
 }
 
 .top-bar-copy {
-  min-width: 220px;
+  min-width: 180px;
 }
 
 .top-bar-copy strong {
   display: block;
-  font-size: 22px;
+  font-size: 16px;
   line-height: 1.05;
   letter-spacing: -0.03em;
 }
 
 .top-bar-copy p {
-  margin: 4px 0 0;
+  margin: 2px 0 0;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 11px;
 }
 
 .eyebrow {
   display: inline-block;
-  margin-bottom: 6px;
-  font-size: 11px;
+  margin-bottom: 4px;
+  font-size: 10px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.18em;
@@ -403,7 +408,7 @@ textarea {
 
 .search-container {
   width: min(560px, 100%);
-  min-height: 54px;
+  min-height: 44px;
   margin-left: auto;
 }
 
@@ -415,8 +420,8 @@ textarea {
 }
 
 .icon-btn {
-  width: 42px;
-  height: 42px;
+  width: 40px;
+  height: 40px;
   display: inline-grid;
   place-items: center;
   border-radius: 14px;
@@ -426,26 +431,37 @@ textarea {
   border: 1px solid rgba(15, 78, 53, 0.08);
 }
 
-.notification-btn {
-  position: relative;
-}
-
-.notification-dot {
-  position: absolute;
-  top: 9px;
-  right: 10px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #ef4444;
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.95);
-}
-
 .mobile-only {
   display: none;
 }
 
+.topbar-logout-button {
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+  border-radius: 14px;
+  background: rgba(255, 241, 242, 0.96);
+  color: #9f1239;
+  border: 1px solid rgba(190, 24, 93, 0.14);
+  box-shadow: none;
+  flex: 0 0 40px;
+}
+
+.topbar-logout-button:hover {
+  background: #ffe4e6;
+}
+
+.topbar-logout-button.icon-only span {
+  display: none;
+}
+
 .content {
+  flex: 1;
   padding: 30px;
 }
 
@@ -886,7 +902,12 @@ th {
   }
 
   .top-bar {
-    padding: 16px;
+    padding: 10px 16px;
+  }
+
+  .top-bar-actions {
+    width: auto;
+    justify-content: flex-end;
   }
 }
 
@@ -918,6 +939,10 @@ th {
   .top-bar-copy {
     min-width: 0;
     width: 100%;
+  }
+
+  .top-bar-actions {
+    width: auto;
   }
 
   .search-container {

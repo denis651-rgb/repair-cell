@@ -338,6 +338,126 @@
   background: #fff;
 }
 
+.device-modal-search-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 54px;
+  padding: 0 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(196, 181, 253, 0.75);
+  background: #fff;
+  color: #7a699d;
+}
+
+.device-modal-search-box input {
+  border: none;
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
+}
+
+.device-modal-search-box input:focus {
+  outline: none;
+}
+
+.device-modal-search-clear {
+  width: 30px;
+  height: 30px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 10px;
+  background: #f5f3ff;
+  color: #5b3df5;
+  flex: 0 0 30px;
+}
+
+.device-modal-search-results {
+  display: grid;
+  gap: 10px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 4px 2px 0;
+}
+
+.device-modal-search-empty {
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: #faf5ff;
+  border: 1px dashed rgba(167, 139, 250, 0.5);
+  color: #756988;
+  text-align: center;
+}
+
+.device-modal-result-card,
+.device-modal-selected-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(226, 214, 255, 0.8);
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.device-modal-result-card {
+  text-align: left;
+  color: inherit;
+}
+
+.device-modal-result-card.active {
+  border-color: rgba(109, 64, 224, 0.45);
+  background: #f5f1ff;
+}
+
+.device-modal-result-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #32215f, #6c42f4);
+  color: white;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  flex: 0 0 42px;
+}
+
+.device-modal-result-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.device-modal-result-copy strong {
+  color: #26154a;
+  overflow-wrap: anywhere;
+}
+
+.device-modal-result-copy span {
+  color: #776a92;
+  overflow-wrap: anywhere;
+}
+
+.device-modal-selected-card {
+  background: #f7f2ff;
+}
+
+.device-modal-selected-remove {
+  width: 32px;
+  height: 32px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  margin-left: auto;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #5b3df5;
+  flex: 0 0 32px;
+}
+
 .device-modal-field input:focus,
 .device-modal-field textarea:focus,
 .device-modal-field select:focus {

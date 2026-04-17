@@ -4,12 +4,28 @@ import {
   LockKeyhole,
   MapPinned,
   Palette,
+  Search,
   Smartphone,
   UserRound,
+  X,
 } from 'lucide-react';
 import Modal from '../common/Modal';
 
-export default function DeviceModal({ open, onClose, onSubmit, form, setForm, clientes, loading, editing }) {
+export default function DeviceModal({
+  open,
+  onClose,
+  onSubmit,
+  form,
+  setForm,
+  clientes,
+  loading,
+  editing,
+  clientQuery,
+  setClientQuery,
+  selectedClientLabel,
+  onSelectClient,
+  onClearClient,
+}) {
   return (
     <Modal
       open={open}
@@ -32,12 +48,80 @@ export default function DeviceModal({ open, onClose, onSubmit, form, setForm, cl
         <div className="form-grid two-columns">
           <label className="device-modal-field">
             <span><UserRound size={15} /> Cliente</span>
-            <select value={form.clienteId} onChange={(event) => setForm({ ...form, clienteId: event.target.value })} required>
-              <option value="">Selecciona un cliente</option>
-              {clientes.map((cliente) => (
-                <option key={cliente.id} value={cliente.id}>{cliente.nombreCompleto}</option>
-              ))}
-            </select>
+            <div className="device-modal-search-box">
+              <Search size={14} />
+              <input
+                value={clientQuery}
+                onChange={(event) => setClientQuery(event.target.value)}
+                placeholder="Buscar por nombre, telefono o correo"
+                required={!form.clienteId}
+              />
+              {clientQuery && (
+                <button
+                  type="button"
+                  className="device-modal-search-clear"
+                  onClick={onClearClient}
+                  aria-label="Limpiar cliente"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            {clientQuery.trim() && (
+              <div className="device-modal-search-results">
+                {clientes.length === 0 ? (
+                  <div className="device-modal-search-empty">No se encontraron clientes</div>
+                ) : (
+                  clientes.map((cliente) => (
+                    <button
+                      type="button"
+                      key={cliente.id}
+                      className={`device-modal-result-card ${String(form.clienteId) === String(cliente.id) ? 'active' : ''}`}
+                      onClick={() => onSelectClient(cliente)}
+                    >
+                      <div className="device-modal-result-avatar">
+                        {cliente.nombreCompleto
+                          ?.split(' ')
+                          .filter(Boolean)
+                          .slice(0, 2)
+                          .map((part) => part[0]?.toUpperCase())
+                          .join('') || 'CL'}
+                      </div>
+                      <div className="device-modal-result-copy">
+                        <strong>{cliente.nombreCompleto}</strong>
+                        <span>{cliente.telefono || cliente.email || 'Sin contacto'}</span>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+
+            {selectedClientLabel && !clientQuery.trim() && (
+              <div className="device-modal-selected-card">
+                <div className="device-modal-result-avatar">
+                  {selectedClientLabel
+                    .split(' ')
+                    .filter(Boolean)
+                    .slice(0, 2)
+                    .map((part) => part[0]?.toUpperCase())
+                    .join('') || 'CL'}
+                </div>
+                <div className="device-modal-result-copy">
+                  <strong>{selectedClientLabel}</strong>
+                  <span>Cliente seleccionado</span>
+                </div>
+                <button
+                  type="button"
+                  className="device-modal-selected-remove"
+                  onClick={onClearClient}
+                  aria-label="Quitar cliente"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            )}
           </label>
           <label className="device-modal-field">
             <span><Smartphone size={15} /> Marca</span>

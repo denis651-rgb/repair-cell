@@ -35,6 +35,7 @@ export default function InventoryPage() {
   const [movementsPageIndex, setMovementsPageIndex] = useState(0);
   const [categoryForm, setCategoryForm] = useState(categoriaInitial);
   const [productForm, setProductForm] = useState(productInitial);
+  const [productCategoryQuery, setProductCategoryQuery] = useState('');
   const [adjustmentForm, setAdjustmentForm] = useState(adjustmentInitial);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [error, setError] = useState('');
@@ -117,6 +118,21 @@ export default function InventoryPage() {
     [products],
   );
 
+  const filteredCategories = useMemo(() => {
+    const term = productCategoryQuery.trim().toLowerCase();
+    if (!term) return [];
+
+    return categories.filter((category) =>
+      [category.nombre, category.descripcion]
+        .some((value) => String(value || '').toLowerCase().includes(term))
+    );
+  }, [categories, productCategoryQuery]);
+
+  const selectedProductCategory = useMemo(
+    () => categories.find((category) => String(category.id) === String(productForm.categoriaId)),
+    [categories, productForm.categoriaId],
+  );
+
   const saveCategory = async (event) => {
     event.preventDefault();
     try {
@@ -143,11 +159,28 @@ export default function InventoryPage() {
         activo: true,
       }, { categoriaId: Number(productForm.categoriaId) });
       setProductForm(productInitial);
+      setProductCategoryQuery('');
       setProductModalOpen(false);
       await Promise.all([loadProducts(productsPageIndex, debouncedSearch), loadStaticInventory()]);
     } catch (err) {
       setError(err.message);
     }
+  };
+
+  const handleSelectProductCategory = (category) => {
+    setProductForm((current) => ({
+      ...current,
+      categoriaId: String(category.id),
+    }));
+    setProductCategoryQuery('');
+  };
+
+  const handleClearProductCategory = () => {
+    setProductCategoryQuery('');
+    setProductForm((current) => ({
+      ...current,
+      categoriaId: '',
+    }));
   };
 
   const openAdjustment = (product, tipoMovimiento) => {
@@ -511,10 +544,64 @@ export default function InventoryPage() {
           <div className="form-grid two-columns">
             <label>
               <span>Categoría</span>
-              <select value={productForm.categoriaId} onChange={(event) => setProductForm({ ...productForm, categoriaId: event.target.value })} required>
-                <option value="">Selecciona categoría</option>
-                {categories.map((category) => <option key={category.id} value={category.id}>{category.nombre}</option>)}
-              </select>
+              <div className="inventory-modal-search-box">
+                <Search size={14} />
+                <input
+                  value={productCategoryQuery}
+                  onChange={(event) => setProductCategoryQuery(event.target.value)}
+                  placeholder="Buscar categoria por nombre o descripcion"
+                  required={!productForm.categoriaId}
+                />
+                {productCategoryQuery && (
+                  <button
+                    type="button"
+                    className="inventory-modal-search-clear"
+                    onClick={handleClearProductCategory}
+                    aria-label="Limpiar categoria"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+
+              {productCategoryQuery.trim() && (
+                <div className="inventory-modal-search-results">
+                  {filteredCategories.length === 0 ? (
+                    <div className="inventory-modal-search-empty">No se encontraron categorías</div>
+                  ) : (
+                    filteredCategories.map((category) => (
+                      <button
+                        type="button"
+                        key={category.id}
+                        className={`inventory-modal-result-card ${String(productForm.categoriaId) === String(category.id) ? 'active' : ''}`}
+                        onClick={() => handleSelectProductCategory(category)}
+                      >
+                        <div className="inventory-modal-result-copy">
+                          <strong>{category.nombre}</strong>
+                          <span>{category.descripcion || 'Sin descripción'}</span>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {selectedProductCategory && !productCategoryQuery.trim() && (
+                <div className="inventory-modal-selected-card">
+                  <div className="inventory-modal-result-copy">
+                    <strong>{selectedProductCategory.nombre}</strong>
+                    <span>Categoría seleccionada</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="inventory-modal-selected-remove"
+                    onClick={handleClearProductCategory}
+                    aria-label="Quitar categoria"
+                  >
+                    ×
+                  </button>
+                </div>
+              )}
             </label>
             <label>
               <span>SKU</span>

@@ -3,6 +3,7 @@ package com.store.repair.service;
 import com.store.repair.config.SanitizadorTexto;
 import com.store.repair.domain.CajaDiaria;
 import com.store.repair.domain.EntradaContable;
+import com.store.repair.domain.OrdenReparacion;
 import com.store.repair.domain.TipoEntrada;
 import com.store.repair.dto.BalanceResponse;
 import com.store.repair.dto.CajaResumenActualResponse;
@@ -58,6 +59,32 @@ public class AccountingService {
         cajaRepository.findByEstado("ABIERTA").ifPresent(caja -> entry.setCajaId(caja.getId()));
 
         return repository.save(entry);
+    }
+
+    @Transactional
+    public EntradaContable saveRepairOrderIncome(OrdenReparacion orden, double monto) {
+        if (orden == null || orden.getId() == null) {
+            throw new BusinessException("La orden relacionada es obligatoria");
+        }
+
+        if (monto <= 0) {
+            throw new BusinessException("El monto de la orden entregada debe ser mayor a cero");
+        }
+
+        EntradaContable entry = repository
+                .findFirstByModuloRelacionadoAndRelacionadoId("ORDEN_REPARACION", orden.getId())
+                .orElseGet(() -> EntradaContable.builder()
+                        .moduloRelacionado("ORDEN_REPARACION")
+                        .relacionadoId(orden.getId())
+                        .tipoEntrada(TipoEntrada.ENTRADA)
+                        .build());
+
+        entry.setCategoria("REPARACION");
+        entry.setDescripcion("Cobro de orden " + orden.getNumeroOrden());
+        entry.setMonto(monto);
+        entry.setFechaEntrada(LocalDate.now());
+
+        return save(entry);
     }
 
     @Transactional

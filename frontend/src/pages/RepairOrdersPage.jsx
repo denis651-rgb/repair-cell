@@ -17,7 +17,7 @@ import Modal from '../components/common/Modal';
 import EmptyState from '../components/common/EmptyState';
 import RepairOrderModal from '../components/modals/RepairOrderModal';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import { formatDateTime, money } from '../utils/formatters';
+import { formatDateTime, money, resolveVisibleOrderAmount } from '../utils/formatters';
 import '../styles/pages/ordenes.css';
 
 const DRAFTS_STORAGE_KEY = 'repair-order-drafts';
@@ -203,7 +203,7 @@ export default function RepairOrdersPage() {
   );
 
   const totalVisibleValue = useMemo(
-    () => ordersPage.content.reduce((sum, order) => sum + Number(order.costoFinal || order.costoEstimado || 0), 0),
+    () => ordersPage.content.reduce((sum, order) => sum + resolveVisibleOrderAmount(order), 0),
     [ordersPage.content]
   );
 
@@ -490,7 +490,7 @@ export default function RepairOrdersPage() {
           <div className="repair-orders-kpi-icon icon-danger"><FileText size={20} /></div>
           <span className="repair-orders-kpi-label">Valor visible</span>
           <strong className="repair-orders-kpi-value repair-orders-kpi-value-money">{money.format(totalVisibleValue)}</strong>
-          <p>Estimado entre costo final y estimado</p>
+          <p>Suma real de las ordenes visibles</p>
         </article>
       </section>
 
@@ -532,7 +532,7 @@ export default function RepairOrdersPage() {
                   <div className="repair-order-info-block">
                     <span>Técnico</span>
                     <strong>{order.tecnicoResponsable || 'Sin asignar'}</strong>
-                    <p>{money.format(order.costoFinal || order.costoEstimado || 0)}</p>
+                    <p>{money.format(resolveVisibleOrderAmount(order))}</p>
                   </div>
 
                   <div className="repair-order-info-block">
