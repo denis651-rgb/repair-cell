@@ -1,0 +1,19 @@
+<svg width="96" height="96" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="12" y1="8" x2="84" y2="88" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0B2E21"/>
+      <stop offset="1" stop-color="#1C8A57"/>
+    </linearGradient>
+  </defs>
+  <rect x="6" y="6" width="84" height="84" rx="26" fill="url(#bg)"/>
+  <rect x="16" y="18" width="18" height="36" rx="6" fill="#F7FAFC"/>
+  <path d="M19 27L23 31L26 24L29 36" stroke="#0B2E21" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M20 43L24 39L27 46L30 35" stroke="#0B2E21" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M44 18H49V33L46.5 36L44 33V18Z" fill="#F7FAFC"/>
+  <rect x="33" y="38" width="30" height="20" rx="4" fill="#F7FAFC"/>
+  <path d="M29 61H67L62 67H34L29 61Z" fill="#F7FAFC"/>
+  <rect x="42" y="42" width="12" height="12" rx="2" fill="#1C8A57"/>
+  <path d="M39 44H36M39 49H36M39 54H36M57 44H60M57 49H60M57 54H60M44 39V36M49 39V36M54 39V36M44 57V60M49 57V60M54 57V60" stroke="#F7FAFC" stroke-width="2" stroke-linecap="round"/>
+  <path d="M70 26H80M70 38H80M70 50H80" stroke="#F7FAFC" stroke-width="5.5" stroke-linecap="round"/>
+  <path d="M70 62H82" stroke="#F7FAFC" stroke-width="5.5" stroke-linecap="round"/>
+</svg>

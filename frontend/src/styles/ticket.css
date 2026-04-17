@@ -1,0 +1,33 @@
+.ticket-preview-wrapper {
+    display: flex;
+    justify-content: center;
+    overflow-x: auto;
+    padding: 20px;
+}
+
+/* 🔥 ESCALA RESPONSIVA */
+.ticket-scale {
+    transform: scale(1);
+    transform-origin: top center;
+}
+
+/* 📱 AJUSTE PARA PANTALLAS PEQUEÑAS */
+@media (max-width: 768px) {
+    .ticket-scale {
+        transform: scale(0.8);
+    }
+}
+
+@media (max-width: 480px) {
+    .ticket-scale {
+        transform: scale(0.65);
+    }
+}
+
+/* ESTILO DEL TICKET */
+.thermal-ticket {
+    width: 80mm;
+    background: white;
+    padding: 10px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+}

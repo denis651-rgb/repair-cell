@@ -1,0 +1,42 @@
+{
+  "name": "cell-repair-desktop-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sistema de escritorio offline para taller de reparación de celulares",
+  "main": "electron/main.js",
+  "scripts": {
+    "frontend:dev": "npm --prefix frontend run dev",
+    "frontend:build": "npm --prefix frontend run build",
+    "backend:package": "cd backend && ./mvnw -DskipTests package || mvn -DskipTests package",
+    "electron:dev": "electron .",
+    "desktop:dev": "concurrently \"npm run frontend:dev\" \"wait-on http://localhost:5173 && electron .\"",
+    "dist": "npm run frontend:build && electron-builder"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "electron": "^35.2.0",
+    "electron-builder": "^26.0.12",
+    "wait-on": "^8.0.3"
+  },
+  "build": {
+    "appId": "com.tallercelular.desktop",
+    "productName": "Taller Celular",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**/*",
+      "frontend/dist/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "backend/target/repair-backend-1.0.0.jar",
+        "to": "backend/repair-backend.jar"
+      }
+    ],
+    "win": {
+      "target": "nsis"
+    }
+  }
+}

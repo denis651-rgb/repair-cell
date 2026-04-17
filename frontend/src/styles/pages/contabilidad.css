@@ -1,0 +1,370 @@
+.accounting-page {
+  gap: 22px;
+}
+
+.accounting-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.accounting-ghost-button {
+  background: rgba(255, 255, 255, 0.9);
+  color: #2e1b62;
+  border: 1px solid rgba(109, 64, 224, 0.12);
+}
+
+.accounting-status-strip {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 18px 22px;
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(246, 244, 255, 0.96));
+  border: 1px solid rgba(196, 181, 255, 0.16);
+  box-shadow: 0 14px 30px rgba(78, 54, 136, 0.08);
+}
+
+.accounting-status-strip p {
+  margin: 0;
+  color: #6d6287;
+}
+
+.accounting-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.accounting-status-pill.is-open {
+  background: #e8fff3;
+  color: #0f8f54;
+}
+
+.accounting-status-pill.is-closed {
+  background: #fff4f6;
+  color: #c2185b;
+}
+
+.accounting-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.accounting-kpi-card {
+  position: relative;
+  overflow: hidden;
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(197, 181, 255, 0.18);
+  border-radius: 28px;
+  box-shadow: 0 18px 40px rgba(76, 48, 136, 0.08);
+}
+
+.accounting-kpi-card::after {
+  content: '';
+  position: absolute;
+  inset: auto -40px -44px auto;
+  width: 124px;
+  height: 124px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(151, 111, 255, 0.16), transparent 70%);
+}
+
+.accounting-kpi-card-accent {
+  background: linear-gradient(180deg, #f4eeff 0%, #ede2ff 100%);
+}
+
+.accounting-kpi-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 18px;
+}
+
+.accounting-kpi-label {
+  display: block;
+  margin-bottom: 10px;
+  color: #72658f;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.accounting-kpi-value {
+  display: block;
+  margin-bottom: 8px;
+  color: #251447;
+  font-size: clamp(28px, 3vw, 44px);
+  font-weight: 900;
+  line-height: 1.05;
+}
+
+.accounting-kpi-card p {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  color: #756988;
+  font-size: 14px;
+}
+
+.accounting-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(300px, 0.8fr);
+  gap: 22px;
+  align-items: start;
+}
+
+.accounting-main-column,
+.accounting-side-column {
+  display: grid;
+  gap: 20px;
+}
+
+.accounting-panel {
+  padding: 26px;
+  border-radius: 30px;
+  border: 1px solid rgba(196, 181, 255, 0.16);
+  box-shadow: 0 18px 40px rgba(76, 48, 136, 0.08);
+}
+
+.accounting-cash-panel,
+.accounting-table-panel,
+.accounting-filter-panel {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 243, 255, 0.96));
+}
+
+.accounting-guide-panel {
+  color: white;
+  background: linear-gradient(135deg, #4a28d0 0%, #6b42f4 100%);
+  overflow: hidden;
+  position: relative;
+}
+
+.accounting-guide-panel::after {
+  content: '';
+  position: absolute;
+  right: -34px;
+  bottom: -44px;
+  width: 170px;
+  height: 170px;
+  border-radius: 40px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.18), transparent 66%);
+}
+
+.accounting-guide-kicker {
+  display: inline-block;
+  margin-bottom: 10px;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.accounting-guide-panel h3,
+.accounting-guide-panel .accounting-flow-list {
+  position: relative;
+  z-index: 1;
+}
+
+.accounting-flow-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 10px;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.accounting-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.accounting-panel-header h3 {
+  margin: 0;
+  color: #27154b;
+  font-size: 22px;
+}
+
+.accounting-panel-header p {
+  margin: 6px 0 0;
+  color: #7b6d98;
+  font-size: 14px;
+}
+
+.accounting-chip-muted {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.accounting-helper-card,
+.accounting-range-summary {
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: #f7f2ff;
+  border: 1px solid rgba(167, 139, 250, 0.16);
+}
+
+.accounting-helper-card strong {
+  color: #2a1550;
+}
+
+.accounting-helper-card p,
+.accounting-range-summary span {
+  color: #736789;
+}
+
+.accounting-range-summary strong {
+  color: #251447;
+}
+
+.accounting-open-box,
+.accounting-close-box,
+.accounting-cash-grid {
+  display: grid;
+  gap: 18px;
+}
+
+.accounting-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.accounting-summary-card {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(221, 214, 254, 0.9);
+}
+
+.accounting-summary-card span {
+  color: #7d7194;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.accounting-summary-card strong {
+  color: #241446;
+  font-size: 26px;
+  line-height: 1.05;
+}
+
+.accounting-summary-card p {
+  margin: 0;
+  color: #7a6d93;
+  font-size: 13px;
+}
+
+.accounting-summary-card-accent {
+  background: linear-gradient(180deg, #f3edff 0%, #ebe0ff 100%);
+}
+
+.accounting-close-button {
+  justify-self: start;
+}
+
+.accounting-table-wrap {
+  min-width: 0;
+}
+
+.accounting-table-wrap table {
+  width: 100%;
+}
+
+.accounting-entry-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.accounting-entry-pill.is-entry {
+  background: #e8fff3;
+  color: #0f8f54;
+}
+
+.accounting-entry-pill.is-exit {
+  background: #fff2f5;
+  color: #c2185b;
+}
+
+.accounting-amount-cell {
+  white-space: nowrap;
+  font-weight: 800;
+  color: #241446;
+}
+
+.accounting-pagination-row {
+  justify-content: center;
+  align-items: center;
+  gap: 18px;
+  margin-top: 18px;
+}
+
+@media (max-width: 1280px) {
+  .accounting-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .accounting-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 980px) {
+  .accounting-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .accounting-header-actions {
+    width: 100%;
+  }
+
+  .accounting-header-actions > * {
+    flex: 1 1 100%;
+  }
+
+  .accounting-kpi-grid,
+  .accounting-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .accounting-panel {
+    padding: 20px;
+    border-radius: 24px;
+  }
+
+  .accounting-close-button {
+    justify-self: stretch;
+  }
+
+  .accounting-pagination-row {
+    flex-wrap: wrap;
+  }
+}
