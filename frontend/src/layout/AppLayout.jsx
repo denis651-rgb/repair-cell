@@ -10,7 +10,6 @@ import {
   BarChart3,
   DatabaseBackup,
   Search,
-  Bell,
   Menu,
   Plus,
   X,
@@ -177,19 +176,6 @@ export default function AppLayout() {
               <span>Nueva orden</span>
             </button>
           </Link>
-
-          <div className="user-profile">
-            <div className="user-avatar avatar-fallback">YT</div>
-            <div className="user-info">
-              <h4>Administrador</h4>
-              <p>Yiyo Tec principal</p>
-            </div>
-          </div>
-
-          <button type="button" className="sidebar-logout-button" onClick={cerrarSesion}>
-            <LogOut size={18} />
-            <span>Cerrar sesion</span>
-          </button>
         </div>
       </aside>
 
@@ -218,14 +204,9 @@ export default function AppLayout() {
           </div>
 
           <div className="top-bar-actions">
-            <button className="icon-btn notification-btn" aria-label="Notificaciones">
-              <Bell size={20} />
-              <span className="notification-dot" />
+            <button type="button" className="topbar-logout-button icon-only" onClick={cerrarSesion} aria-label="Cerrar sesion" title="Cerrar sesion">
+              <LogOut size={18} />
             </button>
-            <div className="workspace-info">
-              <h5>Panel operativo</h5>
-              <p>Sesion local</p>
-            </div>
           </div>
         </header>
 

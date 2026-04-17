@@ -1,6 +1,7 @@
 package com.store.repair.domain;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.store.repair.util.OrdenMontoUtils;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -74,4 +75,20 @@ public class OrdenReparacion extends EntidadBase {
     @OneToMany(mappedBy = "ordenReparacion", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<ParteOrdenReparacion> partes = new ArrayList<>();
+
+    @Transient
+    public Double getMontoPartes() {
+        return OrdenMontoUtils.resolveMontoPartes(partes);
+    }
+
+    @Transient
+    public Double getMontoVisible() {
+        return OrdenMontoUtils.resolveMontoVisible(this);
+    }
+
+    @Transient
+    public Double getCostoFinalCalculado() {
+        double costoFinalActual = this.costoFinal == null ? 0D : this.costoFinal;
+        return costoFinalActual > 0 ? costoFinalActual : getMontoVisible();
+    }
 }

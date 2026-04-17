@@ -1,4 +1,5 @@
-import { Search, X, Save, Plus, Trash2, ChevronRight } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Search, X, Save, Plus, Trash2, ChevronRight, Funnel } from 'lucide-react';
 import Modal from '../common/Modal';
 
 const initialPart = { productoId: '', nombreParte: '', cantidad: 1, tipoFuente: 'TIENDA' };
@@ -33,6 +34,63 @@ export default function RepairOrderModal({
   onClearClient,
   onClearDevice,
 }) {
+  const [productQuery, setProductQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [showCategoryFilters, setShowCategoryFilters] = useState(false);
+
+  const productCategories = useMemo(() => {
+    const categoriesMap = new Map();
+    products.forEach((product) => {
+      const id = product?.categoria?.id;
+      const nombre = product?.categoria?.nombre;
+      if (!id || !nombre || categoriesMap.has(String(id))) return;
+      categoriesMap.set(String(id), { id: String(id), nombre });
+    });
+    return Array.from(categoriesMap.values()).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }, [products]);
+
+  const filteredProducts = useMemo(() => {
+    const term = productQuery.trim().toLowerCase();
+
+    return products.filter((product) => {
+      const matchesCategory = !selectedCategory || String(product?.categoria?.id) === String(selectedCategory);
+      if (!matchesCategory) return false;
+      if (!term) return true;
+
+      return [
+        product?.nombre,
+        product?.sku,
+        product?.descripcion,
+        product?.categoria?.nombre,
+      ].some((value) => String(value || '').toLowerCase().includes(term));
+    });
+  }, [products, productQuery, selectedCategory]);
+
+  const selectedProduct = useMemo(
+    () => products.find((product) => String(product.id) === String(selectedPart.productoId)),
+    [products, selectedPart.productoId],
+  );
+
+  const handleSelectProduct = (product) => {
+    setSelectedPart({
+      ...selectedPart,
+      productoId: String(product.id),
+      nombreParte: selectedPart.nombreParte || product.nombre,
+    });
+    setProductQuery('');
+    setShowCategoryFilters(false);
+  };
+
+  const handleClearProduct = () => {
+    setProductQuery('');
+    setSelectedCategory('');
+    setShowCategoryFilters(false);
+    setSelectedPart({
+      ...selectedPart,
+      productoId: '',
+    });
+  };
+
   return (
     <Modal
       open={open}
@@ -292,17 +350,94 @@ export default function RepairOrderModal({
             <div className="repair-grid repair-grid--parts">
               <label className="repair-field">
                 <span className="repair-field-label">Producto inventario</span>
-                <select
-                  value={selectedPart.productoId}
-                  onChange={(e) => setSelectedPart({ ...selectedPart, productoId: e.target.value })}
-                >
-                  <option value="">Selecciona un producto</option>
-                  {products.map((product) => (
-                    <option key={product.id} value={product.id}>
-                      {product.nombre} · Stock {product.cantidadStock}
-                    </option>
-                  ))}
-                </select>
+                <div className="repair-search-box repair-search-box--product">
+                  <Search size={14} />
+                  <input
+                    value={productQuery}
+                    onChange={(e) => setProductQuery(e.target.value)}
+                    placeholder="Buscar producto, SKU o categoria"
+                  />
+                  <button
+                    type="button"
+                    className={`repair-search-filter ${selectedCategory ? 'active' : ''}`}
+                    onClick={() => setShowCategoryFilters((current) => !current)}
+                    aria-label="Filtrar por categoria"
+                    title="Filtrar por categoria"
+                  >
+                    <Funnel size={14} />
+                  </button>
+                  {(productQuery || selectedPart.productoId || selectedCategory) && (
+                    <button
+                      type="button"
+                      className="repair-search-clear"
+                      onClick={handleClearProduct}
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+
+                {showCategoryFilters && (
+                  <div className="repair-category-filters">
+                    <button
+                      type="button"
+                      className={`repair-category-chip ${selectedCategory === '' ? 'active' : ''}`}
+                      onClick={() => setSelectedCategory('')}
+                    >
+                      Todas
+                    </button>
+                    {productCategories.map((category) => (
+                      <button
+                        type="button"
+                        key={category.id}
+                        className={`repair-category-chip ${String(selectedCategory) === String(category.id) ? 'active' : ''}`}
+                        onClick={() => setSelectedCategory(category.id)}
+                      >
+                        {category.nombre}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {(productQuery.trim() || selectedCategory) && (
+                  <div className="repair-search-results repair-search-results--products">
+                    {filteredProducts.length === 0 ? (
+                      <div className="repair-search-empty">No se encontraron productos</div>
+                    ) : (
+                      filteredProducts.map((product) => (
+                        <button
+                          type="button"
+                          key={product.id}
+                          className={`repair-result-card ${String(selectedPart.productoId) === String(product.id) ? 'active' : ''}`}
+                          onClick={() => handleSelectProduct(product)}
+                        >
+                          <div className="repair-result-card__icon">📦</div>
+                          <div className="repair-result-card__content">
+                            <strong>{product.nombre}</strong>
+                            <span>{product.categoria?.nombre || 'Sin categoria'} · Stock {product.cantidadStock}</span>
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+
+                {selectedProduct && !productQuery.trim() && !selectedCategory && (
+                  <div className="repair-selected-card">
+                    <div className="repair-selected-card__icon">📦</div>
+                    <div className="repair-selected-card__content">
+                      <strong>{selectedProduct.nombre}</strong>
+                      <span>{selectedProduct.categoria?.nombre || 'Sin categoria'} · Stock {selectedProduct.cantidadStock}</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="repair-selected-card__remove"
+                      onClick={handleClearProduct}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                )}
               </label>
 
               <label className="repair-field">

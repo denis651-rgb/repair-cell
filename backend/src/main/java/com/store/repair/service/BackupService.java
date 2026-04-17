@@ -57,7 +57,7 @@ public class BackupService {
     @PostConstruct
     public void initializeSettings() {
         if (dbUrl == null || !dbUrl.startsWith("jdbc:sqlite:")) {
-            throw new IllegalStateException("BackupService está diseñado para SQLite y requiere spring.datasource.url=jdbc:sqlite:...");
+            throw new IllegalStateException("BackupService requiere SQLite con spring.datasource.url=jdbc:sqlite:...");
         }
 
         backupSettingsRepository.findAll().stream().findFirst().orElseGet(() -> backupSettingsRepository.save(
@@ -118,6 +118,8 @@ public class BackupService {
 
     public BackupSettingsResponse getSettings() {
         BackupSettings settings = getSettingsEntity();
+        LocalDateTime nextAutomaticBackupAt = resolveNextAutomaticBackupAt(settings);
+
         return BackupSettingsResponse.builder()
                 .enabled(Boolean.TRUE.equals(settings.getEnabled()))
                 .cron(settings.getCron())
@@ -127,11 +129,15 @@ public class BackupService {
                 .googleDriveEnabled(Boolean.TRUE.equals(settings.getGoogleDriveEnabled()))
                 .googleDriveFolderId(settings.getGoogleDriveFolderId())
                 .googleServiceAccountKeyPath(settings.getGoogleServiceAccountKeyPath())
+                .googleDriveReady(isGoogleDriveReady(settings))
                 .lastAutomaticBackupAt(settings.getLastAutomaticBackupAt() == null ? null : settings.getLastAutomaticBackupAt().toString())
+                .nextAutomaticBackupAt(nextAutomaticBackupAt == null ? null : nextAutomaticBackupAt.toString())
                 .build();
     }
 
     public BackupSettingsResponse updateSettings(BackupSettingsRequest request) {
+        validateRequest(request);
+
         BackupSettings settings = getSettingsEntity();
         settings.setEnabled(request.isEnabled());
         settings.setCron(request.getCron().trim());
@@ -148,15 +154,20 @@ public class BackupService {
     public BackupSummaryResponse getSummary() {
         BackupSettings settings = getSettingsEntity();
         BackupRecord lastRecord = backupRecordRepository.findTopByOrderByGeneradoEnDesc().orElse(null);
+        LocalDateTime nextAutomaticBackupAt = resolveNextAutomaticBackupAt(settings);
 
         return BackupSummaryResponse.builder()
                 .totalBackups(backupRecordRepository.count())
                 .pendingUploads(backupRecordRepository.countByEstado(BackupEstado.PENDING_UPLOAD))
                 .lastBackupAt(lastRecord == null ? null : lastRecord.getGeneradoEn().toString())
                 .lastBackupStatus(lastRecord == null ? null : lastRecord.getEstado().name())
+                .lastBackupMessage(lastRecord == null ? null : lastRecord.getMensaje())
+                .lastRemoteLocation(lastRecord == null ? null : lastRecord.getUbicacionRemota())
                 .backupDirectory(settings.getDirectory())
                 .automaticEnabled(Boolean.TRUE.equals(settings.getEnabled()))
                 .googleDriveEnabled(Boolean.TRUE.equals(settings.getGoogleDriveEnabled()))
+                .googleDriveReady(isGoogleDriveReady(settings))
+                .nextAutomaticBackupAt(nextAutomaticBackupAt == null ? null : nextAutomaticBackupAt.toString())
                 .build();
     }
 
@@ -199,7 +210,7 @@ public class BackupService {
 
     private BackupResponse performBackupInterno(BackupOrigen origen) {
         if (!backupLock.tryLock()) {
-            throw new IllegalStateException("Ya hay un backup en ejecución");
+            throw new IllegalStateException("Ya hay un backup en ejecucion");
         }
 
         try {
@@ -244,7 +255,7 @@ public class BackupService {
                     record.setMensaje(ex.getMessage());
                     record.setUltimoIntentoSubidaEn(LocalDateTime.now());
                     record.setIntentosSubida(1);
-                    log.warn("El backup local fue creado, pero la subida remota falló: {}", ex.getMessage());
+                    log.warn("El backup local fue creado, pero la subida remota fallo: {}", ex.getMessage());
                 }
             }
 
@@ -270,7 +281,34 @@ public class BackupService {
 
     private BackupSettings getSettingsEntity() {
         return backupSettingsRepository.findAll().stream().findFirst()
-                .orElseThrow(() -> new IllegalStateException("No se encontró la configuración de backups"));
+                .orElseThrow(() -> new IllegalStateException("No se encontro la configuracion de backups"));
+    }
+
+    private void validateRequest(BackupSettingsRequest request) {
+        if (request.getCron() == null || request.getCron().isBlank()) {
+            throw new IllegalStateException("La expresion cron es obligatoria");
+        }
+
+        try {
+            CronExpression.parse(request.getCron().trim());
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalStateException("La expresion cron no es valida");
+        }
+
+        if (request.getDirectory() == null || request.getDirectory().isBlank()) {
+            throw new IllegalStateException("La carpeta local es obligatoria");
+        }
+
+        Path directory = Paths.get(request.getDirectory().trim()).toAbsolutePath().normalize();
+        try {
+            Files.createDirectories(directory);
+        } catch (IOException ex) {
+            throw new IllegalStateException("No se pudo preparar la carpeta de backups: " + ex.getMessage(), ex);
+        }
+
+        if (request.getRetentionDays() < 1) {
+            throw new IllegalStateException("La retencion minima es de 1 dia");
+        }
     }
 
     private void ejecutarVacuumInto(Path backupFile) {
@@ -328,7 +366,7 @@ public class BackupService {
                         }
                     });
         } catch (IOException ex) {
-            log.warn("No se pudo aplicar política de retención de backups: {}", ex.getMessage());
+            log.warn("No se pudo aplicar politica de retencion de backups: {}", ex.getMessage());
         }
     }
 
@@ -342,5 +380,29 @@ public class BackupService {
 
     private String safeTrim(String value) {
         return value == null ? null : value.trim();
+    }
+
+    private boolean isGoogleDriveReady(BackupSettings settings) {
+        return Boolean.TRUE.equals(settings.getGoogleDriveEnabled())
+                && settings.getGoogleDriveFolderId() != null
+                && !settings.getGoogleDriveFolderId().isBlank()
+                && settings.getGoogleServiceAccountKeyPath() != null
+                && !settings.getGoogleServiceAccountKeyPath().isBlank();
+    }
+
+    private LocalDateTime resolveNextAutomaticBackupAt(BackupSettings settings) {
+        if (!Boolean.TRUE.equals(settings.getEnabled())) {
+            return null;
+        }
+
+        try {
+            CronExpression cronExpression = CronExpression.parse(settings.getCron());
+            LocalDateTime reference = settings.getLastAutomaticBackupAt() != null
+                    ? settings.getLastAutomaticBackupAt()
+                    : LocalDateTime.now();
+            return cronExpression.next(reference);
+        } catch (Exception ex) {
+            return null;
+        }
     }
 }

@@ -5,6 +5,7 @@ frontend/dist/
 backend/target/
 backend/data/
 backend/backups/
+tmp-app-storage/
 .vscode/
 *.log
 .DS_Store

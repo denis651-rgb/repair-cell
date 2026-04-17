@@ -33,6 +33,7 @@ export default function DevicesPage() {
   const [devicesPage, setDevicesPage] = useState(initialPage);
   const [clientes, setClientes] = useState([]);
   const [form, setForm] = useState(initialForm);
+  const [clientQuery, setClientQuery] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
   const [error, setError] = useState('');
@@ -40,6 +41,7 @@ export default function DevicesPage() {
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(false);
   const debouncedSearch = useDebouncedValue(search, 250);
+  const debouncedClientQuery = useDebouncedValue(clientQuery, 250);
 
   const loadCatalogs = async () => {
     try {
@@ -86,9 +88,25 @@ export default function DevicesPage() {
     [dispositivos],
   );
 
+  const filteredClientes = useMemo(() => {
+    const term = debouncedClientQuery.trim().toLowerCase();
+    if (!term) return [];
+
+    return clientes.filter((cliente) =>
+      [cliente.nombreCompleto, cliente.telefono, cliente.email]
+        .some((value) => String(value || '').toLowerCase().includes(term))
+    );
+  }, [clientes, debouncedClientQuery]);
+
+  const selectedClient = useMemo(
+    () => clientes.find((cliente) => String(cliente.id) === String(form.clienteId)),
+    [clientes, form.clienteId],
+  );
+
   const openCreate = () => {
     setEditingId(null);
     setForm(initialForm);
+    setClientQuery('');
     setModalOpen(true);
   };
 
@@ -104,6 +122,7 @@ export default function DevicesPage() {
       accesorios: device.accesorios || '',
       observaciones: device.observaciones || '',
     });
+    setClientQuery('');
     setModalOpen(true);
   };
 
@@ -111,6 +130,23 @@ export default function DevicesPage() {
     setModalOpen(false);
     setEditingId(null);
     setForm(initialForm);
+    setClientQuery('');
+  };
+
+  const handleSelectClient = (cliente) => {
+    setForm((current) => ({
+      ...current,
+      clienteId: String(cliente.id),
+    }));
+    setClientQuery('');
+  };
+
+  const handleClearClient = () => {
+    setClientQuery('');
+    setForm((current) => ({
+      ...current,
+      clienteId: '',
+    }));
   };
 
   const handleSubmit = async (event) => {
@@ -318,9 +354,14 @@ export default function DevicesPage() {
         onSubmit={handleSubmit}
         form={form}
         setForm={setForm}
-        clientes={clientes}
+        clientes={filteredClientes}
         loading={loading}
         editing={Boolean(editingId)}
+        clientQuery={clientQuery}
+        setClientQuery={setClientQuery}
+        selectedClientLabel={selectedClient?.nombreCompleto || ''}
+        onSelectClient={handleSelectClient}
+        onClearClient={handleClearClient}
       />
     </div>
   );

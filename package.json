@@ -2,15 +2,18 @@
   "name": "cell-repair-desktop-app",
   "version": "1.0.0",
   "private": true,
-  "description": "Sistema de escritorio offline para taller de reparación de celulares",
+  "author": "Denis RGB",
+  "description": "Sistema de escritorio offline para taller de reparacion de celulares",
   "main": "electron/main.js",
   "scripts": {
+    "clean:dist": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\scripts\\clean-dist.ps1",
     "frontend:dev": "npm --prefix frontend run dev",
     "frontend:build": "npm --prefix frontend run build",
-    "backend:package": "cd backend && ./mvnw -DskipTests package || mvn -DskipTests package",
+    "backend:package": "mvn -q -DskipTests package -f backend/pom.xml",
     "electron:dev": "electron .",
     "desktop:dev": "concurrently \"npm run frontend:dev\" \"wait-on http://localhost:5173 && electron .\"",
-    "dist": "npm run frontend:build && electron-builder"
+    "dist": "npm run clean:dist && npm run backend:package && npm run frontend:build && electron-builder",
+    "dist:win": "npm run dist -- --win nsis"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
@@ -37,6 +40,10 @@
     ],
     "win": {
       "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
     }
   }
 }

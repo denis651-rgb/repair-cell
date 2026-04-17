@@ -4,7 +4,7 @@ Proyecto full-stack para una tienda de reparación de celulares que también ven
 
 ## Stack
 
-- Backend: Spring Boot + Java 21
+- Backend: Spring Boot + Java 17
 - Base de datos: SQLite
 - Frontend: React + Vite + CSS
 - Desktop wrapper: Electron
@@ -54,7 +54,7 @@ ARCHITECTURE.md
 ### 1. Backend
 
 Requisitos:
-- Java 21
+- Java 17
 - Maven 3.9+
 
 ```bash
@@ -97,9 +97,7 @@ npm --prefix frontend install
 Primero empaqueta el backend en JAR:
 
 ```bash
-cd backend
-mvn -DskipTests package
-cd ..
+npm run backend:package
 ```
 
 Luego ejecuta el frontend y Electron:
@@ -110,21 +108,7 @@ npm run desktop:dev
 
 ## Generar instalador de escritorio
 
-### 1. Construir frontend
-
-```bash
-npm run frontend:build
-```
-
-### 2. Empaquetar backend
-
-```bash
-cd backend
-mvn -DskipTests package
-cd ..
-```
-
-### 3. Generar instalador
+### 1. Generar instalador
 
 ```bash
 npm run dist
@@ -139,7 +123,9 @@ dist/
 ## Cómo funciona Electron
 
 - Al abrir la app, Electron ejecuta el JAR de Spring Boot como proceso local.
+- Electron espera a que el backend responda antes de mostrar la ventana.
 - El frontend React se muestra dentro de la ventana de Electron.
+- En producciÃ³n la base SQLite y los backups se guardan en la carpeta local de datos del usuario.
 - Al cerrar la app, Electron detiene el proceso Java.
 
 Archivo principal:
@@ -147,6 +133,16 @@ Archivo principal:
 ```text
 electron/main.js
 ```
+
+### Requisito actual para escritorio
+
+Por ahora la app necesita que Windows tenga Java 17 disponible en `PATH`, o que agregues un runtime embebido en:
+
+```text
+resources/runtime/bin/java.exe
+```
+
+Si luego quieres evitar instalar Java en cada PC, el siguiente paso es empaquetar un JRE dentro del instalador.
 
 ## Endpoints principales
 

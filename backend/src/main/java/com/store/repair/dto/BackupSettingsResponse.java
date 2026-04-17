@@ -14,5 +14,7 @@ public class BackupSettingsResponse {
     private final boolean googleDriveEnabled;
     private final String googleDriveFolderId;
     private final String googleServiceAccountKeyPath;
+    private final boolean googleDriveReady;
     private final String lastAutomaticBackupAt;
+    private final String nextAutomaticBackupAt;
 }
