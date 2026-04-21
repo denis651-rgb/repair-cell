@@ -1,8 +1,10 @@
 package com.store.repair.service;
 
 import com.store.repair.domain.MovimientoStock;
+import com.store.repair.domain.MarcaInventario;
 import com.store.repair.domain.ProductoInventario;
 import com.store.repair.domain.TipoMovimientoStock;
+import com.store.repair.config.SanitizadorTexto;
 import com.store.repair.repository.MovimientoStockRepository;
 import com.store.repair.repository.ProductoInventarioRepository;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +23,7 @@ public class ProductoInventarioService {
 
     private final ProductoInventarioRepository repository;
     private final CategoriaInventarioService categoriaService;
+    private final MarcaInventarioService marcaService;
     private final MovimientoStockRepository movimientoStockRepository;
 
     public List<ProductoInventario> findAll() {
@@ -33,6 +36,14 @@ public class ProductoInventarioService {
                 PageRequest.of(Math.max(pagina, 0), Math.max(tamano, 1)));
     }
 
+    public Page<ProductoInventario> findPage(String busqueda, Long categoriaId, Long marcaId, int pagina, int tamano) {
+        return repository.searchWithFilters(
+                busqueda == null ? "" : busqueda.trim(),
+                categoriaId,
+                marcaId,
+                PageRequest.of(Math.max(pagina, 0), Math.max(tamano, 1)));
+    }
+
     public List<ProductoInventario> findLowStock() {
         return repository.findByCantidadStockLessThanEqualOrderByCantidadStockAsc(Integer.MAX_VALUE).stream()
                 .filter(producto -> producto.getCantidadStock() != null)
@@ -41,44 +52,104 @@ public class ProductoInventarioService {
                 .toList();
     }
 
+    public List<MarcaInventario> findMarcas() {
+        return marcaService.findAll();
+    }
+
     public ProductoInventario findById(Long id) {
         return repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Producto no encontrado: " + id));
     }
 
     @Transactional
-    @CacheEvict(value = { "reportes_resumen", "reportes_panel" }, allEntries = true)
-    public ProductoInventario save(ProductoInventario producto, Long categoriaId) {
-        producto.setCategoria(categoriaService.findById(categoriaId));
+    @CacheEvict(value = {
+            "reportes_resumen",
+            "reportes_panel",
+            "reportes_resumen_global",
+            "reportes_panel_global",
+            "reportes_clientes_global"
+    }, allEntries = true)
+    public ProductoInventario save(ProductoInventario producto, Long categoriaId, Long marcaId) {
+        ProductoInventario existente = producto.getId() == null ? null : findById(producto.getId());
+        boolean esNuevo = existente == null;
+        int stockInicial = producto.getCantidadStock() == null ? 0 : producto.getCantidadStock();
 
-        if (producto.getActivo() == null) {
-            producto.setActivo(Boolean.TRUE);
-        }
-        if (producto.getCantidadStock() == null) {
-            producto.setCantidadStock(0);
-        }
-        if (producto.getStockMinimo() == null) {
-            producto.setStockMinimo(0);
-        }
-        if (producto.getCostoUnitario() == null) {
-            producto.setCostoUnitario(0D);
-        }
-        if (producto.getPrecioVenta() == null) {
-            producto.setPrecioVenta(0D);
-        }
-        if (producto.getCostoPromedio() == null) {
-            producto.setCostoPromedio(producto.getCostoUnitario());
-        }
-
-        if (producto.getCantidadStock() < 0 || producto.getStockMinimo() < 0) {
+        if (stockInicial < 0 || (producto.getStockMinimo() != null && producto.getStockMinimo() < 0)) {
             throw new IllegalArgumentException("Los valores de stock no pueden ser negativos");
         }
 
-        return repository.save(producto);
+        ProductoInventario objetivo = esNuevo ? producto : existente;
+
+        if (!esNuevo) {
+            objetivo.setCreadoEn(existente.getCreadoEn());
+        }
+
+        objetivo.setCategoria(categoriaService.findById(categoriaId));
+        objetivo.setMarca(marcaService.findById(marcaId));
+        objetivo.setSku(SanitizadorTexto.limpiar(producto.getSku()));
+        objetivo.setNombre(SanitizadorTexto.limpiar(producto.getNombre()));
+        objetivo.setDescripcion(SanitizadorTexto.limpiar(producto.getDescripcion()));
+        objetivo.setCalidad(SanitizadorTexto.limpiar(producto.getCalidad()));
+        objetivo.setActivo(producto.getActivo() == null ? Boolean.TRUE : producto.getActivo());
+        objetivo.setStockMinimo(producto.getStockMinimo() == null ? 0 : producto.getStockMinimo());
+        objetivo.setCostoUnitario(producto.getCostoUnitario() == null ? 0D : producto.getCostoUnitario());
+        objetivo.setPrecioVenta(producto.getPrecioVenta() == null ? 0D : producto.getPrecioVenta());
+
+        if (esNuevo) {
+            objetivo.setCantidadStock(0);
+            objetivo.setCostoPromedio(
+                    producto.getCostoPromedio() != null
+                            ? producto.getCostoPromedio()
+                            : objetivo.getCostoUnitario());
+        } else {
+            objetivo.setCantidadStock(existente.getCantidadStock() == null ? 0 : existente.getCantidadStock());
+            objetivo.setCostoPromedio(
+                    existente.getCostoPromedio() != null
+                            ? existente.getCostoPromedio()
+                            : objetivo.getCostoUnitario());
+        }
+
+        ProductoInventario guardado = repository.save(objetivo);
+
+        if (esNuevo && stockInicial > 0) {
+            return adjustStock(
+                    guardado.getId(),
+                    stockInicial,
+                    TipoMovimientoStock.ENTRADA,
+                    "Stock inicial del producto",
+                    "PRODUCTO_INICIAL",
+                    guardado.getId(),
+                    guardado.getCostoUnitario(),
+                    guardado.getPrecioVenta());
+        }
+
+        return guardado;
     }
 
     @Transactional
-    @CacheEvict(value = { "reportes_resumen", "reportes_panel" }, allEntries = true)
+    @CacheEvict(value = {
+            "reportes_resumen",
+            "reportes_panel",
+            "reportes_resumen_global",
+            "reportes_panel_global",
+            "reportes_clientes_global"
+    }, allEntries = true)
+    public ProductoInventario save(ProductoInventario producto, Long categoriaId) {
+        Long marcaId = producto.getMarca() == null ? null : producto.getMarca().getId();
+        if (marcaId == null) {
+            throw new BusinessException("La marca es obligatoria para el producto");
+        }
+        return save(producto, categoriaId, marcaId);
+    }
+
+    @Transactional
+    @CacheEvict(value = {
+            "reportes_resumen",
+            "reportes_panel",
+            "reportes_resumen_global",
+            "reportes_panel_global",
+            "reportes_clientes_global"
+    }, allEntries = true)
     public ProductoInventario adjustStock(
             Long productoId,
             Integer cantidad,
@@ -86,7 +157,8 @@ public class ProductoInventarioService {
             String descripcion,
             String tipoReferencia,
             Long referenciaId,
-            Double costoUnitario) {
+            Double costoUnitario,
+            Double precioVentaUnitario) {
 
         if (cantidad == null || cantidad <= 0) {
             throw new IllegalArgumentException("La cantidad debe ser mayor a cero");
@@ -130,12 +202,19 @@ public class ProductoInventarioService {
         }
 
         producto.setCantidadStock(nuevoStock);
+        if (precioVentaUnitario != null && precioVentaUnitario >= 0) {
+            producto.setPrecioVenta(precioVentaUnitario);
+        }
         ProductoInventario guardado = repository.save(producto);
 
         MovimientoStock movimiento = MovimientoStock.builder()
                 .producto(guardado)
                 .tipoMovimiento(tipoMovimiento)
                 .cantidad(cantidad)
+                .stockAnterior(stockPrevio)
+                .stockPosterior(nuevoStock)
+                .costoUnitario(costoUnitario)
+                .precioVentaUnitario(precioVentaUnitario)
                 .descripcion(descripcion == null ? "" : descripcion.trim())
                 .tipoReferencia(tipoReferencia)
                 .referenciaId(referenciaId)
@@ -154,10 +233,28 @@ public class ProductoInventarioService {
             String descripcion,
             String tipoReferencia,
             Long referenciaId) {
-        return adjustStock(productoId, cantidad, tipoMovimiento, descripcion, tipoReferencia, referenciaId, null);
+        return adjustStock(productoId, cantidad, tipoMovimiento, descripcion, tipoReferencia, referenciaId, null, null);
     }
 
-    @CacheEvict(value = { "reportes_resumen", "reportes_panel" }, allEntries = true)
+    @Transactional
+    public ProductoInventario adjustStock(
+            Long productoId,
+            Integer cantidad,
+            TipoMovimientoStock tipoMovimiento,
+            String descripcion,
+            String tipoReferencia,
+            Long referenciaId,
+            Double costoUnitario) {
+        return adjustStock(productoId, cantidad, tipoMovimiento, descripcion, tipoReferencia, referenciaId, costoUnitario, null);
+    }
+
+    @CacheEvict(value = {
+            "reportes_resumen",
+            "reportes_panel",
+            "reportes_resumen_global",
+            "reportes_panel_global",
+            "reportes_clientes_global"
+    }, allEntries = true)
     public void delete(Long id) {
         repository.deleteById(id);
     }

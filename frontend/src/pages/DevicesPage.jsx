@@ -206,38 +206,10 @@ export default function DevicesPage() {
           {devicesPage.totalElements} resultados
         </div>
       </section>
-
-      <section className="devices-kpi-grid">
-        <article className="devices-kpi-card">
-          <div className="devices-kpi-icon icon-soft"><Smartphone size={20} /></div>
-          <span className="devices-kpi-label">Total equipos</span>
-          <strong className="devices-kpi-value">{devicesPage.totalElements}</strong>
-          <p>Listado completo con el filtro actual</p>
-        </article>
-
-        <article className="devices-kpi-card">
-          <div className="devices-kpi-icon icon-warning"><Fingerprint size={20} /></div>
-          <span className="devices-kpi-label">Con IMEI / serie</span>
-          <strong className="devices-kpi-value">{devicesWithIdentifier}</strong>
-          <p>Identificación visible en esta página</p>
-        </article>
-
-        <article className="devices-kpi-card devices-kpi-card-accent">
-          <div className="devices-kpi-icon icon-soft"><Shield size={20} /></div>
-          <span className="devices-kpi-label">Con bloqueo</span>
-          <strong className="devices-kpi-value">{devicesWithLock}</strong>
-          <p>Acceso protegido en esta página</p>
-        </article>
-      </section>
-
       <section className="devices-table-card card">
         <div className="devices-table-header">
-          <div>
-            <h3>Equipos registrados</h3>
-            <p>{debouncedSearch.trim() ? 'Resultados paginados según el filtro activo' : 'Vista general paginada de los dispositivos del taller'}</p>
-          </div>
-          <span className="chip">{devicesPage.totalElements} equipos</span>
-        </div>
+         
+               </div>
 
         {dispositivos.length === 0 ? (
           <EmptyState

@@ -57,7 +57,13 @@ public class OrdenReparacionService {
     }
 
     @Transactional
-    @CacheEvict(value = { "reportes_resumen", "reportes_panel" }, allEntries = true)
+    @CacheEvict(value = {
+            "reportes_resumen",
+            "reportes_panel",
+            "reportes_resumen_global",
+            "reportes_panel_global",
+            "reportes_clientes_global"
+    }, allEntries = true)
     public OrdenReparacion create(OrdenReparacionRequest request) {
         Cliente cliente = clienteService.findById(request.getClienteId());
         Dispositivo dispositivo = dispositivoService.findById(request.getDispositivoId());
@@ -94,7 +100,13 @@ public class OrdenReparacionService {
     }
 
     @Transactional
-    @CacheEvict(value = { "reportes_resumen", "reportes_panel" }, allEntries = true)
+    @CacheEvict(value = {
+            "reportes_resumen",
+            "reportes_panel",
+            "reportes_resumen_global",
+            "reportes_panel_global",
+            "reportes_clientes_global"
+    }, allEntries = true)
     public OrdenReparacion updateStatus(Long id, EstadoReparacion estado) {
         OrdenReparacion orden = findById(id);
         String estadoAnterior = orden.getEstado().name();

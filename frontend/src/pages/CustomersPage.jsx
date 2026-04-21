@@ -126,29 +126,6 @@ export default function CustomersPage() {
         </div>
       </section>
 
-      <section className="customers-kpi-grid">
-        <article className="customers-kpi-card">
-          <div className="customers-kpi-icon icon-soft"><Users size={20} /></div>
-          <span className="customers-kpi-label">Total clientes</span>
-          <strong className="customers-kpi-value">{customersPage.totalElements}</strong>
-          <p>Base completa según el filtro actual</p>
-        </article>
-
-        <article className="customers-kpi-card">
-          <div className="customers-kpi-icon icon-warning"><Mail size={20} /></div>
-          <span className="customers-kpi-label">Con correo</span>
-          <strong className="customers-kpi-value">{clientsWithEmail}</strong>
-          <p>Visibles en esta página</p>
-        </article>
-
-        <article className="customers-kpi-card customers-kpi-card-accent">
-          <div className="customers-kpi-icon icon-soft"><MapPin size={20} /></div>
-          <span className="customers-kpi-label">Con dirección</span>
-          <strong className="customers-kpi-value">{clientsWithAddress}</strong>
-          <p>Datos completos en esta página</p>
-        </article>
-      </section>
-
       <section className="customers-table-card card">
         <div className="customers-table-header">
           <div>
@@ -171,7 +148,6 @@ export default function CustomersPage() {
                 <span>Cliente</span>
                 <span>Contacto</span>
                 <span>Ubicación</span>
-                <span>Notas</span>
                 <span>Editar</span>
               </div>
 
@@ -210,14 +186,6 @@ export default function CustomersPage() {
                         <span>{cliente.direccion || 'Sin dirección registrada'}</span>
                       </div>
                     </div>
-
-                    <div className="customers-cell customers-notes-cell">
-                      <div className="customers-note-pill">
-                        <StickyNote size={15} />
-                        <span>{cliente.notas || 'Sin notas'}</span>
-                      </div>
-                    </div>
-
                     <div className="customers-cell customers-actions-cell">
                       <button
                         type="button"

@@ -1,0 +1,64 @@
+.receivables-state-filter {
+  width: auto;
+  min-width: 180px;
+}
+
+.receivables-toolbar-card,
+.receivables-table-card {
+  padding: 20px 22px;
+}
+
+.receivables-list {
+  display: grid;
+  gap: 16px;
+}
+
+.receivable-card {
+  border: 1px solid rgba(47, 125, 87, 0.1);
+  border-radius: 18px;
+  padding: 16px 18px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.receivable-card-header,
+.receivable-card-grid,
+.receivable-payments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.receivable-card-header {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.receivable-card-header strong {
+  font-size: 16px;
+}
+
+.receivable-card-header p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.receivable-card-grid {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.receivable-payments {
+  margin-top: 12px;
+}
+
+@media (max-width: 768px) {
+  .receivables-state-filter {
+    width: 100%;
+  }
+
+  .receivable-card-header {
+    flex-direction: column;
+  }
+}

@@ -20,6 +20,11 @@ public class CategoriaInventarioController {
         return service.findAll();
     }
 
+    @GetMapping("/{id}")
+    public CategoriaInventario findById(@PathVariable Long id) {
+        return service.findById(id);
+    }
+
     @PostMapping
     public CategoriaInventario create(@Valid @RequestBody CategoriaInventario categoria) {
         return service.save(categoria);

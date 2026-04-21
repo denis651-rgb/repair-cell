@@ -6,11 +6,23 @@ public record PanelResumenResponse(
         long totalClientes,
         long totalOrdenes,
         long ordenesPendientes,
+        long totalVentas,
+        long totalCompras,
+        long cuentasPorCobrarAbiertas,
+        double saldoPendienteCobro,
         long inventarioBajo,
         double ingresosTotales,
-        List<SerieDiariaResponse> ordenesPorDia,
+        double egresosTotales,
+        double balanceNeto,
+        List<SerieDiariaResponse> operacionesPorDia,
         List<SerieDiariaResponse> ingresosPorDia,
-        List<ReporteEstadoResponse> estados,
-        List<ProductoStockBajoResponse> productosStockBajo
+        List<SerieDiariaResponse> egresosPorDia,
+        List<ReporteEstadoResponse> estadosOrden,
+        List<ProductoStockBajoResponse> productosStockBajo,
+        double ingresosReparaciones,
+        double ingresosVentas,
+        double cobrosCredito,
+        double egresosCompras,
+        double egresosManuales
 ) {
 }

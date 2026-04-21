@@ -60,7 +60,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<Map<String, Object>> handleTypeMismatch(MethodArgumentTypeMismatchException ex,
             HttpServletRequest request) {
-        return build(HttpStatus.BAD_REQUEST, "Parámetro inválido: " + ex.getName(), request.getRequestURI());
+        return build(HttpStatus.BAD_REQUEST, "Parametro invalido: " + ex.getName(), request.getRequestURI());
     }
 
     @ExceptionHandler(EmptyResultDataAccessException.class)
@@ -72,12 +72,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<Map<String, Object>> handleDataIntegrity(DataIntegrityViolationException ex,
             HttpServletRequest request) {
-        return build(HttpStatus.CONFLICT, "Conflicto de datos o restricción de integridad", request.getRequestURI());
+        return build(HttpStatus.CONFLICT, resolverMensajePersistencia(ex), request.getRequestURI());
     }
 
     @ExceptionHandler({ TransactionSystemException.class, JpaSystemException.class })
     public ResponseEntity<Map<String, Object>> handleJpaSystem(Exception ex, HttpServletRequest request) {
-        return build(HttpStatus.BAD_REQUEST, "Error de persistencia o validación de datos", request.getRequestURI());
+        return build(HttpStatus.BAD_REQUEST, resolverMensajePersistencia(ex), request.getRequestURI());
     }
 
     @ExceptionHandler(AccessDeniedException.class)
@@ -88,7 +88,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGeneric(Exception ex, HttpServletRequest request) {
-        return build(HttpStatus.INTERNAL_SERVER_ERROR, "Ocurrió un error interno en el servidor",
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, "Ocurrio un error interno en el servidor",
                 request.getRequestURI());
     }
 
@@ -99,5 +99,41 @@ public class GlobalExceptionHandler {
         body.put("error", message);
         body.put("ruta", path);
         return ResponseEntity.status(status).body(body);
+    }
+
+    private String resolverMensajePersistencia(Throwable throwable) {
+        String mensaje = extraerMensajeMasUtil(throwable).toLowerCase();
+
+        if (mensaje.contains("unique") || mensaje.contains("duplicate")) {
+            return "Ya existe un registro con ese mismo valor. Revisa nombre, codigo o SKU antes de guardar.";
+        }
+
+        if (mensaje.contains("not null")) {
+            return "Faltan datos obligatorios para guardar el registro. Revisa los campos requeridos e intenta nuevamente.";
+        }
+
+        if (mensaje.contains("foreign key")) {
+            return "No se pudo completar la operacion porque el registro esta relacionado con otros datos del sistema.";
+        }
+
+        if (mensaje.contains("constraint")) {
+            return "No se pudo guardar el registro por una restriccion de datos. Revisa la informacion ingresada.";
+        }
+
+        return "No se pudo guardar el registro por un problema de persistencia de datos.";
+    }
+
+    private String extraerMensajeMasUtil(Throwable throwable) {
+        Throwable actual = throwable;
+        String ultimoMensaje = throwable.getMessage() == null ? "" : throwable.getMessage();
+
+        while (actual != null) {
+            if (actual.getMessage() != null && !actual.getMessage().isBlank()) {
+                ultimoMensaje = actual.getMessage();
+            }
+            actual = actual.getCause();
+        }
+
+        return ultimoMensaje == null ? "" : ultimoMensaje;
     }
 }

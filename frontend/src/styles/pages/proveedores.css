@@ -1,0 +1,17 @@
+.suppliers-page .compact {
+  padding: 9px 12px;
+  min-height: 40px;
+}
+
+.suppliers-toolbar-card,
+.suppliers-table-card {
+  padding: 20px 22px;
+}
+
+.suppliers-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}

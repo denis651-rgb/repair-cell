@@ -10,6 +10,7 @@ import com.store.repair.dto.CajaResumenActualResponse;
 import com.store.repair.repository.CajaDiariaRepository;
 import com.store.repair.repository.EntradaContableRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -29,20 +30,37 @@ public class AccountingService {
         return repository.findAllByOrderByFechaEntradaDescIdDesc();
     }
 
-    public Page<EntradaContable> findPage(LocalDate fechaInicio, LocalDate fechaFin, int pagina, int tamano) {
+    public Page<EntradaContable> findPage(
+            LocalDate fechaInicio,
+            LocalDate fechaFin,
+            String busqueda,
+            TipoEntrada tipoEntrada,
+            String moduloRelacionado,
+            int pagina,
+            int tamano) {
         PageRequest pageRequest = PageRequest.of(Math.max(pagina, 0), Math.max(tamano, 1));
 
-        if (fechaInicio != null && fechaFin != null) {
-            if (fechaFin.isBefore(fechaInicio)) {
-                throw new BusinessException("La fecha fin no puede ser menor a la fecha inicio");
-            }
-            return repository.findByFechaEntradaBetweenOrderByFechaEntradaDesc(fechaInicio, fechaFin, pageRequest);
+        if (fechaInicio != null && fechaFin != null && fechaFin.isBefore(fechaInicio)) {
+            throw new BusinessException("La fecha fin no puede ser menor a la fecha inicio");
         }
 
-        return repository.findAllByOrderByFechaEntradaDescIdDesc(pageRequest);
+        return repository.search(
+                fechaInicio,
+                fechaFin,
+                busqueda == null ? "" : busqueda.trim(),
+                tipoEntrada,
+                moduloRelacionado == null ? "" : moduloRelacionado.trim(),
+                pageRequest);
     }
 
     @Transactional
+    @CacheEvict(value = {
+            "reportes_resumen",
+            "reportes_panel",
+            "reportes_resumen_global",
+            "reportes_panel_global",
+            "reportes_clientes_global"
+    }, allEntries = true)
     public EntradaContable save(EntradaContable entry) {
         if (entry.getMonto() == null || entry.getMonto() < 0) {
             throw new BusinessException("El monto no puede ser negativo");
