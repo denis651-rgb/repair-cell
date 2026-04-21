@@ -31,6 +31,18 @@ public class MovimientoStock extends EntidadBase {
     @Column(nullable = false)
     private Integer cantidad;
 
+    @Column(name = "stock_anterior")
+    private Integer stockAnterior;
+
+    @Column(name = "stock_posterior")
+    private Integer stockPosterior;
+
+    @Column(name = "costo_unitario")
+    private Double costoUnitario;
+
+    @Column(name = "precio_venta_unitario")
+    private Double precioVentaUnitario;
+
     @Column(name = "tipo_referencia")
     private String tipoReferencia;
 

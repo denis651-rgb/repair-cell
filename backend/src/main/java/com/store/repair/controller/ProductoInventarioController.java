@@ -2,6 +2,7 @@ package com.store.repair.controller;
 
 import com.store.repair.domain.ProductoInventario;
 import com.store.repair.domain.TipoMovimientoStock;
+import com.store.repair.domain.MarcaInventario;
 import com.store.repair.service.ProductoInventarioService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
@@ -30,14 +31,21 @@ public class ProductoInventarioController {
     @GetMapping("/paginado")
     public Page<ProductoInventario> findPage(
             @RequestParam(required = false) String busqueda,
+            @RequestParam(required = false) Long categoriaId,
+            @RequestParam(required = false) Long marcaId,
             @RequestParam(defaultValue = "0") int pagina,
             @RequestParam(defaultValue = "8") int tamano) {
-        return service.findPage(busqueda, pagina, tamano);
+        return service.findPage(busqueda, categoriaId, marcaId, pagina, tamano);
     }
 
     @GetMapping("/stock-bajo")
     public List<ProductoInventario> lowStock() {
         return service.findLowStock();
+    }
+
+    @GetMapping("/marcas")
+    public List<MarcaInventario> marcas() {
+        return service.findMarcas();
     }
 
     @GetMapping("/{id}")
@@ -48,17 +56,19 @@ public class ProductoInventarioController {
     @PostMapping
     public ProductoInventario create(
             @RequestParam("categoriaId") Long categoriaId,
+            @RequestParam("marcaId") Long marcaId,
             @Valid @RequestBody ProductoInventario producto) {
-        return service.save(producto, categoriaId);
+        return service.save(producto, categoriaId, marcaId);
     }
 
     @PutMapping("/{id}")
     public ProductoInventario update(
             @PathVariable("id") Long id,
             @RequestParam("categoriaId") Long categoriaId,
+            @RequestParam("marcaId") Long marcaId,
             @Valid @RequestBody ProductoInventario producto) {
         producto.setId(id);
-        return service.save(producto, categoriaId);
+        return service.save(producto, categoriaId, marcaId);
     }
 
     @PostMapping("/{id}/stock")

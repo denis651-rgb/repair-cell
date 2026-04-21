@@ -3,6 +3,7 @@ package com.store.repair.service;
 import com.store.repair.config.SanitizadorTexto;
 import com.store.repair.domain.CategoriaInventario;
 import com.store.repair.repository.CategoriaInventarioRepository;
+import com.store.repair.repository.ProductoInventarioRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -13,9 +14,10 @@ import java.util.List;
 public class CategoriaInventarioService {
 
     private final CategoriaInventarioRepository repository;
+    private final ProductoInventarioRepository productoRepository;
 
     public List<CategoriaInventario> findAll() {
-        return repository.findAll();
+        return repository.findAllByOrderByNombreAsc();
     }
 
     public CategoriaInventario findById(Long id) {
@@ -27,8 +29,21 @@ public class CategoriaInventarioService {
         categoria.setNombre(SanitizadorTexto.limpiar(categoria.getNombre()));
         categoria.setDescripcion(SanitizadorTexto.limpiar(categoria.getDescripcion()));
 
+        if (categoria.getNombre() == null || categoria.getNombre().isBlank()) {
+            throw new BusinessException("El nombre de la categoria es obligatorio");
+        }
+
+        boolean existeDuplicado = categoria.getId() == null
+                ? repository.existsByNombreIgnoreCase(categoria.getNombre())
+                : repository.existsByNombreIgnoreCaseAndIdNot(categoria.getNombre(), categoria.getId());
+
+        if (existeDuplicado) {
+            throw new BusinessException("Ya existe una categoria registrada con ese nombre");
+        }
+
         if (categoria.getId() != null) {
-            findById(categoria.getId());
+            CategoriaInventario existente = findById(categoria.getId());
+            categoria.setCreadoEn(existente.getCreadoEn());
         }
 
         return repository.save(categoria);
@@ -36,6 +51,11 @@ public class CategoriaInventarioService {
 
     public void delete(Long id) {
         findById(id);
+
+        if (productoRepository.existsByCategoriaId(id)) {
+            throw new BusinessException("No puedes eliminar la categoria porque tiene productos asociados");
+        }
+
         repository.deleteById(id);
     }
 }

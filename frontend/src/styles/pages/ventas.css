@@ -1,0 +1,167 @@
+.sales-page .compact {
+  padding: 9px 12px;
+  min-height: 40px;
+}
+
+.sales-toolbar-card,
+.sales-table-card {
+  padding: 20px 22px;
+}
+
+.sale-alert-floating {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  width: min(560px, calc(100vw - 32px));
+  z-index: 99999;
+  pointer-events: auto;
+}
+
+.sale-alert-detailed {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
+  border-radius: 18px;
+}
+
+.sale-alert-copy {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.sale-alert-copy strong {
+  color: #a51e2f;
+  font-size: 16px;
+}
+
+.sale-alert-copy p {
+  margin: 0;
+  color: #7a3b41;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.sales-list {
+  display: grid;
+  gap: 16px;
+}
+
+.sale-card {
+  border: 1px solid rgba(47, 125, 87, 0.1);
+  border-radius: 18px;
+  padding: 16px 18px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.sale-card-header,
+.sale-card-grid,
+.sale-card-items,
+.sale-card-actions,
+.sale-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.sale-card-header {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.sale-card-header strong {
+  font-size: 16px;
+}
+
+.sale-card-header p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.sale-helper-text {
+  margin-top: 6px;
+  color: #4d6d5a;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.sale-card-grid {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.sale-card-items,
+.sale-card-actions {
+  margin-top: 12px;
+}
+
+.devolution-detail-list {
+  display: grid;
+  gap: 12px;
+}
+
+.devolution-detail-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 170px;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid rgba(47, 125, 87, 0.12);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.devolution-detail-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.devolution-detail-copy strong {
+  font-size: 14px;
+}
+
+.devolution-detail-copy span,
+.devolution-quantity-field span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.devolution-quantity-field {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.purchase-builder-grid-sales {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 768px) {
+  .purchase-builder-grid-sales {
+    grid-template-columns: 1fr;
+  }
+
+  .sale-card-header {
+    flex-direction: column;
+  }
+
+  .devolution-detail-card {
+    grid-template-columns: 1fr;
+  }
+
+  .sale-alert-floating {
+    top: 12px;
+    right: 12px;
+    left: 12px;
+    width: auto;
+  }
+
+  .sale-alert-detailed {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

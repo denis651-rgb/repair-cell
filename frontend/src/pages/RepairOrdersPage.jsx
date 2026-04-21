@@ -1,15 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
-  ClipboardList,
   Eye,
   FileText,
   History,
+  Pencil,
   PlusCircle,
   Search,
   Trash2,
-  Wrench,
-  Pencil,
 } from 'lucide-react';
 import { api } from '../api/api';
 import PageHeader from '../components/PageHeader';
@@ -190,21 +188,6 @@ export default function RepairOrdersPage() {
   const selectedDevice = useMemo(
     () => dispositivos.find((device) => String(device.id) === String(form.dispositivoId)),
     [dispositivos, form.dispositivoId]
-  );
-
-  const deliveredCount = useMemo(
-    () => ordersPage.content.filter((order) => order.estado === 'ENTREGADO').length,
-    [ordersPage.content]
-  );
-
-  const pendingCount = useMemo(
-    () => ordersPage.content.filter((order) => order.estado !== 'ENTREGADO' && order.estado !== 'CANCELADO').length,
-    [ordersPage.content]
-  );
-
-  const totalVisibleValue = useMemo(
-    () => ordersPage.content.reduce((sum, order) => sum + resolveVisibleOrderAmount(order), 0),
-    [ordersPage.content]
   );
 
   useEffect(() => {
@@ -462,36 +445,6 @@ export default function RepairOrdersPage() {
           <span className="repair-orders-dot" />
           {ordersPage.content.length} órdenes visibles
         </div>
-      </section>
-
-      <section className="repair-orders-kpi-grid">
-        <article className="repair-orders-kpi-card">
-          <div className="repair-orders-kpi-icon icon-soft"><ClipboardList size={20} /></div>
-          <span className="repair-orders-kpi-label">Órdenes visibles</span>
-          <strong className="repair-orders-kpi-value">{ordersPage.content.length}</strong>
-          <p>Página actual del listado</p>
-        </article>
-
-        <article className="repair-orders-kpi-card">
-          <div className="repair-orders-kpi-icon icon-warning"><Wrench size={20} /></div>
-          <span className="repair-orders-kpi-label">Pendientes</span>
-          <strong className="repair-orders-kpi-value">{pendingCount}</strong>
-          <p>Órdenes aún en proceso</p>
-        </article>
-
-        <article className="repair-orders-kpi-card repair-orders-kpi-card-accent">
-          <div className="repair-orders-kpi-icon icon-soft"><Eye size={20} /></div>
-          <span className="repair-orders-kpi-label">Entregadas</span>
-          <strong className="repair-orders-kpi-value">{deliveredCount}</strong>
-          <p>Equipos cerrados en esta página</p>
-        </article>
-
-        <article className="repair-orders-kpi-card">
-          <div className="repair-orders-kpi-icon icon-danger"><FileText size={20} /></div>
-          <span className="repair-orders-kpi-label">Valor visible</span>
-          <strong className="repair-orders-kpi-value repair-orders-kpi-value-money">{money.format(totalVisibleValue)}</strong>
-          <p>Suma real de las ordenes visibles</p>
-        </article>
       </section>
 
       <section className="repair-orders-list-card card">

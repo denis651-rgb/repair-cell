@@ -24,6 +24,10 @@ public class ProductoInventario extends EntidadBase {
     @JoinColumn(name = "categoria_id", nullable = false)
     private CategoriaInventario categoria;
 
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "marca_id")
+    private MarcaInventario marca;
+
     @NotBlank(message = "El SKU es obligatorio")
     @Column(name = "sku", nullable = false, unique = true)
     private String sku;
@@ -34,6 +38,9 @@ public class ProductoInventario extends EntidadBase {
 
     @Column(name = "descripcion")
     private String descripcion;
+
+    @Column(name = "calidad")
+    private String calidad;
 
     @Min(value = 0, message = "El costo unitario no puede ser negativo")
     @Column(name = "costo_unitario", nullable = false)

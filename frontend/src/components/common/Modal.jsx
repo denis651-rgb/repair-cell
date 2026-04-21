@@ -6,13 +6,23 @@ export default function Modal({ open, title, subtitle, children, onClose, size =
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className={`modal-shell modal-${size}`} onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true">
+      <div
+        className={`modal-shell modal-${size}`}
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
         <div className="modal-shell__header">
           <div>
             <h2>{title}</h2>
             {subtitle && <p>{subtitle}</p>}
           </div>
-          <button type="button" className="icon-button icon-button--ghost" onClick={onClose} aria-label="Cerrar modal">
+          <button
+            type="button"
+            className="icon-button icon-button--ghost"
+            onClick={onClose}
+            aria-label="Cerrar modal"
+          >
             <X size={18} />
           </button>
         </div>

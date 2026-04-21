@@ -1,37 +1,70 @@
 import { useMemo, useState } from 'react';
 import { NavLink, Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard,
-  Users,
-  Smartphone,
-  Wrench,
-  Package,
-  Calculator,
+  BadgeDollarSign,
   BarChart3,
+  Calculator,
+  ChevronDown,
   DatabaseBackup,
-  Search,
-  Menu,
-  Plus,
-  X,
-  Sparkles,
+  HandCoins,
+  LayoutDashboard,
   LogOut,
+  Menu,
+  Package,
+  Plus,
+  Search,
+  ShoppingCart,
+  Smartphone,
+  Sparkles,
+  Truck,
+  Users,
+  Wrench,
+  X,
 } from 'lucide-react';
 import yiyoTecMark from '../assets/yiyo-tec-mark.svg';
 
-const navItems = [
-  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/clientes', label: 'Clientes', icon: Users },
-  { to: '/dispositivos', label: 'Dispositivos', icon: Smartphone },
-  { to: '/reparaciones', label: 'Ordenes', icon: Wrench },
-  { to: '/inventario', label: 'Inventario', icon: Package },
-  { to: '/contabilidad', label: 'Contabilidad', icon: Calculator },
-  { to: '/reportes', label: 'Reportes', icon: BarChart3 },
-  { to: '/respaldos', label: 'Respaldos', icon: DatabaseBackup },
+const navSections = [
+  {
+    id: 'operacion',
+    label: 'Operacion',
+    items: [
+      { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { to: '/clientes', label: 'Clientes', icon: Users },
+      { to: '/dispositivos', label: 'Dispositivos', icon: Smartphone },
+      { to: '/reparaciones', label: 'Ordenes', icon: Wrench },
+    ],
+  },
+  {
+    id: 'comercial',
+    label: 'Comercial',
+    items: [
+      { to: '/inventario', label: 'Inventario', icon: Package },
+      { to: '/proveedores', label: 'Proveedores', icon: Truck },
+      { to: '/compras', label: 'Compras', icon: ShoppingCart },
+      { to: '/ventas', label: 'Ventas', icon: BadgeDollarSign },
+      { to: '/cuentas-por-cobrar', label: 'Cuentas por cobrar', icon: HandCoins },
+    ],
+  },
+  {
+    id: 'finanzas',
+    label: 'Finanzas y control',
+    items: [
+      { to: '/contabilidad', label: 'Contabilidad', icon: Calculator },
+      { to: '/reportes', label: 'Reportes', icon: BarChart3 },
+      { to: '/respaldos', label: 'Respaldos', icon: DatabaseBackup },
+    ],
+  },
 ];
+
+const initialSections = navSections.reduce((acc, section) => {
+  acc[section.id] = true;
+  return acc;
+}, {});
 
 export default function AppLayout() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [busqueda, setBusqueda] = useState('');
+  const [seccionesAbiertas, setSeccionesAbiertas] = useState(initialSections);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -40,10 +73,9 @@ export default function AppLayout() {
       return {
         placeholder: 'Buscar clientes o telefonos',
         title: 'Clientes',
-        description: 'Seguimiento claro de contactos y equipos asociados.',
+        description: 'Seguimiento claro de contactos y relacion comercial.',
       };
     }
-
     if (location.pathname.includes('/dispositivos')) {
       return {
         placeholder: 'Buscar equipos, IMEI o modelos',
@@ -51,7 +83,6 @@ export default function AppLayout() {
         description: 'Ficha tecnica y control rapido de equipos recibidos.',
       };
     }
-
     if (location.pathname.includes('/reparaciones')) {
       return {
         placeholder: 'Buscar ordenes, clientes o diagnosticos',
@@ -59,43 +90,66 @@ export default function AppLayout() {
         description: 'Vista operativa para coordinar el trabajo del taller.',
       };
     }
-
     if (location.pathname.includes('/inventario')) {
       return {
         placeholder: 'Buscar productos, stock o categorias',
         title: 'Inventario',
-        description: 'Control visual de repuestos, herramientas y suministros.',
+        description: 'Control comercial de repuestos, marcas y existencias.',
       };
     }
-
+    if (location.pathname.includes('/proveedores')) {
+      return {
+        placeholder: 'Buscar proveedores, ciudades o telefonos',
+        title: 'Proveedores',
+        description: 'Base institucional de abastecimiento del negocio.',
+      };
+    }
+    if (location.pathname.includes('/compras')) {
+      return {
+        placeholder: 'Buscar compras, proveedores o comprobantes',
+        title: 'Compras',
+        description: 'Ingreso de mercaderia con impacto automatico en inventario.',
+      };
+    }
+    if (location.pathname.includes('/ventas')) {
+      return {
+        placeholder: 'Buscar ventas, clientes o comprobantes',
+        title: 'Ventas',
+        description: 'Venta directa de productos con trazabilidad comercial.',
+      };
+    }
+    if (location.pathname.includes('/cuentas-por-cobrar')) {
+      return {
+        placeholder: 'Buscar cuentas, clientes o referencias',
+        title: 'Cuentas por cobrar',
+        description: 'Seguimiento de creditos, abonos y saldos pendientes.',
+      };
+    }
     if (location.pathname.includes('/contabilidad')) {
       return {
-        placeholder: 'Buscar movimientos, caja o referencias',
+        placeholder: 'Buscar movimientos, categorias o modulos',
         title: 'Contabilidad',
-        description: 'Caja diaria, ingresos y egresos con mejor trazabilidad.',
+        description: 'Caja diaria y movimientos automaticos por modulo.',
       };
     }
-
     if (location.pathname.includes('/reportes')) {
       return {
         placeholder: 'Buscar metricas, rangos o resultados',
         title: 'Reportes',
-        description: 'Panorama comercial y tecnico del taller.',
+        description: 'Lectura gerencial y tecnica del desempeño del taller.',
       };
     }
-
     if (location.pathname.includes('/respaldos')) {
       return {
         placeholder: 'Buscar respaldos, carpetas o estados',
         title: 'Respaldos',
-        description: 'Copias locales y sincronizacion remota de la base de datos.',
+        description: 'Continuidad operativa y resguardo de datos del sistema.',
       };
     }
-
     return {
       placeholder: 'Buscar en el sistema',
       title: 'Dashboard',
-      description: 'Resumen general para operar el taller con claridad.',
+      description: 'Resumen institucional del negocio y su operacion.',
     };
   }, [location.pathname]);
 
@@ -113,17 +167,20 @@ export default function AppLayout() {
     navigate('/login', { replace: true });
   };
 
+  const toggleSection = (sectionId) => {
+    setSeccionesAbiertas((actual) => ({
+      ...actual,
+      [sectionId]: !actual[sectionId],
+    }));
+  };
+
   return (
-    <div className="app-shell">
+    <div className="app-shell institutional-shell">
       {menuOpen && (
-        <button
-          className="sidebar-backdrop"
-          onClick={() => setMenuOpen(false)}
-          aria-label="Cerrar menu"
-        />
+        <button className="sidebar-backdrop" onClick={() => setMenuOpen(false)} aria-label="Cerrar menu" />
       )}
 
-      <aside className={`sidebar ${menuOpen ? 'open' : ''}`}>
+      <aside className={`sidebar institutional-sidebar ${menuOpen ? 'open' : ''}`}>
         <div className="brand brand-row">
           <div className="brand-mark-shell">
             <img src={yiyoTecMark} alt="Yiyo Tec" className="brand-mark" />
@@ -131,48 +188,71 @@ export default function AppLayout() {
           <div className="brand-copy">
             <h2>Yiyo Tec</h2>
             <p>Phone &amp; Computer Repair</p>
-            <span className="brand-tagline">Precision tecnica para cada ingreso</span>
+            <span className="brand-tagline">Gestion integrada de taller y repuestos</span>
           </div>
           <button className="icon-btn mobile-close" onClick={() => setMenuOpen(false)} aria-label="Cerrar menu lateral">
-            <X size={20} />
+            <X size={18} />
           </button>
         </div>
 
-        <div className="sidebar-section-label">Operacion diaria</div>
+        <div className="sidebar-section-label">Navegacion por modulos</div>
 
-        <nav className="nav-links">
-          {navItems.map((item) => {
-            const Icon = item.icon;
+        <nav className="module-nav">
+          {navSections.map((section) => {
+            const activa = section.items.some((item) => location.pathname.startsWith(item.to));
+            const abierta = seccionesAbiertas[section.id];
+
             return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}
-                onClick={() => setMenuOpen(false)}
-              >
-                <span className="nav-link-icon">
-                  <Icon size={18} strokeWidth={2} />
-                </span>
-                <span>{item.label}</span>
-              </NavLink>
+              <div key={section.id} className={`module-nav-group ${activa ? 'is-active' : ''}`}>
+                <button
+                  type="button"
+                  className="module-nav-toggle"
+                  onClick={() => toggleSection(section.id)}
+                  aria-expanded={abierta}
+                >
+                  <span>{section.label}</span>
+                  <ChevronDown size={16} className={`module-nav-chevron ${abierta ? 'is-open' : ''}`} />
+                </button>
+
+                {abierta && (
+                  <div className="nav-links module-nav-links">
+                    {section.items.map((item) => {
+                      const Icon = item.icon;
+                      return (
+                        <NavLink
+                          key={item.to}
+                          to={item.to}
+                          className={({ isActive }) => (isActive ? 'nav-link active' : 'nav-link')}
+                          onClick={() => setMenuOpen(false)}
+                        >
+                          <span className="nav-link-icon">
+                            <Icon size={16} strokeWidth={2} />
+                          </span>
+                          <span>{item.label}</span>
+                        </NavLink>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             );
           })}
         </nav>
 
         <div className="sidebar-bottom">
-          <div className="sidebar-highlight-card">
+          <div className="sidebar-highlight-card institutional-highlight-card">
             <div className="sidebar-highlight-icon">
-              <Sparkles size={18} />
+              <Sparkles size={16} />
             </div>
             <div>
-              <strong>Flujo mas ordenado</strong>
-              <p>Usa busqueda global y accesos rapidos para moverte entre modulos.</p>
+              <strong>Navegacion modular</strong>
+              <p>Agrupa las paginas por area para que el sistema siga creciendo sin saturar el menu.</p>
             </div>
           </div>
 
           <Link to="/reparaciones">
-            <button className="btn-new-order">
-              <Plus size={18} />
+            <button className="btn-new-order compact">
+              <Plus size={16} />
               <span>Nueva orden</span>
             </button>
           </Link>
@@ -180,20 +260,20 @@ export default function AppLayout() {
       </aside>
 
       <div className="main-wrapper">
-        <header className="top-bar">
+        <header className="top-bar institutional-top-bar">
           <div className="top-bar-left">
             <button className="icon-btn mobile-only" onClick={() => setMenuOpen(true)} aria-label="Abrir menu">
-              <Menu size={22} />
+              <Menu size={20} />
             </button>
 
             <div className="top-bar-copy">
-              <span className="eyebrow">Panel Yiyo Tec</span>
+              <span className="eyebrow">Panel institucional</span>
               <strong>{pageMeta.title}</strong>
               <p>{pageMeta.description}</p>
             </div>
 
-            <form className="search-container" onSubmit={enviarBusqueda}>
-              <Search size={16} color="#5b657d" />
+            <form className="search-container institutional-search" onSubmit={enviarBusqueda}>
+              <Search size={14} color="#607276" />
               <input
                 type="text"
                 placeholder={pageMeta.placeholder}
@@ -205,7 +285,7 @@ export default function AppLayout() {
 
           <div className="top-bar-actions">
             <button type="button" className="topbar-logout-button icon-only" onClick={cerrarSesion} aria-label="Cerrar sesion" title="Cerrar sesion">
-              <LogOut size={18} />
+              <LogOut size={16} />
             </button>
           </div>
         </header>

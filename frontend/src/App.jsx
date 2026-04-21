@@ -6,6 +6,10 @@ import DevicesPage from './pages/DevicesPage';
 import RepairOrdersPage from './pages/RepairOrdersPage';
 import TicketPage from './pages/TicketPage';
 import InventoryPage from './pages/InventoryPage';
+import ProveedoresPage from './pages/ProveedoresPage';
+import ComprasPage from './pages/ComprasPage';
+import VentasPage from './pages/VentasPage';
+import CuentasPorCobrarPage from './pages/CuentasPorCobrarPage';
 import AccountingPage from './pages/AccountingPage';
 import ReportesPage from './pages/ReportesPage';
 import BackupsPage from './pages/BackupsPage';
@@ -42,6 +46,10 @@ export default function App() {
         <Route path="reparaciones" element={<RepairOrdersPage />} />
         <Route path="tickets/:id" element={<TicketPage />} />
         <Route path="inventario" element={<InventoryPage />} />
+        <Route path="proveedores" element={<ProveedoresPage />} />
+        <Route path="compras" element={<ComprasPage />} />
+        <Route path="ventas" element={<VentasPage />} />
+        <Route path="cuentas-por-cobrar" element={<CuentasPorCobrarPage />} />
         <Route path="contabilidad" element={<AccountingPage />} />
         <Route path="reportes" element={<ReportesPage />} />
         <Route path="respaldos" element={<BackupsPage />} />
