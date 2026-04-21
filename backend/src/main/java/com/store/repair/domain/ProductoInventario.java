@@ -64,4 +64,8 @@ public class ProductoInventario extends EntidadBase {
 
     @Column(name = "activo", nullable = false)
     private Boolean activo;
+
+    @Transient
+    @Builder.Default
+    private Boolean skuEditable = Boolean.TRUE;
 }

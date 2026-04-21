@@ -10,4 +10,6 @@ public interface ParteOrdenReparacionRepository extends JpaRepository<ParteOrden
     List<ParteOrdenReparacion> findAllByOrdenReparacionId(Long ordenReparacionId);
 
     List<ParteOrdenReparacion> findAllByProductoId(Long productoId);
+
+    boolean existsByProductoId(Long productoId);
 }

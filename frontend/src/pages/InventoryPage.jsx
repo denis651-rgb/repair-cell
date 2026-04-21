@@ -1,19 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import {
-  AlertTriangle,
-  ArrowDownToLine,
-  ArrowUpToLine,
-  Edit3,
-  PackagePlus,
-  Search,
-  Tags,
-  Trash2,
-} from 'lucide-react';
+import { ArrowDownToLine, ArrowUpToLine, FolderTree, PackagePlus, PencilLine, Tags, Trash2 } from 'lucide-react';
 import { api } from '../api/api';
 import EmptyState from '../components/common/EmptyState';
 import Modal from '../components/common/Modal';
 import PageHeader from '../components/PageHeader';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { isValidSku, normalizeSku, suggestSku } from '../utils/sku';
 import '../styles/pages/inventario.css';
 
 const TAMANO_PRODUCTOS = 10;
@@ -86,8 +78,15 @@ export default function InventoryPage() {
   const [productoEditando, setProductoEditando] = useState(null);
   const [productoSeleccionado, setProductoSeleccionado] = useState(null);
   const [error, setError] = useState(null);
+  const [skuSugerido, setSkuSugerido] = useState('');
+  const [skuTocado, setSkuTocado] = useState(false);
+  const [productosSimilares, setProductosSimilares] = useState([]);
+  const [cargandoSku, setCargandoSku] = useState(false);
 
   const busquedaDebounced = useDebouncedValue(busqueda, 250);
+  const skuDebounced = useDebouncedValue(productoForm.sku, 200);
+  const nombreDebounced = useDebouncedValue(productoForm.nombre, 200);
+  const calidadDebounced = useDebouncedValue(productoForm.calidad, 200);
 
   const currency = useMemo(
     () => new Intl.NumberFormat('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
@@ -177,6 +176,9 @@ export default function InventoryPage() {
   const abrirProductoNuevo = () => {
     setProductoEditando(null);
     setProductoForm(productoInicial);
+    setSkuTocado(false);
+    setSkuSugerido('');
+    setProductosSimilares([]);
     setModalProductoOpen(true);
   };
 
@@ -199,21 +201,94 @@ export default function InventoryPage() {
 
   const editarProducto = (producto) => {
     setProductoEditando(producto);
-      setProductoForm({
-        categoriaId: producto.categoria?.id ? String(producto.categoria.id) : '',
-        marcaId: obtenerIdMarca(producto.marca),
-        sku: producto.sku || '',
-        nombre: producto.nombre || '',
-        descripcion: producto.descripcion || '',
-        calidad: producto.calidad || '',
-        costoUnitario: producto.costoUnitario ?? 0,
-        precioVenta: producto.precioVenta ?? 0,
-        stockInicial: 0,
-        stockMinimo: producto.stockMinimo ?? 0,
-        activo: producto.activo ?? true,
-      });
-      setModalProductoOpen(true);
+    setProductoForm({
+      categoriaId: producto.categoria?.id ? String(producto.categoria.id) : '',
+      marcaId: obtenerIdMarca(producto.marca),
+      sku: producto.sku || '',
+      nombre: producto.nombre || '',
+      descripcion: producto.descripcion || '',
+      calidad: producto.calidad || '',
+      costoUnitario: producto.costoUnitario ?? 0,
+      precioVenta: producto.precioVenta ?? 0,
+      stockInicial: 0,
+      stockMinimo: producto.stockMinimo ?? 0,
+      activo: producto.activo ?? true,
+    });
+    setSkuTocado(true);
+    setSkuSugerido(producto.sku || '');
+    setProductosSimilares([]);
+    setModalProductoOpen(true);
   };
+
+  useEffect(() => {
+    if (!modalProductoOpen) return;
+
+    const categoriaNombre = categorias.find((categoria) => String(categoria.id) === String(productoForm.categoriaId))?.nombre;
+    const marcaNombre = marcas.find((marca) => String(marca.id) === String(productoForm.marcaId))?.nombre;
+    const sugerenciaLocal = suggestSku({
+      categoria: categoriaNombre,
+      marca: marcaNombre,
+      nombreModelo: nombreDebounced,
+      calidad: calidadDebounced,
+    });
+
+    if (!skuTocado && sugerenciaLocal) {
+      setProductoForm((actual) => ({ ...actual, sku: sugerenciaLocal }));
+    }
+
+    setSkuSugerido(sugerenciaLocal);
+
+    const puedeConsultar = productoForm.categoriaId && productoForm.marcaId && nombreDebounced.trim();
+    if (!puedeConsultar) {
+      setProductosSimilares([]);
+      return;
+    }
+
+    let cancelado = false;
+    setCargandoSku(true);
+
+    api.get('/inventario/productos/sku/sugerencia', {
+      categoriaId: Number(productoForm.categoriaId),
+      marcaId: Number(productoForm.marcaId),
+      nombreModelo: nombreDebounced,
+      calidad: calidadDebounced,
+      skuActual: skuDebounced,
+      productoId: productoEditando?.id,
+    })
+      .then((respuesta) => {
+        if (cancelado) return;
+        setSkuSugerido(respuesta?.skuSugerido || sugerenciaLocal);
+        setProductosSimilares(respuesta?.productosSimilares || []);
+        if (!skuTocado && respuesta?.skuSugerido) {
+          setProductoForm((actual) => ({ ...actual, sku: respuesta.skuSugerido }));
+        }
+      })
+      .catch(() => {
+        if (!cancelado) {
+          setProductosSimilares([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelado) {
+          setCargandoSku(false);
+        }
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, [
+    modalProductoOpen,
+    productoForm.categoriaId,
+    productoForm.marcaId,
+    nombreDebounced,
+    calidadDebounced,
+    skuDebounced,
+    skuTocado,
+    categorias,
+    marcas,
+    productoEditando?.id,
+  ]);
 
   const guardarCategoria = async (event) => {
     event.preventDefault();
@@ -290,8 +365,16 @@ export default function InventoryPage() {
   const guardarProducto = async (event) => {
     event.preventDefault();
     try {
+      const skuNormalizado = normalizeSku(productoForm.sku);
+      if (!skuNormalizado) {
+        throw new Error('El SKU es obligatorio.');
+      }
+      if (!isValidSku(skuNormalizado)) {
+        throw new Error('El SKU debe usar solo letras, numeros y guiones. Ejemplo: BAT-SAM-A04-ORI');
+      }
+
       const payload = {
-        sku: productoForm.sku,
+        sku: skuNormalizado,
         nombre: productoForm.nombre,
         descripcion: productoForm.descripcion,
         calidad: productoForm.calidad,
@@ -318,6 +401,9 @@ export default function InventoryPage() {
 
       setProductoForm(productoInicial);
       setProductoEditando(null);
+      setSkuSugerido('');
+      setSkuTocado(false);
+      setProductosSimilares([]);
       setModalProductoOpen(false);
       await Promise.all([cargarResumen(), cargarProductos(0), cargarMovimientos(0)]);
       setPaginaProductos(0);
@@ -378,7 +464,14 @@ export default function InventoryPage() {
     setModalProductoOpen(false);
     setProductoEditando(null);
     setProductoForm(productoInicial);
+    setSkuSugerido('');
+    setSkuTocado(false);
+    setProductosSimilares([]);
   };
+
+  const skuNoEditable = Boolean(productoEditando && productoEditando.skuEditable === false);
+  const skuNormalizadoPreview = normalizeSku(productoForm.sku);
+  const skuInvalido = Boolean(productoForm.sku) && !isValidSku(productoForm.sku);
 
   return (
     <div className="page-stack inventory-page">
@@ -387,17 +480,29 @@ export default function InventoryPage() {
         subtitle="Control comercial de repuestos con CRUD de categorias y marcas, filtros y precios visibles."
       >
         <div className="inventory-header-actions">
-          <button className="secondary inventory-ghost-button" onClick={abrirCategorias}>
-            <Tags size={16} />
-            Categorias
+          <button
+            className="secondary inventory-ghost-button inventory-icon-button"
+            onClick={abrirCategorias}
+            title="Administrar categorias"
+            aria-label="Administrar categorias"
+          >
+            <FolderTree size={18} />
           </button>
-          <button className="secondary inventory-ghost-button" onClick={abrirMarcas}>
-            <Tags size={16} />
-            Marcas
+          <button
+            className="secondary inventory-ghost-button inventory-icon-button"
+            onClick={abrirMarcas}
+            title="Administrar marcas"
+            aria-label="Administrar marcas"
+          >
+            <Tags size={18} />
           </button>
-          <button className="inventory-primary-button" onClick={abrirProductoNuevo}>
-            <PackagePlus size={16} />
-            Producto
+          <button
+            className="inventory-primary-button inventory-icon-button"
+            onClick={abrirProductoNuevo}
+            title="Registrar producto"
+            aria-label="Registrar producto"
+          >
+            <PackagePlus size={18} />
           </button>
         </div>
       </PageHeader>
@@ -417,7 +522,6 @@ export default function InventoryPage() {
       <section className="inventory-hero-card inventory-toolbar-card">
         <div className="inventory-toolbar">
           <label className="inventory-search">
-            <Search size={16} />
             <input
               value={busqueda}
               onChange={(event) => setBusqueda(event.target.value)}
@@ -456,9 +560,6 @@ export default function InventoryPage() {
 
       {productosStockBajo.length > 0 && (
         <div className="low-stock-banner">
-          <div className="low-stock-icon">
-            <AlertTriangle size={22} />
-          </div>
           <div className="low-stock-copy">
             <strong>Productos con stock bajo</strong>
             <p>
@@ -488,12 +589,12 @@ export default function InventoryPage() {
               <div className="inventory-products-table inventory-products-table-wide">
                 <div className="inventory-products-head inventory-products-head-wide">
                   <span>Producto</span>
+                  <span>SKU</span>
                   <span>Marca</span>
                   <span>Categoria</span>
                   <span>Calidad</span>
                   <span>Stock</span>
                   <span>Precio venta</span>
-                  <span>Costo</span>
                   <span>Acciones</span>
                 </div>
 
@@ -510,15 +611,15 @@ export default function InventoryPage() {
                         className="inventory-product-row inventory-product-row-wide inventory-product-row-polished"
                       >
                         <div className="inventory-product-cell inventory-product-info">
-                          <div className="inventory-product-avatar">
-                            {(producto.nombre || 'P').slice(0, 2).toUpperCase()}
-                          </div>
                           <div>
                             <strong>{producto.nombre}</strong>
                             <p>{descripcionSecundaria}</p>
                           </div>
                         </div>
 
+                        <div className="inventory-product-cell">
+                          <strong>{producto.sku || 'Sin SKU'}</strong>
+                        </div>
                         <div className="inventory-product-cell">{obtenerNombreMarca(producto.marca) || 'Sin marca'}</div>
                         <div className="inventory-product-cell">
                           <span className="inventory-category-pill">{producto.categoria?.nombre || 'Sin categoria'}</span>
@@ -533,22 +634,21 @@ export default function InventoryPage() {
                         <div className="inventory-product-cell inventory-price-cell">
                           Bs {currency.format(Number(producto.precioVenta || 0))}
                         </div>
-                        <div className="inventory-product-cell inventory-price-cell inventory-price-muted">
-                          Bs {currency.format(Number(producto.costoUnitario || 0))}
-                        </div>
                         <div className="inventory-product-cell">
                           <div className="inventory-actions-inline">
                             <button
                               className="secondary button-inline"
                               onClick={() => editarProducto(producto)}
                               title="Editar producto"
+                              aria-label="Editar producto"
                             >
-                              <Edit3 size={14} />
+                              <PencilLine size={14} />
                             </button>
                             <button
                               className="secondary button-inline"
                               onClick={() => abrirAjuste(producto, 'ENTRADA')}
                               title="Aumentar stock"
+                              aria-label="Registrar entrada de stock"
                             >
                               <ArrowUpToLine size={14} />
                             </button>
@@ -556,6 +656,7 @@ export default function InventoryPage() {
                               className="secondary button-inline inventory-danger-soft"
                               onClick={() => abrirAjuste(producto, 'SALIDA')}
                               title="Reducir stock"
+                              aria-label="Registrar salida de stock"
                             >
                               <ArrowDownToLine size={14} />
                             </button>
@@ -563,6 +664,7 @@ export default function InventoryPage() {
                               className="secondary button-inline inventory-danger-soft"
                               onClick={() => eliminarProducto(producto)}
                               title="Eliminar producto"
+                              aria-label="Eliminar producto"
                             >
                               <Trash2 size={14} />
                             </button>
@@ -734,14 +836,14 @@ export default function InventoryPage() {
                 </div>
                 <div className="inventory-admin-actions">
                   <button type="button" className="secondary compact" onClick={() => editarCategoria(categoria)}>
-                    <Edit3 size={14} />
+                    Editar
                   </button>
                   <button
                     type="button"
                     className="secondary compact inventory-danger-soft"
                     onClick={() => eliminarCategoria(categoria)}
                   >
-                    <Trash2 size={14} />
+                    Eliminar
                   </button>
                 </div>
               </article>
@@ -804,14 +906,14 @@ export default function InventoryPage() {
                 </div>
                 <div className="inventory-admin-actions">
                   <button type="button" className="secondary compact" onClick={() => editarMarca(marca)}>
-                    <Edit3 size={14} />
+                    Editar
                   </button>
                   <button
                     type="button"
                     className="secondary compact inventory-danger-soft"
                     onClick={() => eliminarMarca(marca)}
                   >
-                    <Trash2 size={14} />
+                    Eliminar
                   </button>
                 </div>
               </article>
@@ -863,8 +965,14 @@ export default function InventoryPage() {
               <span>SKU</span>
               <input
                 value={productoForm.sku}
-                onChange={(event) => setProductoForm((actual) => ({ ...actual, sku: event.target.value }))}
+                onChange={(event) => {
+                  setSkuTocado(true);
+                  setProductoForm((actual) => ({ ...actual, sku: event.target.value }));
+                }}
                 required
+                readOnly={skuNoEditable}
+                disabled={skuNoEditable}
+                placeholder="BAT-SAM-A04-ORI"
               />
             </label>
             <label>
@@ -936,6 +1044,48 @@ export default function InventoryPage() {
               onChange={(event) => setProductoForm((actual) => ({ ...actual, descripcion: event.target.value }))}
             />
           </label>
+          <div className="alert inventory-alert-detailed">
+            <div className="inventory-alert-copy">
+              <strong>SKU sugerido: {skuSugerido || 'Completa categoria, marca y modelo'}</strong>
+              <p>
+                {skuNoEditable
+                  ? 'El SKU queda bloqueado porque este producto ya tiene historial operativo.'
+                  : `Se guardara como: ${skuNormalizadoPreview || 'sin valor'}${skuInvalido ? ' · formato invalido' : ''}`}
+              </p>
+            </div>
+            {!skuNoEditable && skuSugerido && skuSugerido !== productoForm.sku && (
+              <button
+                type="button"
+                className="secondary compact"
+                onClick={() => {
+                  setSkuTocado(true);
+                  setProductoForm((actual) => ({ ...actual, sku: skuSugerido }));
+                }}
+              >
+                Usar sugerencia
+              </button>
+            )}
+          </div>
+          {cargandoSku && <div className="alert">Validando SKU y buscando duplicados parecidos...</div>}
+          {productosSimilares.length > 0 && (
+            <div className="alert inventory-alert-detailed">
+              <div className="inventory-alert-copy">
+                <strong>Productos parecidos detectados</strong>
+                <p>
+                  Ya existen {productosSimilares.length} registro{productosSimilares.length === 1 ? '' : 's'} con la misma categoria, marca, nombre/modelo y calidad.
+                </p>
+                <p>
+                  {productosSimilares
+                    .slice(0, 3)
+                    .map((item) => `${item.sku} · ${item.nombre}`)
+                    .join(' | ')}
+                </p>
+              </div>
+            </div>
+          )}
+          <div className="alert">
+            Regla operativa: si es el mismo producto maestro reutiliza el SKU; si cambia calidad, modelo o compatibilidad real, crea un SKU nuevo.
+          </div>
           {!productoEditando && (
             <div className="alert">
               Si registras stock inicial aqui, el sistema lo guardara como un movimiento real del kardex y no como edicion directa.

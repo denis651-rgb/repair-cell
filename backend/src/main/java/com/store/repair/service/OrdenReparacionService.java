@@ -92,6 +92,7 @@ public class OrdenReparacionService {
 
         OrdenReparacion guardada = repository.save(orden);
         adjuntarPartes(guardada, request.getPartes());
+        sincronizarCostoFinalConPartes(guardada);
         OrdenReparacion guardadaFinal = repository.save(guardada);
 
         historyService.logChange(guardadaFinal.getId(), null, guardadaFinal.getEstado().name(), "Orden creada");
@@ -112,6 +113,7 @@ public class OrdenReparacionService {
         String estadoAnterior = orden.getEstado().name();
 
         orden.setEstado(estado);
+        sincronizarCostoFinalConPartes(orden);
 
         if (estado == EstadoReparacion.ENTREGADO && orden.getEntregadoEn() == null) {
             orden.setEntregadoEn(LocalDateTime.now());
@@ -173,6 +175,19 @@ public class OrdenReparacionService {
                         "ORDEN_REPARACION",
                         orden.getId());
             }
+        }
+    }
+
+    private void sincronizarCostoFinalConPartes(OrdenReparacion orden) {
+        if (orden == null) {
+            return;
+        }
+
+        double costoFinalActual = valorOCero(orden.getCostoFinal());
+        double montoPartes = OrdenMontoUtils.resolveMontoPartes(orden.getPartes());
+
+        if (costoFinalActual <= 0 && montoPartes > 0) {
+            orden.setCostoFinal(montoPartes);
         }
     }
 

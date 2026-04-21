@@ -31,7 +31,6 @@
   min-width: min(100%, 320px);
   display: flex;
   align-items: center;
-  gap: 12px;
   padding: 0 18px;
   min-height: 58px;
   border-radius: 999px;
@@ -165,15 +164,17 @@
 .devices-table-wrap {
   display: grid;
   gap: 18px;
+  width: 100%;
 }
 
 .devices-table-head,
 .devices-row {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1.15fr) minmax(0, 1.1fr) minmax(0, 1fr) 68px;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1.15fr) minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 0.8fr);
   gap: 16px;
   align-items: center;
   min-width: 0;
+  text-align: center;
 }
 
 .devices-table-head {
@@ -205,22 +206,7 @@
 .devices-customer-main {
   display: flex;
   align-items: center;
-  gap: 16px;
-}
-
-.devices-avatar,
-.device-modal-avatar {
-  width: 54px;
-  height: 54px;
-  border-radius: 18px;
-  display: grid;
-  place-items: center;
-  background: linear-gradient(135deg, #32215f, #6c42f4);
-  color: white;
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  flex: 0 0 54px;
+  justify-content: center;
 }
 
 .devices-customer-main strong {
@@ -239,6 +225,7 @@
 .devices-meta-stack {
   display: grid;
   gap: 10px;
+  justify-items: center;
 }
 
 .devices-meta-item,
@@ -246,7 +233,7 @@
 .devices-soft-chip {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
 }
 
 .devices-meta-item {
@@ -262,6 +249,7 @@
 .devices-chip-line {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
 }
 
 .devices-soft-chip {
@@ -278,11 +266,12 @@
 }
 
 .devices-edit-button {
-  width: 42px;
+  min-width: 96px;
   height: 42px;
-  padding: 0;
-  display: inline-grid;
-  place-items: center;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.94);
   color: #5b3df5;
@@ -482,7 +471,7 @@
 @media (max-width: 1180px) {
   .devices-table-head,
   .devices-row {
-    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.95fr) 68px;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.95fr) minmax(0, 0.8fr);
   }
 }
 

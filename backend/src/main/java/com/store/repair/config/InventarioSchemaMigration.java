@@ -1,5 +1,6 @@
 package com.store.repair.config;
 
+import com.store.repair.util.SkuUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
@@ -9,7 +10,9 @@ import javax.sql.DataSource;
 import java.sql.*;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Component
 @RequiredArgsConstructor
@@ -24,6 +27,7 @@ public class InventarioSchemaMigration implements ApplicationRunner {
             try {
                 asegurarTablaMarcas(connection);
                 migrarProductosConMarca(connection);
+                migrarSkusProductos(connection);
                 migrarMovimientosStock(connection);
                 connection.commit();
             } catch (Exception exception) {
@@ -83,6 +87,64 @@ public class InventarioSchemaMigration implements ApplicationRunner {
         asegurarColumna(connection, "movimientos_stock", "costo_unitario", "REAL");
         asegurarColumna(connection, "movimientos_stock", "precio_venta_unitario", "REAL");
         asegurarIndice(connection, "idx_movimientos_stock_fecha", "movimientos_stock", "fecha_movimiento");
+    }
+
+    private void migrarSkusProductos(Connection connection) throws SQLException {
+        if (!existeTabla(connection, "productos_inventario")) {
+            return;
+        }
+
+        asegurarColumna(connection, "productos_inventario", "sku", "TEXT");
+
+        Set<String> usados = new HashSet<>();
+        List<ProductoSkuMigracion> productos = new ArrayList<>();
+
+        try (PreparedStatement statement = connection.prepareStatement("""
+                SELECT p.id, p.sku, p.nombre, p.calidad, c.nombre AS categoria_nombre, m.nombre AS marca_nombre
+                FROM productos_inventario p
+                LEFT JOIN categorias_inventario c ON c.id = p.categoria_id
+                LEFT JOIN marcas_inventario m ON m.id = p.marca_id
+                ORDER BY p.id
+                """);
+             ResultSet resultSet = statement.executeQuery()) {
+            while (resultSet.next()) {
+                productos.add(new ProductoSkuMigracion(
+                        resultSet.getLong("id"),
+                        resultSet.getString("sku"),
+                        resultSet.getString("nombre"),
+                        resultSet.getString("calidad"),
+                        resultSet.getString("categoria_nombre"),
+                        resultSet.getString("marca_nombre")));
+            }
+        }
+
+        for (ProductoSkuMigracion producto : productos) {
+            String sugerido = SkuUtils.normalize(producto.sku());
+            if (sugerido == null) {
+                sugerido = SkuUtils.suggest(
+                        producto.categoriaNombre(),
+                        producto.marcaNombre(),
+                        producto.nombre(),
+                        producto.calidad());
+            }
+
+            String skuFinal = SkuUtils.ensureUnique(sugerido, sku -> usados.contains(sku.toUpperCase()));
+            usados.add(skuFinal.toUpperCase());
+
+            try (PreparedStatement update = connection.prepareStatement("""
+                    UPDATE productos_inventario
+                    SET sku = ?
+                    WHERE id = ?
+                    """)) {
+                update.setString(1, skuFinal);
+                update.setLong(2, producto.id());
+                update.executeUpdate();
+            }
+        }
+
+        try (Statement statement = connection.createStatement()) {
+            statement.executeUpdate("CREATE UNIQUE INDEX IF NOT EXISTS idx_productos_sku_unique ON productos_inventario(sku)");
+        }
     }
 
     private void insertarMarcasDesdeTexto(Connection connection) throws SQLException {
@@ -203,5 +265,14 @@ public class InventarioSchemaMigration implements ApplicationRunner {
         try (Statement statement = connection.createStatement()) {
             statement.executeUpdate("CREATE INDEX IF NOT EXISTS " + nombreIndice + " ON " + tabla + "(" + columna + ")");
         }
+    }
+
+    private record ProductoSkuMigracion(
+            long id,
+            String sku,
+            String nombre,
+            String calidad,
+            String categoriaNombre,
+            String marcaNombre) {
     }
 }

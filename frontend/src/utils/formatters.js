@@ -4,6 +4,28 @@ export const money = new Intl.NumberFormat('es-BO', {
   minimumFractionDigits: 2,
 });
 
+function pad(value) {
+  return String(value).padStart(2, '0');
+}
+
+export function toDateInputValue(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function parseDateValue(value) {
+  if (typeof value === 'string') {
+    const plainDateMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (plainDateMatch) {
+      const [, year, month, day] = plainDateMatch;
+      return new Date(Number(year), Number(month) - 1, Number(day));
+    }
+  }
+
+  return new Date(value);
+}
+
 export function resolvePartUnitPrice(part) {
   const precioUnitario = Number(part?.precioUnitario || 0);
   if (precioUnitario > 0) return precioUnitario;
@@ -34,8 +56,8 @@ export function resolveVisibleOrderAmount(order) {
 }
 
 export function formatDate(value) {
-  if (!value) return '—';
-  const date = new Date(value);
+  if (!value) return '-';
+  const date = parseDateValue(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleDateString('es-BO', {
     year: 'numeric',
@@ -45,7 +67,7 @@ export function formatDate(value) {
 }
 
 export function formatDateTime(value) {
-  if (!value) return '—';
+  if (!value) return '-';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString('es-BO');

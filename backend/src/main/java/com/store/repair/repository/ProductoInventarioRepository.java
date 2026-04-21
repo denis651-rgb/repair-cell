@@ -9,10 +9,17 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface ProductoInventarioRepository extends JpaRepository<ProductoInventario, Long> {
 
     List<ProductoInventario> findAllByOrderByNombreAsc();
+
+    Optional<ProductoInventario> findBySkuIgnoreCase(String sku);
+
+    boolean existsBySkuIgnoreCase(String sku);
+
+    boolean existsBySkuIgnoreCaseAndIdNot(String sku, Long id);
 
     List<ProductoInventario> findByCantidadStockLessThanEqualOrderByCantidadStockAsc(Integer cantidadStock);
 
@@ -57,4 +64,20 @@ public interface ProductoInventarioRepository extends JpaRepository<ProductoInve
             @Param("categoriaId") Long categoriaId,
             @Param("marcaId") Long marcaId,
             Pageable pageable);
+
+    @Query("""
+            select p from ProductoInventario p
+            where p.id <> coalesce(:excludeId, -1)
+              and p.categoria.id = :categoriaId
+              and p.marca.id = :marcaId
+              and lower(coalesce(p.nombre, '')) = lower(:nombre)
+              and lower(coalesce(p.calidad, '')) = lower(coalesce(:calidad, ''))
+            order by p.nombre asc
+            """)
+    List<ProductoInventario> findFunctionalDuplicates(
+            @Param("categoriaId") Long categoriaId,
+            @Param("marcaId") Long marcaId,
+            @Param("nombre") String nombre,
+            @Param("calidad") String calidad,
+            @Param("excludeId") Long excludeId);
 }

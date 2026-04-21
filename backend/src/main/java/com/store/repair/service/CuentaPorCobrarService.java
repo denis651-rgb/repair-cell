@@ -8,6 +8,7 @@ import com.store.repair.repository.CuentaPorCobrarRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,10 +24,14 @@ public class CuentaPorCobrarService {
     private final AccountingService accountingService;
 
     public Page<CuentaPorCobrar> findPage(String busqueda, EstadoCuentaPorCobrar estado, int pagina, int tamano) {
-        return repository.search(
+        Page<CuentaPorCobrar> page = repository.search(
                 busqueda == null ? "" : busqueda.trim(),
                 estado,
                 PageRequest.of(Math.max(pagina, 0), Math.max(tamano, 1)));
+        return new PageImpl<>(
+                page.getContent().stream().map(cuenta -> findById(cuenta.getId())).toList(),
+                page.getPageable(),
+                page.getTotalElements());
     }
 
     public CuentaPorCobrar findById(Long id) {

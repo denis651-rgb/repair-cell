@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Mail, MapPin, PencilLine, Phone, Search, StickyNote, UserPlus, Users } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { api } from '../api/api';
 import PageHeader from '../components/PageHeader';
 import EmptyState from '../components/common/EmptyState';
@@ -44,16 +43,6 @@ export default function CustomersPage() {
   }, [debouncedSearch]);
 
   const clientes = customersPage.content || [];
-
-  const clientsWithEmail = useMemo(
-    () => clientes.filter((cliente) => Boolean(cliente.email)).length,
-    [clientes],
-  );
-
-  const clientsWithAddress = useMemo(
-    () => clientes.filter((cliente) => Boolean(cliente.direccion)).length,
-    [clientes],
-  );
 
   const openCreate = () => {
     setEditingId(null);
@@ -100,10 +89,9 @@ export default function CustomersPage() {
 
   return (
     <div className="page-stack customers-page">
-      <PageHeader title="Clientes" subtitle="Organiza tu base de clientes, mantén la información esencial a la vista y edita sin fricción.">
+      <PageHeader title="Clientes" subtitle="Organiza tu base de clientes, manten la informacion esencial a la vista y edita sin friccion.">
         <div className="customers-header-actions">
           <button className="customers-primary-button" onClick={openCreate}>
-            <UserPlus size={18} />
             Nuevo cliente
           </button>
         </div>
@@ -113,15 +101,13 @@ export default function CustomersPage() {
 
       <section className="customers-hero-card">
         <label className="customers-search">
-          <Search size={18} />
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Buscar por nombre, teléfono, correo, dirección o notas..."
+            placeholder="Buscar por nombre, telefono, correo, direccion o notas..."
           />
         </label>
         <div className="customers-search-summary">
-          <span className="customers-dot" />
           {customersPage.totalElements} resultados
         </div>
       </section>
@@ -130,7 +116,7 @@ export default function CustomersPage() {
         <div className="customers-table-header">
           <div>
             <h3>Clientes registrados</h3>
-            <p>{debouncedSearch.trim() ? 'Resultados paginados según tu búsqueda actual' : 'Vista general paginada de la base de clientes'}</p>
+            <p>{debouncedSearch.trim() ? 'Resultados paginados segun tu busqueda actual' : 'Vista general paginada de la base de clientes'}</p>
           </div>
           <span className="chip">{customersPage.totalElements} registros</span>
         </div>
@@ -138,7 +124,7 @@ export default function CustomersPage() {
         {clientes.length === 0 ? (
           <EmptyState
             title="No hay clientes para mostrar"
-            description={customersPage.totalElements === 0 ? 'Crea el primer cliente para comenzar a registrar reparaciones.' : 'Prueba con otro criterio de búsqueda o limpia el filtro actual.'}
+            description={customersPage.totalElements === 0 ? 'Crea el primer cliente para comenzar a registrar reparaciones.' : 'Prueba con otro criterio de busqueda o limpia el filtro actual.'}
             action={<button onClick={openCreate}>Crear cliente</button>}
           />
         ) : (
@@ -147,7 +133,7 @@ export default function CustomersPage() {
               <div className="customers-table-head">
                 <span>Cliente</span>
                 <span>Contacto</span>
-                <span>Ubicación</span>
+                <span>Ubicacion</span>
                 <span>Editar</span>
               </div>
 
@@ -155,35 +141,24 @@ export default function CustomersPage() {
                 {clientes.map((cliente) => (
                   <article key={cliente.id} className="customers-row">
                     <div className="customers-cell customers-client-main">
-                      <div className="customers-avatar">
-                        {cliente.nombreCompleto
-                          ?.split(' ')
-                          .filter(Boolean)
-                          .slice(0, 2)
-                          .map((part) => part[0]?.toUpperCase())
-                          .join('') || 'CL'}
-                      </div>
                       <div>
                         <strong>{cliente.nombreCompleto}</strong>
-                        <p>Cliente listo para nuevas órdenes y seguimiento</p>
+                        <p>Cliente listo para nuevas ordenes y seguimiento</p>
                       </div>
                     </div>
 
                     <div className="customers-cell customers-meta-stack">
                       <div className="customers-meta-item">
-                        <Phone size={15} />
                         <span>{cliente.telefono}</span>
                       </div>
                       <div className="customers-meta-item">
-                        <Mail size={15} />
                         <span>{cliente.email || 'Sin correo registrado'}</span>
                       </div>
                     </div>
 
                     <div className="customers-cell customers-meta-stack">
                       <div className="customers-meta-item">
-                        <MapPin size={15} />
-                        <span>{cliente.direccion || 'Sin dirección registrada'}</span>
+                        <span>{cliente.direccion || 'Sin direccion registrada'}</span>
                       </div>
                     </div>
                     <div className="customers-cell customers-actions-cell">
@@ -194,7 +169,7 @@ export default function CustomersPage() {
                         aria-label={`Editar ${cliente.nombreCompleto}`}
                         title={`Editar ${cliente.nombreCompleto}`}
                       >
-                        <PencilLine size={16} />
+                        Editar
                       </button>
                     </div>
                   </article>
@@ -213,7 +188,7 @@ export default function CustomersPage() {
               </button>
 
               <span>
-                Página {customersPage.number + 1} de {Math.max(customersPage.totalPages || 1, 1)}
+                Pagina {customersPage.number + 1} de {Math.max(customersPage.totalPages || 1, 1)}
               </span>
 
               <button

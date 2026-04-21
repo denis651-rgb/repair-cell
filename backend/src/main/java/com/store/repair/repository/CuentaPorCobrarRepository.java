@@ -2,6 +2,7 @@ package com.store.repair.repository;
 
 import com.store.repair.domain.CuentaPorCobrar;
 import com.store.repair.domain.EstadoCuentaPorCobrar;
+import com.store.repair.dto.ClienteMontoAcumuladoDto;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -20,8 +21,8 @@ public interface CuentaPorCobrarRepository extends JpaRepository<CuentaPorCobrar
     @EntityGraph(attributePaths = { "cliente", "venta", "abonos" })
     Optional<CuentaPorCobrar> findByVentaId(Long ventaId);
 
-    @EntityGraph(attributePaths = { "cliente", "venta", "abonos" })
-    @Query("""
+    @Query(
+            value = """
             select cxc from CuentaPorCobrar cxc
             left join cxc.cliente c
             left join cxc.venta v
@@ -32,9 +33,44 @@ public interface CuentaPorCobrarRepository extends JpaRepository<CuentaPorCobrar
                    or lower(coalesce(v.numeroComprobante, '')) like lower(concat('%', :busqueda, '%')))
               and (:estado is null or cxc.estado = :estado)
             order by cxc.fechaEmision desc, cxc.id desc
+            """,
+            countQuery = """
+            select count(cxc.id) from CuentaPorCobrar cxc
+            left join cxc.cliente c
+            left join cxc.venta v
+            where (:busqueda is null
+                   or trim(:busqueda) = ''
+                   or lower(coalesce(c.nombreCompleto, '')) like lower(concat('%', :busqueda, '%'))
+                   or lower(coalesce(c.telefono, '')) like lower(concat('%', :busqueda, '%'))
+                   or lower(coalesce(v.numeroComprobante, '')) like lower(concat('%', :busqueda, '%')))
+              and (:estado is null or cxc.estado = :estado)
             """)
     Page<CuentaPorCobrar> search(
             @Param("busqueda") String busqueda,
             @Param("estado") EstadoCuentaPorCobrar estado,
             Pageable pageable);
+
+    long countByEstadoNotAndEstadoNot(EstadoCuentaPorCobrar estadoA, EstadoCuentaPorCobrar estadoB);
+
+    @Query("""
+            select coalesce(sum(cxc.saldoPendiente), 0)
+            from CuentaPorCobrar cxc
+            where cxc.estado <> :estadoA
+              and cxc.estado <> :estadoB
+            """)
+    Double sumSaldoPendienteByEstadoNotAndEstadoNot(
+            @Param("estadoA") EstadoCuentaPorCobrar estadoA,
+            @Param("estadoB") EstadoCuentaPorCobrar estadoB);
+
+    @Query("""
+            select new com.store.repair.dto.ClienteMontoAcumuladoDto(
+                c.id,
+                c.nombreCompleto,
+                coalesce(sum(cxc.saldoPendiente), 0)
+            )
+            from CuentaPorCobrar cxc
+            join cxc.cliente c
+            group by c.id, c.nombreCompleto
+            """)
+    java.util.List<ClienteMontoAcumuladoDto> sumarSaldoPendientePorCliente();
 }

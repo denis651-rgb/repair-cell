@@ -32,7 +32,7 @@ import {
   Legend,
 } from 'recharts';
 import { api } from '../api/api';
-import { money } from '../utils/formatters';
+import { money, resolveVisibleOrderAmount } from '../utils/formatters';
 import '../styles/pages/dashboard.css';
 
 const PIE_COLORS = ['#0f766e', '#dc2626', '#f59e0b', '#2563eb', '#7c3aed', '#475569'];
@@ -254,7 +254,7 @@ export default function DashboardPage() {
                           <td>{orden.numeroOrden}</td>
                           <td>{orden.cliente?.nombreCompleto}</td>
                           <td><span className="badge">{orden.estado}</span></td>
-                          <td>{money.format(orden.costoFinal || 0)}</td>
+                          <td>{money.format(resolveVisibleOrderAmount(orden))}</td>
                         </tr>
                       ))}
                       {ordenes.length === 0 && (
