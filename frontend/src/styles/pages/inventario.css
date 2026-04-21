@@ -7,6 +7,7 @@
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .inventory-primary-button,
@@ -21,16 +22,26 @@
 }
 
 .inventory-primary-button {
-  min-width: 146px;
   background: linear-gradient(135deg, #5b3df5 0%, #6c3ee9 100%);
   box-shadow: 0 16px 32px rgba(91, 61, 245, 0.24);
 }
 
 .inventory-ghost-button {
-  min-width: 146px;
   background: rgba(255, 255, 255, 0.9);
   color: #2e1b62;
   border: 1px solid rgba(109, 64, 224, 0.12);
+}
+
+.inventory-icon-button {
+  width: 46px;
+  height: 46px;
+  min-width: 46px;
+  padding: 0;
+  border-radius: 14px;
+}
+
+.inventory-icon-button svg {
+  flex: 0 0 auto;
 }
 
 .inventory-hero-card {
@@ -77,7 +88,6 @@
   min-width: min(100%, 320px);
   display: flex;
   align-items: center;
-  gap: 12px;
   padding: 0 18px;
   min-height: 58px;
   border-radius: 999px;
@@ -128,7 +138,7 @@
 
 .inventory-page .low-stock-banner {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: 1fr;
   gap: 18px;
   align-items: center;
   padding: 22px 24px;
@@ -139,24 +149,17 @@
   box-shadow: 0 18px 36px rgba(239, 111, 176, 0.24);
 }
 
-.low-stock-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 18px;
-  display: grid;
-  place-items: center;
-  background: rgba(123, 16, 75, 0.12);
-}
-
 .low-stock-copy strong {
   display: block;
   margin-bottom: 4px;
   font-size: 16px;
+  text-align: center;
 }
 
 .low-stock-copy p {
   margin: 0;
   color: rgba(87, 17, 59, 0.88);
+  text-align: center;
 }
 
 .low-stock-action {
@@ -313,6 +316,7 @@
   gap: 16px;
   align-items: center;
   min-width: 0;
+  text-align: center;
 }
 
 .inventory-products-head {
@@ -326,27 +330,27 @@
 
 .inventory-products-list {
   display: grid;
-  gap: 14px;
+  gap: 10px;
   min-width: 0;
 }
 
 .inventory-product-row {
-  padding: 18px;
-  border-radius: 24px;
+  padding: 12px 16px;
+  border-radius: 18px;
   background: rgba(255, 255, 255, 0.95);
   border: 1px solid rgba(226, 214, 255, 0.8);
-  box-shadow: 0 16px 28px rgba(117, 87, 202, 0.08);
+  box-shadow: 0 10px 20px rgba(117, 87, 202, 0.06);
 }
 
 .inventory-product-row-polished {
-  padding: 16px 18px;
-  box-shadow: 0 10px 20px rgba(55, 87, 95, 0.08);
+  padding: 10px 14px;
+  box-shadow: 0 8px 16px rgba(55, 87, 95, 0.06);
   border-color: rgba(189, 215, 210, 0.7);
 }
 
 .inventory-products-head-wide,
 .inventory-product-row-wide {
-  grid-template-columns: minmax(0, 2.1fr) minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.8fr);
+  grid-template-columns: minmax(0, 2.1fr) minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1.05fr) minmax(0, 0.9fr) minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1.4fr);
 }
 
 .inventory-product-cell {
@@ -357,21 +361,7 @@
 .inventory-product-info {
   display: flex;
   align-items: center;
-  gap: 16px;
-}
-
-.inventory-product-avatar {
-  flex: 0 0 52px;
-  width: 52px;
-  height: 52px;
-  border-radius: 18px;
-  display: grid;
-  place-items: center;
-  background: linear-gradient(135deg, #32215f, #6c42f4);
-  color: white;
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
+  justify-content: center;
 }
 
 .inventory-product-info strong,
@@ -383,21 +373,21 @@
 
 .inventory-product-info p,
 .inventory-movement-copy p {
-  margin: 4px 0 0;
+  margin: 2px 0 0;
   color: #776a92;
   overflow-wrap: anywhere;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .inventory-category-pill {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 8px 14px;
+  padding: 6px 12px;
   border-radius: 999px;
   background: #f2ecff;
   color: #5d3ed8;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -426,16 +416,17 @@
 .inventory-stock-summary {
   display: grid;
   gap: 2px;
+  justify-items: center;
 }
 
 .inventory-stock-summary strong {
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1.1;
 }
 
 .inventory-stock-summary span {
   color: #7b6d98;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
 }
 
@@ -459,7 +450,7 @@
 
 .inventory-price-cell {
   color: #23134a;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 800;
   white-space: nowrap;
 }
@@ -507,19 +498,30 @@
   display: flex;
   gap: 8px;
   flex-shrink: 0;
+  justify-content: center;
 }
 
 .inventory-actions-inline {
   display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  justify-content: flex-start;
+  gap: 6px;
+  flex-wrap: nowrap;
+  justify-content: center;
+  align-items: center;
 }
 
 .inventory-actions-inline .button-inline {
-  padding: 10px 14px;
-  font-size: 14px;
-  flex: 1 1 132px;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  padding: 0;
+  font-size: 12px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  border-radius: 10px;
+}
+
+.inventory-actions-inline .button-inline svg {
+  flex: 0 0 auto;
 }
 
 .inventory-danger-soft {
@@ -673,6 +675,18 @@
   margin-top: 18px;
 }
 
+.inventory-kardex-table th,
+.inventory-kardex-table td {
+  text-align: center;
+  vertical-align: middle;
+}
+
+.inventory-kardex-table td strong,
+.inventory-kardex-table td div {
+  display: block;
+  text-align: center;
+}
+
 .inventory-modal-search-box {
   display: flex;
   align-items: center;
@@ -811,11 +825,7 @@
 
   .inventory-products-head-wide,
   .inventory-product-row-wide {
-    grid-template-columns: minmax(0, 1.8fr) repeat(3, minmax(0, 1fr)) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.8fr);
-  }
-
-  .inventory-actions-inline .button-inline {
-    flex-basis: 100%;
+    grid-template-columns: minmax(0, 1.6fr) repeat(4, minmax(0, 0.95fr)) minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1.3fr);
   }
 }
 
@@ -878,11 +888,12 @@
   }
 
   .inventory-product-info {
-    align-items: flex-start;
+    align-items: center;
   }
 
   .inventory-actions-inline {
     width: 100%;
+    flex-wrap: wrap;
   }
 
   .inventory-actions-inline .button-inline {

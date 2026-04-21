@@ -14,6 +14,7 @@ import com.store.repair.dto.CompraDetalleRegistroRequest;
 import com.store.repair.dto.CompraRegistroRequest;
 import com.store.repair.repository.CompraRepository;
 import com.store.repair.repository.EntradaContableRepository;
+import com.store.repair.util.SkuUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.Page;
@@ -113,7 +114,7 @@ public class CompraService {
             totalCompra += subtotal;
         }
 
-        compraGuardada.setDetalles(detallesGuardados);
+        compraGuardada.replaceDetalles(detallesGuardados);
         compraGuardada.setTotal(totalCompra);
         Compra compraFinal = repositorio.save(compraGuardada);
 
@@ -158,8 +159,8 @@ public class CompraService {
                 existente.setCalidad(detalle.getCalidad());
             }
 
-            if (SanitizadorTexto.limpiar(detalle.getSku()) != null) {
-                existente.setSku(detalle.getSku());
+            if (SkuUtils.normalize(detalle.getSku()) != null) {
+                existente.setSku(SkuUtils.normalize(detalle.getSku()));
             }
         }
 
@@ -203,7 +204,7 @@ public class CompraService {
         copia.setProductoId(origen.getProductoId());
         copia.setCategoriaId(origen.getCategoriaId());
         copia.setMarcaId(origen.getMarcaId());
-        copia.setSku(SanitizadorTexto.limpiar(origen.getSku()));
+        copia.setSku(SkuUtils.normalize(origen.getSku()));
         copia.setNombreProducto(SanitizadorTexto.limpiar(origen.getNombreProducto()));
         copia.setCalidad(SanitizadorTexto.limpiar(origen.getCalidad()));
         copia.setCantidad(origen.getCantidad());
@@ -274,8 +275,8 @@ public class CompraService {
 
         producto.setCategoria(categoria);
         producto.setMarca(marca);
-        producto.setSku(SanitizadorTexto.limpiar(detalleSolicitud.getSku()) != null
-                ? SanitizadorTexto.limpiar(detalleSolicitud.getSku())
+        producto.setSku(SkuUtils.normalize(detalleSolicitud.getSku()) != null
+                ? SkuUtils.normalize(detalleSolicitud.getSku())
                 : generarSkuCompra(categoria, marca, detalleSolicitud));
         producto.setNombre(SanitizadorTexto.limpiar(detalleSolicitud.getNombreProducto()));
         producto.setDescripcion(null);
@@ -295,21 +296,15 @@ public class CompraService {
     }
 
     private String generarSkuCompra(CategoriaInventario categoria, MarcaInventario marca, CompraDetalleRegistroRequest detalleSolicitud) {
-        String categoriaBase = SanitizadorTexto.limpiar(categoria.getNombre());
-        String marcaBase = SanitizadorTexto.limpiar(marca.getNombre());
-        String nombreBase = SanitizadorTexto.limpiar(detalleSolicitud.getNombreProducto());
-
-        String bruto = String.format("%s-%s-%s",
-                categoriaBase == null ? "ITEM" : categoriaBase,
-                marcaBase == null ? "GEN" : marcaBase,
-                nombreBase == null ? "PRODUCTO" : nombreBase);
-
-        String skuNormalizado = bruto
-                .replaceAll("[^a-zA-Z0-9]+", "-")
-                .replaceAll("(^-|-$)", "")
-                .toUpperCase();
-
-        return skuNormalizado.isBlank() ? ("ITEM-" + System.currentTimeMillis()) : skuNormalizado;
+        String sugerido = productoService.buildSkuSuggestion(
+                categoria.getId(),
+                marca.getId(),
+                detalleSolicitud.getNombreProducto(),
+                detalleSolicitud.getCalidad(),
+                null,
+                null)
+                .getSkuSugerido();
+        return productoService.ensureUniqueSkuSuggestion(sugerido);
     }
 
     private void registrarSalidaContable(Compra compra) {

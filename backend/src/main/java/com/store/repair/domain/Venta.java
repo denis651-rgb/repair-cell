@@ -56,4 +56,20 @@ public class Venta extends EntidadBase {
     @JsonIgnoreProperties("venta")
     @Builder.Default
     private List<VentaDetalle> detalles = new ArrayList<>();
+
+    public void addDetalle(VentaDetalle detalle) {
+        if (detalle == null) {
+            return;
+        }
+        detalles.add(detalle);
+        detalle.setVenta(this);
+    }
+
+    public void replaceDetalles(List<VentaDetalle> nuevosDetalles) {
+        detalles.clear();
+        if (nuevosDetalles == null) {
+            return;
+        }
+        nuevosDetalles.forEach(this::addDetalle);
+    }
 }

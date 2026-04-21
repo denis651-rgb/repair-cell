@@ -3,6 +3,7 @@ package com.store.repair.controller;
 import com.store.repair.domain.ProductoInventario;
 import com.store.repair.domain.TipoMovimientoStock;
 import com.store.repair.domain.MarcaInventario;
+import com.store.repair.dto.ProductoSkuSuggestionResponse;
 import com.store.repair.service.ProductoInventarioService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
@@ -51,6 +52,17 @@ public class ProductoInventarioController {
     @GetMapping("/{id}")
     public ProductoInventario findById(@PathVariable("id") Long id) {
         return service.findById(id);
+    }
+
+    @GetMapping("/sku/sugerencia")
+    public ProductoSkuSuggestionResponse suggestSku(
+            @RequestParam(required = false) Long categoriaId,
+            @RequestParam(required = false) Long marcaId,
+            @RequestParam(required = false) String nombreModelo,
+            @RequestParam(required = false) String calidad,
+            @RequestParam(required = false) String skuActual,
+            @RequestParam(required = false) Long productoId) {
+        return service.buildSkuSuggestion(categoriaId, marcaId, nombreModelo, calidad, skuActual, productoId);
     }
 
     @PostMapping

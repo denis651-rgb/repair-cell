@@ -32,12 +32,19 @@ import {
 } from 'recharts';
 import { api } from '../api/api';
 import PageHeader from '../components/PageHeader';
-import { money } from '../utils/formatters';
+import { money, toDateInputValue } from '../utils/formatters';
 import '../styles/pages/reportes.css';
 
-const hoy = new Date().toISOString().slice(0, 10);
-const hace7 = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+const hoy = toDateInputValue();
+const hace7 = toDateInputValue(new Date(Date.now() - 6 * 24 * 60 * 60 * 1000));
 const ESTADO_COLORS = ['#0f766e', '#dc2626', '#f59e0b', '#2563eb', '#7c3aed', '#475569'];
+const BLOQUES_INICIALES = {
+  financiero: null,
+  clientes: null,
+  panelGlobal: null,
+  panelOperativo: null,
+  ordenes: null,
+};
 
 function diffDays(inicio, fin) {
   const from = new Date(inicio);
@@ -49,6 +56,23 @@ function diffDays(inicio, fin) {
   return Math.max(0, Math.round((to.getTime() - from.getTime()) / (1000 * 60 * 60 * 24)));
 }
 
+function logFrontendRequestError({ endpoint, params, error, contexto }) {
+  console.error(`[Reportes] ${contexto}`, {
+    endpoint,
+    params,
+    mensajeBackend: error?.message || 'Sin mensaje',
+    error,
+  });
+}
+
+function construirErrorBloque(titulo, endpoint, params, error) {
+  logFrontendRequestError({ endpoint, params, error, contexto: titulo });
+  return {
+    titulo,
+    detalle: error?.message || 'No se pudo cargar este bloque del tablero.',
+  };
+}
+
 export default function ReportesPage() {
   const [rango, setRango] = useState({ inicio: hace7, fin: hoy });
   const [serieFinanciera, setSerieFinanciera] = useState([]);
@@ -56,31 +80,89 @@ export default function ReportesPage() {
   const [panelGlobal, setPanelGlobal] = useState(null);
   const [panelOperativo, setPanelOperativo] = useState(null);
   const [ordenes, setOrdenes] = useState([]);
+  const [bloquesError, setBloquesError] = useState(BLOQUES_INICIALES);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
   const cargarTodo = async (inicio = rango.inicio, fin = rango.fin) => {
     setLoading(true);
-    try {
-      setError('');
-      const [financiero, clientes, global, operativo, ordenesData] = await Promise.all([
-        api.get('/reportes/financiero-por-fecha', { inicio, fin }),
-        api.get('/reportes/clientes-global'),
-        api.get('/reportes/panel-global'),
-        api.get('/reportes/panel'),
-        api.get('/ordenes-reparacion'),
-      ]);
+    setError('');
+    setBloquesError(BLOQUES_INICIALES);
 
-      setSerieFinanciera(financiero || []);
-      setClientesGlobales(clientes || []);
-      setPanelGlobal(global);
-      setPanelOperativo(operativo);
-      setOrdenes(ordenesData || []);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+    const solicitudes = [
+      {
+        key: 'financiero',
+        endpoint: '/reportes/financiero-por-fecha',
+        params: { inicio, fin },
+        request: api.get('/reportes/financiero-por-fecha', { inicio, fin }),
+      },
+      {
+        key: 'clientes',
+        endpoint: '/reportes/clientes-global',
+        params: {},
+        request: api.get('/reportes/clientes-global'),
+      },
+      {
+        key: 'panelGlobal',
+        endpoint: '/reportes/panel-global',
+        params: {},
+        request: api.get('/reportes/panel-global'),
+      },
+      {
+        key: 'panelOperativo',
+        endpoint: '/reportes/panel',
+        params: {},
+        request: api.get('/reportes/panel'),
+      },
+      {
+        key: 'ordenes',
+        endpoint: '/ordenes-reparacion',
+        params: {},
+        request: api.get('/ordenes-reparacion'),
+      },
+    ];
+
+    const resultados = await Promise.allSettled(solicitudes.map((solicitud) => solicitud.request));
+    const errores = { ...BLOQUES_INICIALES };
+
+    resultados.forEach((resultado, index) => {
+      const solicitud = solicitudes[index];
+      if (resultado.status === 'fulfilled') {
+        const valor = resultado.value;
+        if (solicitud.key === 'financiero') setSerieFinanciera(valor || []);
+        if (solicitud.key === 'clientes') setClientesGlobales(valor || []);
+        if (solicitud.key === 'panelGlobal') setPanelGlobal(valor || null);
+        if (solicitud.key === 'panelOperativo') setPanelOperativo(valor || null);
+        if (solicitud.key === 'ordenes') setOrdenes(valor || []);
+        return;
+      }
+
+      errores[solicitud.key] = construirErrorBloque(
+        `No se pudo cargar ${solicitud.endpoint}.`,
+        solicitud.endpoint,
+        solicitud.params,
+        resultado.reason,
+      );
+
+      if (solicitud.key === 'financiero') setSerieFinanciera([]);
+      if (solicitud.key === 'clientes') setClientesGlobales([]);
+      if (solicitud.key === 'panelGlobal') setPanelGlobal(null);
+      if (solicitud.key === 'panelOperativo') setPanelOperativo(null);
+      if (solicitud.key === 'ordenes') setOrdenes([]);
+    });
+
+    setBloquesError(errores);
+
+    const bloquesFallidos = Object.values(errores).filter(Boolean);
+    if (bloquesFallidos.length > 0) {
+      setError(
+        bloquesFallidos.length === solicitudes.length
+          ? 'No se pudo cargar ningun bloque de reportes.'
+          : `Algunos bloques fallaron (${bloquesFallidos.length}). El resto del tablero sigue disponible.`,
+      );
     }
+
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -102,10 +184,17 @@ export default function ReportesPage() {
   }, [serieFinanciera]);
 
   const mejorCliente = clientesGlobales[0];
+  const bloquesConError = useMemo(
+    () => Object.entries(bloquesError).filter(([, value]) => Boolean(value)),
+    [bloquesError],
+  );
 
   const estadosOperativos = useMemo(
-    () => (panelGlobal?.estadosOrden || []).map((item, index) => ({ ...item, fill: ESTADO_COLORS[index % ESTADO_COLORS.length] })),
-    [panelGlobal],
+    () => (panelOperativo?.estados || []).map((item, index) => ({
+      ...item,
+      fill: ESTADO_COLORS[index % ESTADO_COLORS.length],
+    })),
+    [panelOperativo],
   );
 
   const tiemposReparacion = useMemo(() => {
@@ -162,6 +251,17 @@ export default function ReportesPage() {
       </PageHeader>
 
       {error && <div className="alert">{error}</div>}
+
+      {bloquesConError.length > 0 && (
+        <section className="reports-status-grid">
+          {bloquesConError.map(([key, value]) => (
+            <article key={key} className="reports-status-card reports-status-card-danger">
+              <strong>{value.titulo}</strong>
+              <p>{value.detalle}</p>
+            </article>
+          ))}
+        </section>
+      )}
 
       <section className="reports-hero-card">
         <div className="reports-hero-copy">
@@ -235,6 +335,18 @@ export default function ReportesPage() {
             <h2>Ingresos, egresos y balance por fecha</h2>
           </div>
         </div>
+
+        {bloquesError.financiero && (
+          <div className="reports-block-alert" role="alert">
+            <div>
+              <strong>No se pudo cargar el bloque financiero.</strong>
+              <p>{bloquesError.financiero.detalle}</p>
+            </div>
+            <button type="button" className="secondary reports-ghost-button" onClick={() => cargarTodo(rango.inicio, rango.fin)}>
+              Reintentar
+            </button>
+          </div>
+        )}
 
         <section className="reports-kpi-grid">
           <article className="reports-kpi-card">
@@ -316,6 +428,18 @@ export default function ReportesPage() {
             <h2>Ventas, compras, clientes y stock critico</h2>
           </div>
         </div>
+
+        {(bloquesError.clientes || bloquesError.panelGlobal) && (
+          <div className="reports-block-alert" role="alert">
+            <div>
+              <strong>No se pudo cargar todo el bloque comercial.</strong>
+              <p>{bloquesError.clientes?.detalle || bloquesError.panelGlobal?.detalle}</p>
+            </div>
+            <button type="button" className="secondary reports-ghost-button" onClick={() => cargarTodo(rango.inicio, rango.fin)}>
+              Reintentar
+            </button>
+          </div>
+        )}
 
         <section className="reports-kpi-grid">
           <article className="reports-kpi-card">
@@ -431,6 +555,18 @@ export default function ReportesPage() {
             <h2>Ordenes por estado y tiempos de reparacion</h2>
           </div>
         </div>
+
+        {(bloquesError.panelOperativo || bloquesError.ordenes) && (
+          <div className="reports-block-alert" role="alert">
+            <div>
+              <strong>No se pudo cargar todo el bloque operativo.</strong>
+              <p>{bloquesError.panelOperativo?.detalle || bloquesError.ordenes?.detalle}</p>
+            </div>
+            <button type="button" className="secondary reports-ghost-button" onClick={() => cargarTodo(rango.inicio, rango.fin)}>
+              Reintentar
+            </button>
+          </div>
+        )}
 
         <section className="reports-kpi-grid">
           <article className="reports-kpi-card">

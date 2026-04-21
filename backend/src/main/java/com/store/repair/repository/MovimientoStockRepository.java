@@ -22,6 +22,8 @@ public interface MovimientoStockRepository extends JpaRepository<MovimientoStock
     @EntityGraph(attributePaths = "producto")
     List<MovimientoStock> findAllByProductoId(Long productoId);
 
+    boolean existsByProductoId(Long productoId);
+
     @EntityGraph(attributePaths = { "producto", "producto.categoria", "producto.marca" })
     @Query("""
             select m from MovimientoStock m

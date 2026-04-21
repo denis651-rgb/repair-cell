@@ -414,7 +414,7 @@ export default function RepairOrderModal({
                           <div className="repair-result-card__icon">📦</div>
                           <div className="repair-result-card__content">
                             <strong>{product.nombre}</strong>
-                            <span>{product.categoria?.nombre || 'Sin categoria'} · Stock {product.cantidadStock}</span>
+                            <span>{product.sku || 'Sin SKU'} · {product.categoria?.nombre || 'Sin categoria'} · Stock {product.cantidadStock}</span>
                           </div>
                         </button>
                       ))
@@ -427,7 +427,7 @@ export default function RepairOrderModal({
                     <div className="repair-selected-card__icon">📦</div>
                     <div className="repair-selected-card__content">
                       <strong>{selectedProduct.nombre}</strong>
-                      <span>{selectedProduct.categoria?.nombre || 'Sin categoria'} · Stock {selectedProduct.cantidadStock}</span>
+                      <span>{selectedProduct.sku || 'Sin SKU'} · {selectedProduct.categoria?.nombre || 'Sin categoria'} · Stock {selectedProduct.cantidadStock}</span>
                     </div>
                     <button
                       type="button"

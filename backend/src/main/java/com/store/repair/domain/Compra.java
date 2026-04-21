@@ -52,4 +52,20 @@ public class Compra extends EntidadBase {
     @JsonIgnoreProperties("compra")
     @Builder.Default
     private List<CompraDetalle> detalles = new ArrayList<>();
+
+    public void addDetalle(CompraDetalle detalle) {
+        if (detalle == null) {
+            return;
+        }
+        detalles.add(detalle);
+        detalle.setCompra(this);
+    }
+
+    public void replaceDetalles(List<CompraDetalle> nuevosDetalles) {
+        detalles.clear();
+        if (nuevosDetalles == null) {
+            return;
+        }
+        nuevosDetalles.forEach(this::addDetalle);
+    }
 }

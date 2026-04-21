@@ -13,13 +13,16 @@ import com.store.repair.domain.Venta;
 import com.store.repair.domain.VentaDetalle;
 import com.store.repair.dto.DevolucionVentaDetalleRequest;
 import com.store.repair.dto.DevolucionVentaRequest;
+import com.store.repair.dto.VentaListadoResponse;
 import com.store.repair.dto.VentaDetalleRegistroRequest;
 import com.store.repair.dto.VentaRegistroRequest;
 import com.store.repair.repository.CuentaPorCobrarRepository;
 import com.store.repair.repository.EntradaContableRepository;
 import com.store.repair.repository.VentaRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -33,6 +36,7 @@ import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class VentaService {
 
     private final VentaRepository repository;
@@ -42,10 +46,35 @@ public class VentaService {
     private final EntradaContableRepository entradaContableRepository;
     private final CuentaPorCobrarRepository cuentaPorCobrarRepository;
 
-    public Page<Venta> findPage(String busqueda, int pagina, int tamano) {
-        return repository.search(
-                busqueda == null ? "" : busqueda.trim(),
-                PageRequest.of(Math.max(pagina, 0), Math.max(tamano, 1)));
+    @Transactional(readOnly = true)
+    public Page<VentaListadoResponse> findPage(String busqueda, int pagina, int tamano) {
+        String textoBusqueda = busqueda == null ? "" : busqueda.trim();
+        int paginaSegura = Math.max(pagina, 0);
+        int tamanoSeguro = Math.max(tamano, 1);
+
+        try {
+            return repository.search(
+                    textoBusqueda,
+                    PageRequest.of(paginaSegura, tamanoSeguro));
+
+        } catch (ResourceNotFoundException | BusinessException ex) {
+            log.warn(
+                    "Error controlado al paginar ventas. busqueda='{}', pagina={}, tamano={}. Motivo={}",
+                    textoBusqueda, paginaSegura, tamanoSeguro, ex.getMessage(), ex);
+            throw ex;
+
+        } catch (DataAccessException ex) {
+            log.error(
+                    "Error de base de datos al paginar ventas. busqueda='{}', pagina={}, tamano={}",
+                    textoBusqueda, paginaSegura, tamanoSeguro, ex);
+            throw new BusinessException("Ocurrió un error al consultar las ventas en la base de datos.");
+
+        } catch (Exception ex) {
+            log.error(
+                    "Error inesperado en findPage(). busqueda='{}', pagina={}, tamano={}",
+                    textoBusqueda, paginaSegura, tamanoSeguro, ex);
+            throw new RuntimeException("Error inesperado al obtener el listado paginado de ventas.", ex);
+        }
     }
 
     public Venta findById(Long id) {
@@ -82,13 +111,12 @@ public class VentaService {
         double totalVenta = 0D;
         List<VentaDetalle> detallesGuardados = new ArrayList<>();
 
-        // El backend consolida los productos repetidos para que el descuento de
-        // stock y el snapshot historico de la venta siempre queden coherentes.
         for (VentaDetalleRegistroRequest detalleSolicitud : detallesNormalizados) {
             ProductoInventario producto = productoService.findById(detalleSolicitud.getProductoId());
-            double precioVenta = detalleSolicitud.getPrecioVentaUnitario() != null && detalleSolicitud.getPrecioVentaUnitario() >= 0
-                    ? detalleSolicitud.getPrecioVentaUnitario()
-                    : (producto.getPrecioVenta() == null ? 0D : producto.getPrecioVenta());
+            double precioVenta = detalleSolicitud.getPrecioVentaUnitario() != null
+                    && detalleSolicitud.getPrecioVentaUnitario() >= 0
+                            ? detalleSolicitud.getPrecioVentaUnitario()
+                            : (producto.getPrecioVenta() == null ? 0D : producto.getPrecioVenta());
             double subtotal = detalleSolicitud.getCantidad() * precioVenta;
 
             productoService.adjustStock(
@@ -118,7 +146,7 @@ public class VentaService {
             totalVenta += subtotal;
         }
 
-        ventaGuardada.setDetalles(detallesGuardados);
+        ventaGuardada.replaceDetalles(detallesGuardados);
         ventaGuardada.setTotal(totalVenta);
         Venta ventaFinal = repository.save(ventaGuardada);
 
@@ -149,8 +177,6 @@ public class VentaService {
         List<DevolucionVentaDetalleRequest> detallesNormalizados = normalizarDetallesDevolucion(venta, request);
         double montoDevueltoEnOperacion = 0D;
 
-        // La devolucion parcial devuelve solo las cantidades elegidas y deja la
-        // venta viva para futuras devoluciones o consulta historica.
         for (DevolucionVentaDetalleRequest detalleSolicitud : detallesNormalizados) {
             VentaDetalle detalle = buscarDetalleVenta(venta, detalleSolicitud.getVentaDetalleId());
             int cantidadYaDevuelta = detalle.getCantidadDevuelta() == null ? 0 : detalle.getCantidadDevuelta();
@@ -183,7 +209,8 @@ public class VentaService {
         return findById(ventaId);
     }
 
-    private List<VentaDetalleRegistroRequest> normalizarDetallesVenta(List<VentaDetalleRegistroRequest> detallesOriginales) {
+    private List<VentaDetalleRegistroRequest> normalizarDetallesVenta(
+            List<VentaDetalleRegistroRequest> detallesOriginales) {
         if (detallesOriginales == null || detallesOriginales.isEmpty()) {
             return List.of();
         }
@@ -218,7 +245,8 @@ public class VentaService {
         return new ArrayList<>(detallesConsolidados.values());
     }
 
-    private List<DevolucionVentaDetalleRequest> normalizarDetallesDevolucion(Venta venta, DevolucionVentaRequest request) {
+    private List<DevolucionVentaDetalleRequest> normalizarDetallesDevolucion(Venta venta,
+            DevolucionVentaRequest request) {
         if (request == null || request.getDetalles() == null || request.getDetalles().isEmpty()) {
             throw new BusinessException("Selecciona al menos un item para la devolucion");
         }
@@ -245,7 +273,8 @@ public class VentaService {
             }
 
             int cantidadVendida = detalleVenta.getCantidad() == null ? 0 : detalleVenta.getCantidad();
-            int cantidadYaDevuelta = detalleVenta.getCantidadDevuelta() == null ? 0 : detalleVenta.getCantidadDevuelta();
+            int cantidadYaDevuelta = detalleVenta.getCantidadDevuelta() == null ? 0
+                    : detalleVenta.getCantidadDevuelta();
             int disponibleParaDevolver = cantidadVendida - cantidadYaDevuelta;
             int cantidadSolicitada = detallesConsolidados.get(detalle.getVentaDetalleId()).getCantidad();
 

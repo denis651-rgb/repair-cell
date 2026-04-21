@@ -1,6 +1,5 @@
 package com.store.repair.service;
 
-import com.store.repair.domain.CuentaPorCobrar;
 import com.store.repair.domain.EntradaContable;
 import com.store.repair.domain.EstadoCuentaPorCobrar;
 import com.store.repair.domain.EstadoReparacion;
@@ -8,6 +7,7 @@ import com.store.repair.domain.OrdenReparacion;
 import com.store.repair.domain.ProductoInventario;
 import com.store.repair.domain.TipoEntrada;
 import com.store.repair.domain.Venta;
+import com.store.repair.dto.ClienteMontoAcumuladoDto;
 import com.store.repair.dto.PanelResumenResponse;
 import com.store.repair.dto.PanelTallerResponse;
 import com.store.repair.dto.ProductoStockBajoResponse;
@@ -25,6 +25,8 @@ import com.store.repair.repository.EntradaContableRepository;
 import com.store.repair.repository.OrdenReparacionRepository;
 import com.store.repair.repository.ProductoInventarioRepository;
 import com.store.repair.repository.VentaRepository;
+import com.store.repair.repository.AbonoCuentaPorCobrarRepository;
+import com.store.repair.util.OrdenMontoUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -49,6 +51,7 @@ public class ReporteServicio {
     private final VentaRepository ventaRepositorio;
     private final CompraRepository compraRepositorio;
     private final CuentaPorCobrarRepository cuentaPorCobrarRepositorio;
+    private final AbonoCuentaPorCobrarRepository abonoCuentaPorCobrarRepositorio;
 
     @Cacheable("reportes_resumen")
     public ReporteResumenResponse obtenerResumen() {
@@ -70,7 +73,7 @@ public class ReporteServicio {
         List<ProductoInventario> stockBajo = obtenerProductosConStockBajo();
 
         double totalIngresos = ordenes.stream()
-                .mapToDouble(orden -> orden.getCostoFinal() == null ? 0D : orden.getCostoFinal())
+                .mapToDouble(OrdenMontoUtils::resolveMontoVisible)
                 .sum();
 
         return new PanelTallerResponse(
@@ -88,19 +91,17 @@ public class ReporteServicio {
     @Cacheable("reportes_resumen_global")
     public ResumenGlobalResponse obtenerResumenGlobal() {
         List<EntradaContable> entradasContables = entradaContableRepositorio.findAll();
-        List<CuentaPorCobrar> cuentasPorCobrar = cuentaPorCobrarRepositorio.findAll();
 
         double ingresosTotales = sumarPorTipoEntrada(entradasContables, TipoEntrada.ENTRADA);
         double egresosTotales = sumarPorTipoEntrada(entradasContables, TipoEntrada.SALIDA);
 
-        long cuentasAbiertas = cuentasPorCobrar.stream()
-                .filter(this::cuentaPorCobrarAbierta)
-                .count();
+        long cuentasAbiertas = cuentaPorCobrarRepositorio.countByEstadoNotAndEstadoNot(
+                EstadoCuentaPorCobrar.PAGADA,
+                EstadoCuentaPorCobrar.ANULADA);
 
-        double saldoPendiente = cuentasPorCobrar.stream()
-                .filter(this::cuentaPorCobrarAbierta)
-                .mapToDouble(cuenta -> valorSeguro(cuenta.getSaldoPendiente()))
-                .sum();
+        double saldoPendiente = valorSeguro(cuentaPorCobrarRepositorio.sumSaldoPendienteByEstadoNotAndEstadoNot(
+                EstadoCuentaPorCobrar.PAGADA,
+                EstadoCuentaPorCobrar.ANULADA));
 
         return new ResumenGlobalResponse(
                 clienteRepositorio.count(),
@@ -120,7 +121,6 @@ public class ReporteServicio {
     public PanelResumenResponse obtenerPanelGlobal() {
         List<OrdenReparacion> ordenes = ordenRepositorio.findAll();
         List<EntradaContable> entradasContables = entradaContableRepositorio.findAll();
-        List<CuentaPorCobrar> cuentasPorCobrar = cuentaPorCobrarRepositorio.findAll();
         List<ProductoInventario> stockBajo = obtenerProductosConStockBajo();
 
         double ingresosTotales = sumarPorTipoEntrada(entradasContables, TipoEntrada.ENTRADA);
@@ -135,14 +135,13 @@ public class ReporteServicio {
                 .mapToDouble(entrada -> valorSeguro(entrada.getMonto()))
                 .sum();
 
-        long cuentasAbiertas = cuentasPorCobrar.stream()
-                .filter(this::cuentaPorCobrarAbierta)
-                .count();
+        long cuentasAbiertas = cuentaPorCobrarRepositorio.countByEstadoNotAndEstadoNot(
+                EstadoCuentaPorCobrar.PAGADA,
+                EstadoCuentaPorCobrar.ANULADA);
 
-        double saldoPendiente = cuentasPorCobrar.stream()
-                .filter(this::cuentaPorCobrarAbierta)
-                .mapToDouble(cuenta -> valorSeguro(cuenta.getSaldoPendiente()))
-                .sum();
+        double saldoPendiente = valorSeguro(cuentaPorCobrarRepositorio.sumSaldoPendienteByEstadoNotAndEstadoNot(
+                EstadoCuentaPorCobrar.PAGADA,
+                EstadoCuentaPorCobrar.ANULADA));
 
         return new PanelResumenResponse(
                 clienteRepositorio.count(),
@@ -187,7 +186,7 @@ public class ReporteServicio {
             LocalDate fecha = orden.getRecibidoEn().toLocalDate();
             acumulado.computeIfPresent(
                     fecha,
-                    (clave, valorActual) -> valorActual + valorSeguro(orden.getCostoFinal()));
+                    (clave, valorActual) -> valorActual + OrdenMontoUtils.resolveMontoVisible(orden));
         }
 
         return acumulado.entrySet().stream()
@@ -261,7 +260,7 @@ public class ReporteServicio {
                         lista.get(0).getCliente().getId(),
                         lista.get(0).getCliente().getNombreCompleto(),
                         lista.size(),
-                        lista.stream().mapToDouble(orden -> valorSeguro(orden.getCostoFinal())).sum()))
+                        lista.stream().mapToDouble(OrdenMontoUtils::resolveMontoVisible).sum()))
                 .sorted(Comparator.comparingDouble(ReporteClienteResponse::totalFacturado).reversed())
                 .toList();
     }
@@ -279,7 +278,7 @@ public class ReporteServicio {
                     orden.getCliente().getId(),
                     clienteId -> new ReporteClienteGlobalBuilder(clienteId, orden.getCliente().getNombreCompleto()));
             builder.totalOrdenes += 1;
-            builder.totalReparaciones += valorSeguro(orden.getCostoFinal());
+            builder.totalReparaciones += OrdenMontoUtils.resolveMontoVisible(orden);
         }
 
         for (Venta venta : ventaRepositorio.findAll()) {
@@ -293,18 +292,26 @@ public class ReporteServicio {
             builder.totalVentas += valorSeguro(venta.getTotal());
         }
 
-        for (CuentaPorCobrar cuenta : cuentaPorCobrarRepositorio.findAll()) {
-            if (cuenta.getCliente() == null) {
+        for (ClienteMontoAcumuladoDto saldoPendiente : cuentaPorCobrarRepositorio.sumarSaldoPendientePorCliente()) {
+            if (saldoPendiente.clienteId() == null) {
                 continue;
             }
 
             ReporteClienteGlobalBuilder builder = acumulado.computeIfAbsent(
-                    cuenta.getCliente().getId(),
-                    clienteId -> new ReporteClienteGlobalBuilder(clienteId, cuenta.getCliente().getNombreCompleto()));
-            builder.saldoPendiente += valorSeguro(cuenta.getSaldoPendiente());
-            builder.totalAbonado += cuenta.getAbonos().stream()
-                    .mapToDouble(abono -> valorSeguro(abono.getMonto()))
-                    .sum();
+                    saldoPendiente.clienteId(),
+                    clienteId -> new ReporteClienteGlobalBuilder(clienteId, saldoPendiente.cliente()));
+            builder.saldoPendiente += valorSeguro(saldoPendiente.monto());
+        }
+
+        for (ClienteMontoAcumuladoDto abono : abonoCuentaPorCobrarRepositorio.sumarAbonosPorCliente()) {
+            if (abono.clienteId() == null) {
+                continue;
+            }
+
+            ReporteClienteGlobalBuilder builder = acumulado.computeIfAbsent(
+                    abono.clienteId(),
+                    clienteId -> new ReporteClienteGlobalBuilder(clienteId, abono.cliente()));
+            builder.totalAbonado += valorSeguro(abono.monto());
         }
 
         return acumulado.values().stream()
@@ -360,7 +367,7 @@ public class ReporteServicio {
                 .collect(Collectors.groupingBy(
                         orden -> orden.getRecibidoEn().toLocalDate(),
                         TreeMap::new,
-                        Collectors.summingDouble(orden -> valorSeguro(orden.getCostoFinal()))));
+                        Collectors.summingDouble(OrdenMontoUtils::resolveMontoVisible)));
 
         return agrupado.entrySet().stream()
                 .map(entry -> new SerieDiariaResponse(entry.getKey().toString(), entry.getValue()))
@@ -429,11 +436,6 @@ public class ReporteServicio {
                         entrada.getModuloRelacionado() == null ? "" : entrada.getModuloRelacionado().trim()))
                 .mapToDouble(entrada -> valorSeguro(entrada.getMonto()))
                 .sum();
-    }
-
-    private boolean cuentaPorCobrarAbierta(CuentaPorCobrar cuenta) {
-        return cuenta.getEstado() != EstadoCuentaPorCobrar.PAGADA
-                && cuenta.getEstado() != EstadoCuentaPorCobrar.ANULADA;
     }
 
     private LocalDate resolverFechaInicio(LocalDate inicio) {

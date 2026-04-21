@@ -5,13 +5,15 @@ import EmptyState from '../components/common/EmptyState';
 import Modal from '../components/common/Modal';
 import PageHeader from '../components/PageHeader';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { normalizeSku } from '../utils/sku';
+import { toDateInputValue } from '../utils/formatters';
 import '../styles/pages/compras.css';
 
 const TAMANO = 8;
 const paginaVacia = { content: [], totalPages: 0, totalElements: 0, number: 0 };
 const compraInicial = {
   proveedorId: '',
-  fechaCompra: new Date().toISOString().slice(0, 10),
+  fechaCompra: toDateInputValue(),
   numeroComprobante: '',
   observaciones: '',
   tipoPago: 'CONTADO',
@@ -179,7 +181,7 @@ export default function ComprasPage() {
       productoId: detalleForm.productoId ? Number(detalleForm.productoId) : null,
       categoriaId: Number(detalleForm.categoriaId),
       marcaId: Number(detalleForm.marcaId),
-      sku: detalleForm.sku,
+      sku: normalizeSku(detalleForm.sku),
       nombreProducto: detalleForm.nombreProducto,
       marca: marcaSeleccionada.nombre,
       calidad: detalleForm.calidad,
@@ -329,7 +331,7 @@ export default function ComprasPage() {
                   <div className="purchase-card-items">
                     {(compra.detalles || []).slice(0, 3).map((detalle) => (
                       <span key={detalle.id || `${detalle.sku}-${detalle.nombreProducto}`} className="purchase-item-chip">
-                        {detalle.nombreProducto} x{detalle.cantidad}
+                        {detalle.sku || 'Sin SKU'} · {detalle.nombreProducto} x{detalle.cantidad}
                       </span>
                     ))}
                   </div>
@@ -412,7 +414,7 @@ export default function ComprasPage() {
                   <option value="">Crear como producto nuevo</option>
                   {productosFiltradosDetalle.map((producto) => (
                     <option key={producto.id} value={producto.id}>
-                      {producto.nombre} - {obtenerNombreMarca(producto.marca) || 'Sin marca'} - {producto.categoria?.nombre || 'Sin categoria'}
+                      {producto.sku || 'Sin SKU'} - {producto.nombre} - {obtenerNombreMarca(producto.marca) || 'Sin marca'}
                     </option>
                   ))}
                 </select>
@@ -441,7 +443,11 @@ export default function ComprasPage() {
               </label>
               <label>
                 <span>SKU</span>
-                <input value={detalleForm.sku} onChange={(event) => setDetalleForm((actual) => ({ ...actual, sku: event.target.value }))} />
+                <input
+                  value={detalleForm.sku}
+                  onChange={(event) => setDetalleForm((actual) => ({ ...actual, sku: normalizeSku(event.target.value) }))}
+                  placeholder="SKU del producto"
+                />
               </label>
               <label>
                 <span>Nombre / modelo</span>
@@ -478,7 +484,7 @@ export default function ComprasPage() {
                 <table className="table">
                   <thead>
                     <tr>
-                      <th>Producto</th>
+                      <th>SKU / Producto</th>
                       <th>Marca</th>
                       <th>Cantidad</th>
                       <th>P. compra</th>
@@ -490,7 +496,7 @@ export default function ComprasPage() {
                   <tbody>
                     {detallesCompra.map((detalle, index) => (
                       <tr key={`${detalle.nombreProducto}-${index}`}>
-                        <td>{detalle.nombreProducto}</td>
+                        <td>{detalle.sku || 'Sin SKU'} · {detalle.nombreProducto}</td>
                         <td>{detalle.marca}</td>
                         <td>{detalle.cantidad}</td>
                         <td>Bs {currency.format(detalle.precioCompraUnitario)}</td>

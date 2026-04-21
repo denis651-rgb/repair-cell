@@ -2,6 +2,7 @@ package com.store.repair.controller;
 
 import com.store.repair.domain.Venta;
 import com.store.repair.dto.DevolucionVentaRequest;
+import com.store.repair.dto.VentaListadoResponse;
 import com.store.repair.dto.VentaRegistroRequest;
 import com.store.repair.service.VentaService;
 import jakarta.validation.Valid;
@@ -17,7 +18,7 @@ public class VentaController {
     private final VentaService service;
 
     @GetMapping("/paginado")
-    public Page<Venta> findPage(
+    public Page<VentaListadoResponse> findPage(
             @RequestParam(required = false) String busqueda,
             @RequestParam(defaultValue = "0") int pagina,
             @RequestParam(defaultValue = "8") int tamano) {

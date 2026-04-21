@@ -13,11 +13,11 @@ import {
 import { api } from '../api/api';
 import EntryModal from '../components/modals/EntryModal';
 import PageHeader from '../components/PageHeader';
-import { formatDate, formatDateTime, money } from '../utils/formatters';
+import { formatDate, formatDateTime, money, toDateInputValue } from '../utils/formatters';
 import '../styles/pages/contabilidad.css';
 
 const PAGE_SIZE = 8;
-const today = new Date().toISOString().slice(0, 10);
+const today = toDateInputValue();
 const initialForm = { tipoEntrada: 'ENTRADA', categoria: '', descripcion: '', monto: 0, fechaEntrada: today };
 const initialPage = { content: [], totalPages: 0, totalElements: 0, number: 0 };
 const initialCashSummary = { entradas: 0, salidas: 0, movimientos: 0, esperado: 0 };

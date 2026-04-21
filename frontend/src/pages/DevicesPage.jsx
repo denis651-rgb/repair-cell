@@ -1,14 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import {
-  Cable,
-  Fingerprint,
-  Palette,
-  PencilLine,
-  Plus,
-  Search,
-  Shield,
-  Smartphone,
-} from 'lucide-react';
 import { api } from '../api/api';
 import PageHeader from '../components/PageHeader';
 import EmptyState from '../components/common/EmptyState';
@@ -77,16 +67,6 @@ export default function DevicesPage() {
   }, [debouncedSearch]);
 
   const dispositivos = devicesPage.content || [];
-
-  const devicesWithIdentifier = useMemo(
-    () => dispositivos.filter((device) => Boolean(device.imeiSerie)).length,
-    [dispositivos],
-  );
-
-  const devicesWithLock = useMemo(
-    () => dispositivos.filter((device) => Boolean(device.codigoBloqueo)).length,
-    [dispositivos],
-  );
 
   const filteredClientes = useMemo(() => {
     const term = debouncedClientQuery.trim().toLowerCase();
@@ -181,10 +161,9 @@ export default function DevicesPage() {
 
   return (
     <div className="page-stack devices-page">
-      <PageHeader title="Dispositivos" subtitle="Organiza los equipos recibidos, su identificación y los datos técnicos de acceso en una sola vista.">
+      <PageHeader title="Dispositivos" subtitle="Organiza los equipos recibidos, su identificacion y los datos tecnicos de acceso en una sola vista.">
         <div className="devices-header-actions">
           <button className="devices-primary-button" onClick={openCreate}>
-            <Plus size={18} />
             Nuevo dispositivo
           </button>
         </div>
@@ -194,7 +173,6 @@ export default function DevicesPage() {
 
       <section className="devices-hero-card">
         <label className="devices-search">
-          <Search size={18} />
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
@@ -202,19 +180,16 @@ export default function DevicesPage() {
           />
         </label>
         <div className="devices-search-summary">
-          <span className="devices-dot" />
           {devicesPage.totalElements} resultados
         </div>
       </section>
       <section className="devices-table-card card">
-        <div className="devices-table-header">
-         
-               </div>
+        <div className="devices-table-header" />
 
         {dispositivos.length === 0 ? (
           <EmptyState
             title="No hay equipos registrados"
-            description={devicesPage.totalElements === 0 ? 'Agrega el primer dispositivo para empezar a gestionar reparaciones.' : 'Prueba con otro criterio de búsqueda o limpia el filtro actual.'}
+            description={devicesPage.totalElements === 0 ? 'Agrega el primer dispositivo para empezar a gestionar reparaciones.' : 'Prueba con otro criterio de busqueda o limpia el filtro actual.'}
             action={<button onClick={openCreate}>Nuevo dispositivo</button>}
           />
         ) : (
@@ -232,48 +207,36 @@ export default function DevicesPage() {
                 {dispositivos.map((device) => (
                   <article key={device.id} className="devices-row">
                     <div className="devices-cell devices-customer-main">
-                      <div className="devices-avatar">
-                        {device.cliente?.nombreCompleto
-                          ?.split(' ')
-                          .filter(Boolean)
-                          .slice(0, 2)
-                          .map((part) => part[0]?.toUpperCase())
-                          .join('') || 'CL'}
-                      </div>
                       <div>
                         <strong>{device.cliente?.nombreCompleto || 'Sin cliente'}</strong>
-                        <p>Equipo vinculado para seguimiento y reparación</p>
+                        <p>Equipo vinculado para seguimiento y reparacion</p>
                       </div>
                     </div>
 
                     <div className="devices-cell devices-equipment-main">
                       <div className="devices-meta-item">
-                        <Smartphone size={15} />
                         <span>{device.marca} {device.modelo}</span>
                       </div>
                       <div className="devices-meta-item">
-                        <Cable size={15} />
                         <span>{device.accesorios || 'Sin accesorios registrados'}</span>
                       </div>
                     </div>
 
                     <div className="devices-cell devices-meta-stack">
                       <div className="devices-meta-item">
-                        <Fingerprint size={15} />
                         <span>{device.imeiSerie || 'Sin IMEI / serie'}</span>
                       </div>
                       <div className="devices-meta-item">
-                        <Shield size={15} />
                         <span>{device.observaciones || 'Sin observaciones'}</span>
                       </div>
                     </div>
 
                     <div className="devices-cell devices-meta-stack">
                       <div className="devices-chip-line">
-                        <span className="devices-soft-chip"><Palette size={14} /> {device.color || 'Sin color'}</span>
+                        <span className="devices-soft-chip">{device.color || 'Sin color'}</span>
                       </div>
                       <div className="devices-chip-line">
-                        <span className="devices-soft-chip"><Shield size={14} /> {device.codigoBloqueo || 'Sin código'}</span>
+                        <span className="devices-soft-chip">{device.codigoBloqueo || 'Sin codigo'}</span>
                       </div>
                     </div>
 
@@ -285,7 +248,7 @@ export default function DevicesPage() {
                         aria-label={`Editar ${device.marca} ${device.modelo}`}
                         title={`Editar ${device.marca} ${device.modelo}`}
                       >
-                        <PencilLine size={16} />
+                        Editar
                       </button>
                     </div>
                   </article>
@@ -304,7 +267,7 @@ export default function DevicesPage() {
               </button>
 
               <span>
-                Página {devicesPage.number + 1} de {Math.max(devicesPage.totalPages || 1, 1)}
+                Pagina {devicesPage.number + 1} de {Math.max(devicesPage.totalPages || 1, 1)}
               </span>
 
               <button

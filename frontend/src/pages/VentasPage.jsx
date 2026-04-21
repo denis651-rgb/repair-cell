@@ -5,13 +5,14 @@ import EmptyState from '../components/common/EmptyState';
 import Modal from '../components/common/Modal';
 import PageHeader from '../components/PageHeader';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { toDateInputValue } from '../utils/formatters';
 import '../styles/pages/ventas.css';
 
 const TAMANO = 8;
 const paginaVacia = { content: [], totalPages: 0, totalElements: 0, number: 0 };
 const ventaInicial = {
   clienteId: '',
-  fechaVenta: new Date().toISOString().slice(0, 10),
+  fechaVenta: toDateInputValue(),
   numeroComprobante: '',
   observaciones: '',
   tipoPago: 'CONTADO',
@@ -22,7 +23,7 @@ const detalleInicial = {
   precioVentaUnitario: '',
 };
 const devolucionInicial = {
-  fechaDevolucion: new Date().toISOString().slice(0, 10),
+  fechaDevolucion: toDateInputValue(),
   motivoDevolucion: '',
 };
 
@@ -31,6 +32,14 @@ const crearErrorVisualVenta = (titulo, error) => ({
   titulo,
   detalle: error?.message || 'No se pudo completar la operacion de venta.',
 });
+const logFrontendRequestError = ({ endpoint, params, error, contexto }) => {
+  console.error(`[Ventas] ${contexto}`, {
+    endpoint,
+    params,
+    mensajeBackend: error?.message || 'Sin mensaje',
+    error,
+  });
+};
 
 export default function VentasPage() {
   const [ventasPage, setVentasPage] = useState(paginaVacia);
@@ -48,6 +57,7 @@ export default function VentasPage() {
   const [devolucionForm, setDevolucionForm] = useState(devolucionInicial);
   const [detallesDevolucion, setDetallesDevolucion] = useState([]);
   const [error, setError] = useState(null);
+  const [ventasError, setVentasError] = useState(null);
 
   const busquedaDebounced = useDebouncedValue(busqueda, 250);
 
@@ -74,16 +84,28 @@ export default function VentasPage() {
   };
 
   const cargarVentas = async (paginaObjetivo = pagina) => {
+    const params = {
+      pagina: paginaObjetivo,
+      tamano: TAMANO,
+      busqueda: busquedaDebounced,
+    };
+
     try {
-      setError(null);
-      const respuesta = await api.get('/ventas/paginado', {
-        pagina: paginaObjetivo,
-        tamano: TAMANO,
-        busqueda: busquedaDebounced,
-      });
+      setVentasError(null);
+      const respuesta = await api.get('/ventas/paginado', params);
       setVentasPage(respuesta || paginaVacia);
     } catch (err) {
-      setError(crearErrorVisualVenta('No se pudo cargar el historial de ventas.', err));
+      logFrontendRequestError({
+        endpoint: '/ventas/paginado',
+        params,
+        error: err,
+        contexto: 'Fallo al cargar el listado paginado',
+      });
+      setVentasError({
+        titulo: 'No se pudo cargar el listado de ventas.',
+        detalle: 'Existe un problema de integridad de datos en el backend o en la respuesta del endpoint.',
+        backendDetalle: err?.message || 'Sin detalle devuelto por el servidor.',
+      });
     }
   };
 
@@ -181,6 +203,7 @@ export default function VentasPage() {
     const detalleNuevo = {
       productoId: Number(detalleForm.productoId),
       productoNombre: producto.nombre,
+      sku: producto.sku,
       marca: obtenerNombreMarca(producto.marca),
       cantidad: cantidadNueva,
       precioVentaUnitario: Number(detalleForm.precioVentaUnitario || producto.precioVenta || 0),
@@ -247,20 +270,26 @@ export default function VentasPage() {
   };
 
   const abrirDevolucion = (venta) => {
-    setVentaSeleccionada(venta);
-    setDevolucionForm(devolucionInicial);
-    setDetallesDevolucion(
-      (venta.detalles || []).map((detalle) => ({
-        ventaDetalleId: detalle.id,
-        nombreProducto: detalle.nombreProducto,
-        cantidadVendida: Number(detalle.cantidad || 0),
-        cantidadDevuelta: Number(detalle.cantidadDevuelta || 0),
-        cantidadDisponible: Number(detalle.cantidad || 0) - Number(detalle.cantidadDevuelta || 0),
-        cantidad: 0,
-        precioVentaUnitario: Number(detalle.precioVentaUnitario || 0),
-      })),
-    );
-    setModalDevolucionOpen(true);
+    api.get(`/ventas/${venta.id}`)
+      .then((ventaDetalle) => {
+        setVentaSeleccionada(ventaDetalle);
+        setDevolucionForm(devolucionInicial);
+        setDetallesDevolucion(
+          (ventaDetalle.detalles || []).map((detalle) => ({
+            ventaDetalleId: detalle.id,
+            nombreProducto: detalle.nombreProducto,
+            cantidadVendida: Number(detalle.cantidad || 0),
+            cantidadDevuelta: Number(detalle.cantidadDevuelta || 0),
+            cantidadDisponible: Number(detalle.cantidad || 0) - Number(detalle.cantidadDevuelta || 0),
+            cantidad: 0,
+            precioVentaUnitario: Number(detalle.precioVentaUnitario || 0),
+          })),
+        );
+        setModalDevolucionOpen(true);
+      })
+      .catch((err) => {
+        setError(crearErrorVisualVenta('No se pudo cargar el detalle de la venta.', err));
+      });
   };
 
   const guardarDevolucion = async (event) => {
@@ -342,6 +371,19 @@ export default function VentasPage() {
           <span className="chip">{ventasPage.totalElements} registros</span>
         </div>
 
+        {ventasError && (
+          <div className="sale-inline-error" role="alert">
+            <div>
+              <strong>{ventasError.titulo}</strong>
+              <p>{ventasError.detalle}</p>
+              <small>Backend: {ventasError.backendDetalle}</small>
+            </div>
+            <button type="button" className="secondary compact" onClick={() => cargarVentas(pagina)}>
+              Reintentar
+            </button>
+          </div>
+        )}
+
         {ventas.length === 0 ? (
           <EmptyState
             title="Sin ventas registradas"
@@ -354,7 +396,7 @@ export default function VentasPage() {
                 <article key={venta.id} className="sale-card">
                   <div className="sale-card-header">
                     <div>
-                      <strong>{venta.cliente?.nombreCompleto || 'Cliente'}</strong>
+                      <strong>{venta.clienteNombre || 'Cliente'}</strong>
                       <p>{venta.numeroComprobante || `Venta #${venta.id}`}</p>
                     </div>
                     <div className="sale-card-badges">
@@ -366,15 +408,8 @@ export default function VentasPage() {
                   </div>
                   <div className="sale-card-grid">
                     <span>Fecha: {venta.fechaVenta}</span>
-                    <span>Items: {venta.detalles?.length || 0}</span>
+                    <span>Operacion: {venta.tipoPago || 'Sin tipo'}</span>
                     <span>Total: Bs {currency.format(Number(venta.total || 0))}</span>
-                  </div>
-                  <div className="sale-card-items">
-                    {(venta.detalles || []).slice(0, 4).map((detalle) => (
-                      <span key={detalle.id || `${detalle.sku}-${detalle.nombreProducto}`} className="purchase-item-chip">
-                        {detalle.nombreProducto} x{detalle.cantidad}
-                      </span>
-                    ))}
                   </div>
                   {venta.estado !== 'DEVUELTA' && (
                     <div className="sale-card-actions">
@@ -500,7 +535,7 @@ export default function VentasPage() {
                   <option value="">Selecciona un producto</option>
                   {productosFiltradosVenta.map((producto) => (
                     <option key={producto.id} value={producto.id}>
-                      {producto.nombre} • {producto.marca || 'Sin marca'} • Stock {producto.cantidadStock}
+                      {producto.sku || 'Sin SKU'} • {producto.nombre} • Stock {producto.cantidadStock}
                     </option>
                   ))}
                 </select>
@@ -542,7 +577,7 @@ export default function VentasPage() {
                 <table className="table">
                   <thead>
                     <tr>
-                      <th>Producto</th>
+                      <th>SKU / Producto</th>
                       <th>Marca</th>
                       <th>Cantidad</th>
                       <th>Precio</th>
@@ -553,7 +588,7 @@ export default function VentasPage() {
                   <tbody>
                     {detallesVenta.map((detalle, index) => (
                       <tr key={`${detalle.productoId}-${index}`}>
-                        <td>{detalle.productoNombre}</td>
+                        <td>{detalle.sku || 'Sin SKU'} · {detalle.productoNombre}</td>
                         <td>{detalle.marca || 'Sin marca'}</td>
                         <td>{detalle.cantidad}</td>
                         <td>Bs {currency.format(detalle.precioVentaUnitario)}</td>

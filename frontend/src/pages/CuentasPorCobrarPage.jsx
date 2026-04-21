@@ -5,13 +5,14 @@ import EmptyState from '../components/common/EmptyState';
 import Modal from '../components/common/Modal';
 import PageHeader from '../components/PageHeader';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { toDateInputValue } from '../utils/formatters';
 import '../styles/pages/cuentas-por-cobrar.css';
 
 const TAMANO = 8;
 const paginaVacia = { content: [], totalPages: 0, totalElements: 0, number: 0 };
 const abonoInicial = {
   monto: '',
-  fechaAbono: new Date().toISOString().slice(0, 10),
+  fechaAbono: toDateInputValue(),
   observaciones: '',
 };
 
@@ -57,7 +58,11 @@ export default function CuentasPorCobrarPage() {
 
   const abrirAbono = (cuenta) => {
     setCuentaSeleccionada(cuenta);
-    setAbonoForm(abonoInicial);
+    setAbonoForm({
+      monto: String(Number(cuenta?.saldoPendiente || 0)),
+      fechaAbono: toDateInputValue(),
+      observaciones: '',
+    });
     setModalAbonoOpen(true);
   };
 
@@ -72,6 +77,7 @@ export default function CuentasPorCobrarPage() {
       });
       setModalAbonoOpen(false);
       setCuentaSeleccionada(null);
+      setAbonoForm(abonoInicial);
       await cargarCuentas(pagina);
     } catch (err) {
       setError(err.message);
@@ -172,7 +178,16 @@ export default function CuentasPorCobrarPage() {
         )}
       </section>
 
-      <Modal open={modalAbonoOpen} onClose={() => setModalAbonoOpen(false)} title="Registrar abono" subtitle="El abono reduce el saldo y crea una entrada contable automatica.">
+      <Modal
+        open={modalAbonoOpen}
+        onClose={() => {
+          setModalAbonoOpen(false);
+          setCuentaSeleccionada(null);
+          setAbonoForm(abonoInicial);
+        }}
+        title="Registrar abono"
+        subtitle="El abono reduce el saldo y crea una entrada contable automatica."
+      >
         <form className="entity-form" onSubmit={guardarAbono}>
           <label>
             <span>Monto</span>
