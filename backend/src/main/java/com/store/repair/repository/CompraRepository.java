@@ -11,10 +11,10 @@ import org.springframework.data.repository.query.Param;
 public interface CompraRepository extends JpaRepository<Compra, Long> {
 
     @Override
-    @EntityGraph(attributePaths = { "proveedor", "detalles", "detalles.producto" })
+    @EntityGraph(attributePaths = { "proveedor", "detalles", "detalles.producto", "detalles.variante", "detalles.variante.productoBase" })
     java.util.Optional<Compra> findById(Long id);
 
-    @EntityGraph(attributePaths = { "proveedor", "detalles", "detalles.producto" })
+    @EntityGraph(attributePaths = { "proveedor", "detalles", "detalles.producto", "detalles.variante", "detalles.variante.productoBase" })
     @Query("""
             select distinct c from Compra c
             left join c.proveedor p
@@ -35,4 +35,11 @@ public interface CompraRepository extends JpaRepository<Compra, Long> {
             where d.producto.id = :productoId
             """)
     boolean existsByProductoId(@Param("productoId") Long productoId);
+
+    @Query("""
+            select (count(c) > 0) from Compra c
+            join c.detalles d
+            where d.variante.id = :varianteId
+            """)
+    boolean existsByVarianteId(@Param("varianteId") Long varianteId);
 }

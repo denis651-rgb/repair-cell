@@ -10,15 +10,11 @@ import '../styles/pages/ventas.css';
 
 const TAMANO = 8;
 const paginaVacia = { content: [], totalPages: 0, totalElements: 0, number: 0 };
-const ventaInicial = {
-  clienteId: '',
-  fechaVenta: toDateInputValue(),
-  numeroComprobante: '',
-  observaciones: '',
-  tipoPago: 'CONTADO',
-};
 const detalleInicial = {
-  productoId: '',
+  categoriaId: '',
+  marcaId: '',
+  productoBaseId: '',
+  varianteId: '',
   cantidad: 1,
   precioVentaUnitario: '',
 };
@@ -27,7 +23,20 @@ const devolucionInicial = {
   motivoDevolucion: '',
 };
 
-const obtenerNombreMarca = (marca) => (typeof marca === 'string' ? marca : marca?.nombre || '');
+const generarPreviewComprobante = () => {
+  const ahora = new Date();
+  const pad = (valor) => String(valor).padStart(2, '0');
+  return `${ahora.getFullYear()}${pad(ahora.getMonth() + 1)}${pad(ahora.getDate())}${pad(ahora.getHours())}${pad(ahora.getMinutes())}`;
+};
+
+const crearVentaInicial = () => ({
+  clienteId: '',
+  fechaVenta: toDateInputValue(),
+  numeroComprobante: generarPreviewComprobante(),
+  observaciones: '',
+  tipoPago: 'CONTADO',
+});
+
 const crearErrorVisualVenta = (titulo, error) => ({
   titulo,
   detalle: error?.message || 'No se pudo completar la operacion de venta.',
@@ -44,15 +53,18 @@ const logFrontendRequestError = ({ endpoint, params, error, contexto }) => {
 export default function VentasPage() {
   const [ventasPage, setVentasPage] = useState(paginaVacia);
   const [clientes, setClientes] = useState([]);
-  const [productos, setProductos] = useState([]);
+  const [categorias, setCategorias] = useState([]);
+  const [marcas, setMarcas] = useState([]);
+  const [productosBase, setProductosBase] = useState([]);
+  const [variantes, setVariantes] = useState([]);
   const [busqueda, setBusqueda] = useState('');
   const [pagina, setPagina] = useState(0);
   const [modalVentaOpen, setModalVentaOpen] = useState(false);
   const [modalDevolucionOpen, setModalDevolucionOpen] = useState(false);
-  const [ventaForm, setVentaForm] = useState(ventaInicial);
+  const [ventaForm, setVentaForm] = useState(crearVentaInicial);
   const [detalleForm, setDetalleForm] = useState(detalleInicial);
   const [detallesVenta, setDetallesVenta] = useState([]);
-  const [busquedaProductoVenta, setBusquedaProductoVenta] = useState('');
+  const [busquedaVarianteVenta, setBusquedaVarianteVenta] = useState('');
   const [ventaSeleccionada, setVentaSeleccionada] = useState(null);
   const [devolucionForm, setDevolucionForm] = useState(devolucionInicial);
   const [detallesDevolucion, setDetallesDevolucion] = useState([]);
@@ -69,15 +81,18 @@ export default function VentasPage() {
   const cargarCatalogos = async () => {
     try {
       setError(null);
-      const [listaClientes, listaProductos] = await Promise.all([
+      const [listaClientes, listaCategorias, listaMarcas, listaBase, listaVariantes] = await Promise.all([
         api.get('/clientes'),
-        api.get('/inventario/productos'),
+        api.get('/inventario/categorias'),
+        api.get('/inventario/marcas'),
+        api.get('/catalogo/productos-base?soloActivos=true'),
+        api.get('/catalogo/productos-variantes?soloActivas=true'),
       ]);
       setClientes(listaClientes || []);
-      setProductos((listaProductos || []).map((producto) => ({
-        ...producto,
-        marca: obtenerNombreMarca(producto.marca),
-      })));
+      setCategorias(listaCategorias || []);
+      setMarcas(listaMarcas || []);
+      setProductosBase(listaBase || []);
+      setVariantes((listaVariantes || []).filter((item) => Number(item.stockDisponibleTotal || 0) > 0));
     } catch (err) {
       setError(crearErrorVisualVenta('No se pudieron cargar los catalogos de ventas.', err));
     }
@@ -121,33 +136,72 @@ export default function VentasPage() {
     cargarVentas(pagina);
   }, [pagina, busquedaDebounced]);
 
-  const productoSeleccionado = useMemo(
-    () => productos.find((producto) => String(producto.id) === String(detalleForm.productoId)),
-    [productos, detalleForm.productoId],
+  const productoBaseSeleccionado = useMemo(
+    () => productosBase.find((item) => String(item.id) === String(detalleForm.productoBaseId)),
+    [productosBase, detalleForm.productoBaseId],
   );
 
-  const productosFiltradosVenta = useMemo(() => {
-    const termino = busquedaProductoVenta.trim().toLowerCase();
-    if (!termino) return productos;
+  const varianteSeleccionada = useMemo(
+    () => variantes.find((item) => String(item.id) === String(detalleForm.varianteId)),
+    [variantes, detalleForm.varianteId],
+  );
 
-    return productos.filter((producto) =>
-      [producto.nombre, producto.sku, producto.marca, producto.categoria?.nombre]
-        .some((valor) => String(valor || '').toLowerCase().includes(termino)),
-    );
-  }, [productos, busquedaProductoVenta]);
+  const productosBaseFiltradosVenta = useMemo(() => {
+    const termino = busquedaVarianteVenta.trim().toLowerCase();
 
-  const cantidadReservadaProducto = (productoId) =>
+    return productosBase.filter((productoBase) => {
+      const coincideCategoria =
+        !detalleForm.categoriaId || String(productoBase.categoria?.id) === String(detalleForm.categoriaId);
+      const coincideMarca =
+        !detalleForm.marcaId || String(productoBase.marca?.id) === String(detalleForm.marcaId);
+      const coincideTexto =
+        !termino ||
+        [
+          productoBase.codigoBase,
+          productoBase.nombreBase,
+          productoBase.modelo,
+          productoBase.categoria?.nombre,
+          productoBase.marca?.nombre,
+        ].some((valor) => String(valor || '').toLowerCase().includes(termino));
+
+      return coincideCategoria && coincideMarca && coincideTexto;
+    });
+  }, [productosBase, detalleForm.categoriaId, detalleForm.marcaId, busquedaVarianteVenta]);
+
+  const variantesDisponibles = useMemo(
+    () =>
+      variantes.filter((variante) => {
+        const coincideBase =
+          !detalleForm.productoBaseId || String(variante.productoBase?.id) === String(detalleForm.productoBaseId);
+        return coincideBase && Number(variante.stockDisponibleTotal || 0) > 0;
+      }),
+    [variantes, detalleForm.productoBaseId],
+  );
+
+  const cantidadReservadaVariante = (varianteId) =>
     detallesVenta
-      .filter((detalle) => String(detalle.productoId) === String(productoId))
+      .filter((detalle) => String(detalle.varianteId) === String(varianteId))
       .reduce((total, detalle) => total + Number(detalle.cantidad || 0), 0);
 
   useEffect(() => {
-    if (!productoSeleccionado) return;
+    if (!productoBaseSeleccionado) return;
     setDetalleForm((actual) => ({
       ...actual,
-      precioVentaUnitario: productoSeleccionado.precioVenta || '',
+      categoriaId: productoBaseSeleccionado.categoria?.id ? String(productoBaseSeleccionado.categoria.id) : '',
+      marcaId: productoBaseSeleccionado.marca?.id ? String(productoBaseSeleccionado.marca.id) : '',
     }));
-  }, [productoSeleccionado]);
+  }, [productoBaseSeleccionado]);
+
+  useEffect(() => {
+    if (!varianteSeleccionada) return;
+    setDetalleForm((actual) => ({
+      ...actual,
+      productoBaseId: varianteSeleccionada.productoBase?.id
+        ? String(varianteSeleccionada.productoBase.id)
+        : actual.productoBaseId,
+      precioVentaUnitario: varianteSeleccionada.precioVentaSugerido || '',
+    }));
+  }, [varianteSeleccionada]);
 
   const totalVenta = useMemo(
     () => detallesVenta.reduce((sum, detalle) => sum + (detalle.cantidad * detalle.precioVentaUnitario), 0),
@@ -155,34 +209,25 @@ export default function VentasPage() {
   );
 
   const abrirVenta = () => {
-    setVentaForm(ventaInicial);
+    setVentaForm(crearVentaInicial());
     setDetalleForm(detalleInicial);
     setDetallesVenta([]);
-    setBusquedaProductoVenta('');
+    setBusquedaVarianteVenta('');
     setModalVentaOpen(true);
   };
 
   const agregarDetalle = () => {
-    if (!detalleForm.productoId) {
+    if (!detalleForm.varianteId || !varianteSeleccionada || !productoBaseSeleccionado) {
       setError({
         titulo: 'No se pudo agregar el item.',
-        detalle: 'Selecciona un producto para agregarlo a la venta.',
-      });
-      return;
-    }
-
-    const producto = productos.find((item) => String(item.id) === String(detalleForm.productoId));
-    if (!producto) {
-      setError({
-        titulo: 'No se pudo agregar el item.',
-        detalle: 'El producto seleccionado no existe.',
+        detalle: 'Selecciona un producto base y una variante con stock disponible.',
       });
       return;
     }
 
     const cantidadNueva = Number(detalleForm.cantidad || 0);
-    const cantidadAcumulada = cantidadReservadaProducto(detalleForm.productoId);
-    const stockDisponible = Number(producto.cantidadStock || 0);
+    const cantidadAcumulada = cantidadReservadaVariante(detalleForm.varianteId);
+    const stockDisponible = Number(varianteSeleccionada.stockDisponibleTotal || 0);
 
     if (cantidadNueva <= 0) {
       setError({
@@ -195,44 +240,63 @@ export default function VentasPage() {
     if (cantidadNueva + cantidadAcumulada > stockDisponible) {
       setError({
         titulo: 'Stock insuficiente.',
-        detalle: `${producto.nombre} tiene ${stockDisponible} unidades disponibles y ya reservaste ${cantidadAcumulada} en esta venta.`,
+        detalle: `${varianteSeleccionada.codigoVariante} tiene ${stockDisponible} unidades disponibles y ya reservaste ${cantidadAcumulada} en esta venta.`,
+      });
+      return;
+    }
+
+    const precioLista = Number(varianteSeleccionada.precioVentaSugerido || 0);
+    const precioReal = Number(detalleForm.precioVentaUnitario || precioLista);
+
+    if (precioReal < 0) {
+      setError({
+        titulo: 'No se pudo agregar el item.',
+        detalle: 'El precio real de venta no puede ser negativo.',
       });
       return;
     }
 
     const detalleNuevo = {
-      productoId: Number(detalleForm.productoId),
-      productoNombre: producto.nombre,
-      sku: producto.sku,
-      marca: obtenerNombreMarca(producto.marca),
+      varianteId: Number(varianteSeleccionada.id),
+      productoBaseId: Number(productoBaseSeleccionado.id),
+      productoNombre: productoBaseSeleccionado.nombreBase,
+      productoBaseCodigo: productoBaseSeleccionado.codigoBase,
+      codigoVariante: varianteSeleccionada.codigoVariante,
+      marca: productoBaseSeleccionado.marca?.nombre || '',
+      calidad: varianteSeleccionada.calidad || '',
+      stockDisponible,
       cantidad: cantidadNueva,
-      precioVentaUnitario: Number(detalleForm.precioVentaUnitario || producto.precioVenta || 0),
+      precioListaUnitario: precioLista,
+      precioVentaUnitario: precioReal,
     };
 
     setDetallesVenta((actual) => {
       const indiceExistente = actual.findIndex(
-        (detalle) => String(detalle.productoId) === String(detalleNuevo.productoId),
+        (detalle) => String(detalle.varianteId) === String(detalleNuevo.varianteId),
       );
 
       if (indiceExistente === -1) {
         return [...actual, detalleNuevo];
       }
 
-      // Consolidamos el mismo producto para que la venta quede mas clara y el
-      // backend reciba un detalle limpio, sin filas repetidas.
       return actual.map((detalle, indice) => {
         if (indice !== indiceExistente) return detalle;
 
         return {
           ...detalle,
           cantidad: Number(detalle.cantidad || 0) + detalleNuevo.cantidad,
+          precioListaUnitario: detalleNuevo.precioListaUnitario,
           precioVentaUnitario: detalleNuevo.precioVentaUnitario,
         };
       });
     });
 
-    setDetalleForm(detalleInicial);
-    setBusquedaProductoVenta('');
+    setDetalleForm((actual) => ({
+      ...detalleInicial,
+      categoriaId: actual.categoriaId,
+      marcaId: actual.marcaId,
+    }));
+    setBusquedaVarianteVenta('');
     setError(null);
   };
 
@@ -244,24 +308,25 @@ export default function VentasPage() {
     event.preventDefault();
     try {
       if (!detallesVenta.length) {
-        throw new Error('Agrega al menos un producto a la venta');
+        throw new Error('Agrega al menos una variante a la venta');
       }
 
       await api.post('/ventas', {
         ...ventaForm,
         clienteId: Number(ventaForm.clienteId),
         detalles: detallesVenta.map((detalle) => ({
-          productoId: detalle.productoId,
+          varianteId: detalle.varianteId,
           cantidad: detalle.cantidad,
+          precioListaUnitario: detalle.precioListaUnitario,
           precioVentaUnitario: detalle.precioVentaUnitario,
         })),
       });
 
       setModalVentaOpen(false);
-      setVentaForm(ventaInicial);
+      setVentaForm(crearVentaInicial());
       setDetalleForm(detalleInicial);
       setDetallesVenta([]);
-      setBusquedaProductoVenta('');
+      setBusquedaVarianteVenta('');
       await Promise.all([cargarCatalogos(), cargarVentas(0)]);
       setPagina(0);
     } catch (err) {
@@ -277,7 +342,7 @@ export default function VentasPage() {
         setDetallesDevolucion(
           (ventaDetalle.detalles || []).map((detalle) => ({
             ventaDetalleId: detalle.id,
-            nombreProducto: detalle.nombreProducto,
+            nombreProducto: `${detalle.sku || ''} ${detalle.nombreProducto || ''}`.trim(),
             cantidadVendida: Number(detalle.cantidad || 0),
             cantidadDevuelta: Number(detalle.cantidadDevuelta || 0),
             cantidadDisponible: Number(detalle.cantidad || 0) - Number(detalle.cantidadDevuelta || 0),
@@ -327,7 +392,7 @@ export default function VentasPage() {
     <div className="page-stack sales-page">
       <PageHeader
         title="Ventas"
-        subtitle="Venta directa de productos a clientes o tecnicos, al contado o al credito."
+        subtitle="Venta por variante con consumo FIFO de lotes, precio sugerido y precio real editable."
       >
         <button className="inventory-primary-button compact" onClick={abrirVenta}>
           <Plus size={16} />
@@ -452,7 +517,7 @@ export default function VentasPage() {
         open={modalVentaOpen}
         onClose={() => setModalVentaOpen(false)}
         title="Registrar venta"
-        subtitle="Descuenta stock automaticamente y registra el efecto contable segun el tipo de pago."
+        subtitle="El sistema consume FIFO desde los lotes activos y guarda precio lista, precio real, costo y ganancia."
         size="xl"
       >
         <form className="entity-form purchases-form" onSubmit={guardarVenta}>
@@ -512,9 +577,9 @@ export default function VentasPage() {
             <div className="purchase-builder-header">
               <div>
                 <h3>Detalle de la venta</h3>
-                <p>Solo puedes vender productos con stock disponible.</p>
+                <p>Solo puedes vender variantes con stock disponible en lotes activos.</p>
                 <p className="sale-helper-text">
-                  Si agregas el mismo producto dos veces, el sistema consolida la fila y suma la cantidad.
+                  El precio sugerido viene de la variante; el precio real es editable por cada linea.
                 </p>
               </div>
               <span className="chip">{detallesVenta.length} items</span>
@@ -522,23 +587,76 @@ export default function VentasPage() {
 
             <div className="purchase-builder-grid purchase-builder-grid-sales">
               <label>
-                <span>Producto</span>
+                <span>Buscar en catalogo</span>
                 <input
-                  value={busquedaProductoVenta}
-                  onChange={(event) => setBusquedaProductoVenta(event.target.value)}
-                  placeholder="Filtra por nombre, SKU, marca o categoria"
+                  value={busquedaVarianteVenta}
+                  onChange={(event) => setBusquedaVarianteVenta(event.target.value)}
+                  placeholder="Filtra por codigo base, variante, modelo o marca"
                 />
+              </label>
+              <label>
+                <span>Categoria</span>
                 <select
-                  value={detalleForm.productoId}
-                  onChange={(event) => setDetalleForm((actual) => ({ ...actual, productoId: event.target.value }))}
+                  value={detalleForm.categoriaId}
+                  onChange={(event) => setDetalleForm((actual) => ({ ...actual, categoriaId: event.target.value, productoBaseId: '', varianteId: '' }))}
                 >
-                  <option value="">Selecciona un producto</option>
-                  {productosFiltradosVenta.map((producto) => (
-                    <option key={producto.id} value={producto.id}>
-                      {producto.sku || 'Sin SKU'} • {producto.nombre} • Stock {producto.cantidadStock}
+                  <option value="">Todas las categorias</option>
+                  {categorias.map((categoria) => (
+                    <option key={categoria.id} value={categoria.id}>
+                      {categoria.nombre}
                     </option>
                   ))}
                 </select>
+              </label>
+              <label>
+                <span>Marca</span>
+                <select
+                  value={detalleForm.marcaId}
+                  onChange={(event) => setDetalleForm((actual) => ({ ...actual, marcaId: event.target.value, productoBaseId: '', varianteId: '' }))}
+                >
+                  <option value="">Todas las marcas</option>
+                  {marcas.map((marca) => (
+                    <option key={marca.id} value={marca.id}>
+                      {marca.nombre}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>Producto base</span>
+                <select
+                  value={detalleForm.productoBaseId}
+                  onChange={(event) => setDetalleForm((actual) => ({ ...actual, productoBaseId: event.target.value, varianteId: '' }))}
+                >
+                  <option value="">Selecciona un producto base</option>
+                  {productosBaseFiltradosVenta.map((productoBase) => (
+                    <option key={productoBase.id} value={productoBase.id}>
+                      {productoBase.codigoBase} - {productoBase.nombreBase} - {productoBase.modelo || 'Sin modelo'}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>Variante</span>
+                <select
+                  value={detalleForm.varianteId}
+                  onChange={(event) => setDetalleForm((actual) => ({ ...actual, varianteId: event.target.value }))}
+                >
+                  <option value="">Selecciona una variante</option>
+                  {variantesDisponibles.map((variante) => (
+                    <option key={variante.id} value={variante.id}>
+                      {variante.codigoVariante} • {variante.calidad} • Stock {variante.stockDisponibleTotal}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>Precio sugerido</span>
+                <input value={varianteSeleccionada?.precioVentaSugerido || ''} readOnly />
+              </label>
+              <label>
+                <span>Stock disponible</span>
+                <input value={varianteSeleccionada?.stockDisponibleTotal || ''} readOnly />
               </label>
               <label>
                 <span>Cantidad</span>
@@ -550,7 +668,7 @@ export default function VentasPage() {
                 />
               </label>
               <label>
-                <span>Precio de venta</span>
+                <span>Precio real de venta</span>
                 <input
                   type="number"
                   min="0"
@@ -570,27 +688,27 @@ export default function VentasPage() {
             {detallesVenta.length === 0 ? (
               <EmptyState
                 title="Sin items en la venta"
-                description="Agrega productos al detalle para completar la venta."
+                description="Agrega variantes al detalle para completar la venta."
               />
             ) : (
               <div className="responsive-table-wrap">
                 <table className="table">
                   <thead>
                     <tr>
-                      <th>SKU / Producto</th>
-                      <th>Marca</th>
+                      <th>Base / Variante</th>
                       <th>Cantidad</th>
-                      <th>Precio</th>
+                      <th>P. lista</th>
+                      <th>P. real</th>
                       <th>Subtotal</th>
                       <th>Accion</th>
                     </tr>
                   </thead>
                   <tbody>
                     {detallesVenta.map((detalle, index) => (
-                      <tr key={`${detalle.productoId}-${index}`}>
-                        <td>{detalle.sku || 'Sin SKU'} · {detalle.productoNombre}</td>
-                        <td>{detalle.marca || 'Sin marca'}</td>
+                      <tr key={`${detalle.varianteId}-${index}`}>
+                        <td>{detalle.productoBaseCodigo} · {detalle.productoNombre} · {detalle.codigoVariante}</td>
                         <td>{detalle.cantidad}</td>
+                        <td>Bs {currency.format(detalle.precioListaUnitario)}</td>
                         <td>Bs {currency.format(detalle.precioVentaUnitario)}</td>
                         <td>Bs {currency.format(detalle.cantidad * detalle.precioVentaUnitario)}</td>
                         <td>
@@ -609,7 +727,7 @@ export default function VentasPage() {
           <div className="purchase-total-strip">
             <div>
               <strong>Total de venta</strong>
-              <p>Contado: entrada contable. Credito: cuenta por cobrar.</p>
+              <p>El backend distribuye automaticamente el stock entre lotes activos en orden FIFO.</p>
             </div>
             <span>Bs {currency.format(totalVenta)}</span>
           </div>
@@ -627,7 +745,7 @@ export default function VentasPage() {
         open={modalDevolucionOpen}
         onClose={() => setModalDevolucionOpen(false)}
         title="Registrar devolucion"
-        subtitle="La devolucion revierte stock y el efecto financiero asociado."
+        subtitle="La devolucion restituye stock a los lotes originalmente consumidos."
       >
         <form className="entity-form" onSubmit={guardarDevolucion}>
           <label>

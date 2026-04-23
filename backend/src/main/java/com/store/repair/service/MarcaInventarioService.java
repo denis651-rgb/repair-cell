@@ -3,6 +3,7 @@ package com.store.repair.service;
 import com.store.repair.config.SanitizadorTexto;
 import com.store.repair.domain.MarcaInventario;
 import com.store.repair.repository.MarcaInventarioRepository;
+import com.store.repair.repository.ProductoBaseRepository;
 import com.store.repair.repository.ProductoInventarioRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -15,6 +16,7 @@ public class MarcaInventarioService {
 
     private final MarcaInventarioRepository repository;
     private final ProductoInventarioRepository productoRepository;
+    private final ProductoBaseRepository productoBaseRepository;
 
     public List<MarcaInventario> findAll() {
         return repository.findAllByOrderByNombreAsc();
@@ -56,8 +58,8 @@ public class MarcaInventarioService {
     public void delete(Long id) {
         findById(id);
 
-        if (productoRepository.existsByMarcaId(id)) {
-            throw new BusinessException("No puedes eliminar la marca porque tiene productos asociados");
+        if (productoRepository.existsByMarcaId(id) || productoBaseRepository.existsByMarcaId(id)) {
+            throw new BusinessException("No puedes eliminar la marca porque tiene productos o productos base asociados");
         }
 
         repository.deleteById(id);

@@ -3,6 +3,7 @@ package com.store.repair.service;
 import com.store.repair.config.SanitizadorTexto;
 import com.store.repair.domain.CategoriaInventario;
 import com.store.repair.repository.CategoriaInventarioRepository;
+import com.store.repair.repository.ProductoBaseRepository;
 import com.store.repair.repository.ProductoInventarioRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -15,6 +16,7 @@ public class CategoriaInventarioService {
 
     private final CategoriaInventarioRepository repository;
     private final ProductoInventarioRepository productoRepository;
+    private final ProductoBaseRepository productoBaseRepository;
 
     public List<CategoriaInventario> findAll() {
         return repository.findAllByOrderByNombreAsc();
@@ -52,8 +54,8 @@ public class CategoriaInventarioService {
     public void delete(Long id) {
         findById(id);
 
-        if (productoRepository.existsByCategoriaId(id)) {
-            throw new BusinessException("No puedes eliminar la categoria porque tiene productos asociados");
+        if (productoRepository.existsByCategoriaId(id) || productoBaseRepository.existsByCategoriaId(id)) {
+            throw new BusinessException("No puedes eliminar la categoria porque tiene productos o productos base asociados");
         }
 
         repository.deleteById(id);

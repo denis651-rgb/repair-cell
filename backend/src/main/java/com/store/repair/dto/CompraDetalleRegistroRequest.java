@@ -1,12 +1,15 @@
 package com.store.repair.dto;
 
 import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 @Data
 public class CompraDetalleRegistroRequest {
+
+    private Long productoBaseId;
+
+    private Long varianteId;
 
     private Long productoId;
 
@@ -16,7 +19,6 @@ public class CompraDetalleRegistroRequest {
 
     private String sku;
 
-    @NotBlank(message = "El nombre del producto es obligatorio")
     private String nombreProducto;
 
     private String calidad;
@@ -29,7 +31,5 @@ public class CompraDetalleRegistroRequest {
     @Min(value = 0, message = "El precio de compra no puede ser negativo")
     private Double precioCompraUnitario;
 
-    @NotNull(message = "El precio de venta es obligatorio")
-    @Min(value = 0, message = "El precio de venta no puede ser negativo")
     private Double precioVentaUnitario;
 }

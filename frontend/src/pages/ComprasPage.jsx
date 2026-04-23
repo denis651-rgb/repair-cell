@@ -5,62 +5,52 @@ import EmptyState from '../components/common/EmptyState';
 import Modal from '../components/common/Modal';
 import PageHeader from '../components/PageHeader';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import { normalizeSku } from '../utils/sku';
 import { toDateInputValue } from '../utils/formatters';
 import '../styles/pages/compras.css';
 
 const TAMANO = 8;
 const paginaVacia = { content: [], totalPages: 0, totalElements: 0, number: 0 };
-const compraInicial = {
-  proveedorId: '',
-  fechaCompra: toDateInputValue(),
-  numeroComprobante: '',
-  observaciones: '',
-  tipoPago: 'CONTADO',
-};
 const detalleInicial = {
-  productoId: '',
   categoriaId: '',
   marcaId: '',
-  sku: '',
-  nombreProducto: '',
-  calidad: '',
+  productoBaseId: '',
+  varianteId: '',
   cantidad: 1,
   precioCompraUnitario: '',
-  precioVentaUnitario: '',
 };
 
-const obtenerNombreMarca = (marca) => (typeof marca === 'string' ? marca : marca?.nombre || '');
+const generarPreviewComprobante = () => {
+  const ahora = new Date();
+  const pad = (valor) => String(valor).padStart(2, '0');
+  return `${ahora.getFullYear()}${pad(ahora.getMonth() + 1)}${pad(ahora.getDate())}${pad(ahora.getHours())}${pad(ahora.getMinutes())}`;
+};
+
+const crearCompraInicial = () => ({
+  proveedorId: '',
+  fechaCompra: toDateInputValue(),
+  numeroComprobante: generarPreviewComprobante(),
+  observaciones: '',
+  tipoPago: 'CONTADO',
+});
+
 const crearErrorVisualCompra = (titulo, error) => ({
   titulo,
   detalle: error?.message || 'No se pudo completar la operacion de compra.',
 });
-const construirClaveDetalleCompra = (detalle) => {
-  if (detalle.productoId) {
-    return `producto:${detalle.productoId}`;
-  }
-
-  return [
-    `categoria:${detalle.categoriaId || ''}`,
-    `marca:${detalle.marcaId || ''}`,
-    `sku:${String(detalle.sku || '').trim().toLowerCase()}`,
-    `nombre:${String(detalle.nombreProducto || '').trim().toLowerCase()}`,
-    `calidad:${String(detalle.calidad || '').trim().toLowerCase()}`,
-  ].join('|');
-};
 
 export default function ComprasPage() {
   const [comprasPage, setComprasPage] = useState(paginaVacia);
   const [proveedores, setProveedores] = useState([]);
   const [categorias, setCategorias] = useState([]);
   const [marcas, setMarcas] = useState([]);
-  const [productos, setProductos] = useState([]);
+  const [productosBase, setProductosBase] = useState([]);
+  const [variantes, setVariantes] = useState([]);
   const [busqueda, setBusqueda] = useState('');
   const [pagina, setPagina] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
-  const [compraForm, setCompraForm] = useState(compraInicial);
+  const [compraForm, setCompraForm] = useState(crearCompraInicial);
   const [detalleForm, setDetalleForm] = useState(detalleInicial);
-  const [busquedaProductoDetalle, setBusquedaProductoDetalle] = useState('');
+  const [busquedaDetalle, setBusquedaDetalle] = useState('');
   const [detallesCompra, setDetallesCompra] = useState([]);
   const [error, setError] = useState(null);
 
@@ -74,16 +64,18 @@ export default function ComprasPage() {
   const cargarCatalogos = async () => {
     try {
       setError(null);
-      const [listaProveedores, listaCategorias, listaMarcas, listaProductos] = await Promise.all([
+      const [listaProveedores, listaCategorias, listaMarcas, listaBase, listaVariantes] = await Promise.all([
         api.get('/proveedores'),
         api.get('/inventario/categorias'),
         api.get('/inventario/marcas'),
-        api.get('/inventario/productos'),
+        api.get('/catalogo/productos-base'),
+        api.get('/catalogo/productos-variantes'),
       ]);
       setProveedores(listaProveedores || []);
       setCategorias(listaCategorias || []);
       setMarcas(listaMarcas || []);
-      setProductos(listaProductos || []);
+      setProductosBase(listaBase || []);
+      setVariantes(listaVariantes || []);
     } catch (err) {
       setError(crearErrorVisualCompra('No se pudieron cargar los catalogos de compras.', err));
     }
@@ -116,85 +108,130 @@ export default function ComprasPage() {
   }, [pagina, busquedaDebounced]);
 
   const abrirModal = () => {
-    setCompraForm(compraInicial);
+    setCompraForm(crearCompraInicial());
     setDetalleForm(detalleInicial);
-    setBusquedaProductoDetalle('');
+    setBusquedaDetalle('');
     setDetallesCompra([]);
     setModalOpen(true);
   };
 
-  const productoSeleccionado = useMemo(
-    () => productos.find((producto) => String(producto.id) === String(detalleForm.productoId)),
-    [productos, detalleForm.productoId],
-  );
+  const productosBaseFiltrados = useMemo(() => {
+    const termino = busquedaDetalle.trim().toLowerCase();
 
-  const productosFiltradosDetalle = useMemo(() => {
-    const termino = busquedaProductoDetalle.trim().toLowerCase();
-
-    return productos.filter((producto) => {
+    return productosBase.filter((productoBase) => {
       const coincideCategoria =
-        !detalleForm.categoriaId || String(producto.categoria?.id) === String(detalleForm.categoriaId);
+        !detalleForm.categoriaId || String(productoBase.categoria?.id) === String(detalleForm.categoriaId);
       const coincideMarca =
-        !detalleForm.marcaId || String(producto.marca?.id) === String(detalleForm.marcaId);
+        !detalleForm.marcaId || String(productoBase.marca?.id) === String(detalleForm.marcaId);
       const coincideTexto =
         !termino ||
-        [producto.nombre, producto.sku, obtenerNombreMarca(producto.marca), producto.categoria?.nombre]
-          .some((valor) => String(valor || '').toLowerCase().includes(termino));
+        [
+          productoBase.codigoBase,
+          productoBase.nombreBase,
+          productoBase.modelo,
+          productoBase.categoria?.nombre,
+          productoBase.marca?.nombre,
+        ].some((valor) => String(valor || '').toLowerCase().includes(termino));
 
       return coincideCategoria && coincideMarca && coincideTexto;
     });
-  }, [productos, detalleForm.categoriaId, detalleForm.marcaId, busquedaProductoDetalle]);
+  }, [productosBase, detalleForm.categoriaId, detalleForm.marcaId, busquedaDetalle]);
+
+  const variantesDisponibles = useMemo(
+    () =>
+      variantes.filter((variante) => {
+        const coincideBase =
+          !detalleForm.productoBaseId || String(variante.productoBase?.id) === String(detalleForm.productoBaseId);
+        return coincideBase && variante.activo !== false;
+      }),
+    [variantes, detalleForm.productoBaseId],
+  );
+
+  const productoBaseSeleccionado = useMemo(
+    () => productosBase.find((item) => String(item.id) === String(detalleForm.productoBaseId)),
+    [productosBase, detalleForm.productoBaseId],
+  );
+
+  const varianteSeleccionada = useMemo(
+    () => variantes.find((item) => String(item.id) === String(detalleForm.varianteId)),
+    [variantes, detalleForm.varianteId],
+  );
 
   useEffect(() => {
-    if (!productoSeleccionado) return;
+    if (!productoBaseSeleccionado) return;
     setDetalleForm((actual) => ({
       ...actual,
-      categoriaId: productoSeleccionado.categoria?.id ? String(productoSeleccionado.categoria.id) : '',
-      marcaId: productoSeleccionado.marca?.id ? String(productoSeleccionado.marca.id) : '',
-      sku: productoSeleccionado.sku || '',
-      nombreProducto: productoSeleccionado.nombre || '',
-      calidad: productoSeleccionado.calidad || '',
-      precioCompraUnitario: productoSeleccionado.costoUnitario || '',
-      precioVentaUnitario: productoSeleccionado.precioVenta || '',
+      categoriaId: productoBaseSeleccionado.categoria?.id ? String(productoBaseSeleccionado.categoria.id) : '',
+      marcaId: productoBaseSeleccionado.marca?.id ? String(productoBaseSeleccionado.marca.id) : '',
     }));
-  }, [productoSeleccionado]);
+  }, [productoBaseSeleccionado]);
+
+  useEffect(() => {
+    if (!varianteSeleccionada) return;
+    setDetalleForm((actual) => ({
+      ...actual,
+      productoBaseId: varianteSeleccionada.productoBase?.id
+        ? String(varianteSeleccionada.productoBase.id)
+        : actual.productoBaseId,
+    }));
+  }, [varianteSeleccionada]);
 
   const agregarDetalle = () => {
-    if (!detalleForm.categoriaId || !detalleForm.marcaId || !detalleForm.nombreProducto) {
+    if (!detalleForm.productoBaseId || !detalleForm.varianteId) {
       setError({
-        titulo: 'No se pudo agregar el item.',
-        detalle: 'Completa categoria, marca y nombre del producto antes de agregarlo.',
+        titulo: 'No se pudo agregar la linea.',
+        detalle: 'Selecciona un producto base y una variante antes de agregarla.',
       });
       return;
     }
 
-    const marcaSeleccionada = marcas.find((marca) => String(marca.id) === String(detalleForm.marcaId));
-    if (!marcaSeleccionada) {
+    if (!productoBaseSeleccionado || !varianteSeleccionada) {
       setError({
-        titulo: 'No se pudo agregar el item.',
-        detalle: 'Selecciona una marca valida para el producto.',
+        titulo: 'No se pudo agregar la linea.',
+        detalle: 'La combinacion de producto base y variante no es valida.',
+      });
+      return;
+    }
+
+    const cantidad = Number(detalleForm.cantidad || 0);
+    const costo = Number(detalleForm.precioCompraUnitario || 0);
+
+    if (cantidad <= 0) {
+      setError({
+        titulo: 'No se pudo agregar la linea.',
+        detalle: 'La cantidad debe ser mayor a cero.',
+      });
+      return;
+    }
+
+    if (costo < 0) {
+      setError({
+        titulo: 'No se pudo agregar la linea.',
+        detalle: 'El costo unitario no puede ser negativo.',
       });
       return;
     }
 
     const detalle = {
-      productoId: detalleForm.productoId ? Number(detalleForm.productoId) : null,
-      categoriaId: Number(detalleForm.categoriaId),
-      marcaId: Number(detalleForm.marcaId),
-      sku: normalizeSku(detalleForm.sku),
-      nombreProducto: detalleForm.nombreProducto,
-      marca: marcaSeleccionada.nombre,
-      calidad: detalleForm.calidad,
-      cantidad: Number(detalleForm.cantidad),
-      precioCompraUnitario: Number(detalleForm.precioCompraUnitario),
-      precioVentaUnitario: Number(detalleForm.precioVentaUnitario),
+      productoBaseId: Number(productoBaseSeleccionado.id),
+      varianteId: Number(varianteSeleccionada.id),
+      categoriaId: Number(productoBaseSeleccionado.categoria?.id),
+      marcaId: Number(productoBaseSeleccionado.marca?.id),
+      productoBaseCodigo: productoBaseSeleccionado.codigoBase,
+      nombreProducto: productoBaseSeleccionado.nombreBase,
+      marca: productoBaseSeleccionado.marca?.nombre || '',
+      modelo: productoBaseSeleccionado.modelo || '',
+      calidad: varianteSeleccionada.calidad || '',
+      tipoPresentacion: varianteSeleccionada.tipoPresentacion || '',
+      codigoVariante: varianteSeleccionada.codigoVariante,
+      cantidad,
+      precioCompraUnitario: costo,
+      precioVentaUnitario: Number(varianteSeleccionada.precioVentaSugerido || 0),
     };
-
-    const claveNuevoDetalle = construirClaveDetalleCompra(detalle);
 
     setDetallesCompra((actual) => {
       const indiceExistente = actual.findIndex(
-        (item) => construirClaveDetalleCompra(item) === claveNuevoDetalle,
+        (item) => String(item.varianteId) === String(detalle.varianteId),
       );
 
       if (indiceExistente === -1) {
@@ -203,24 +240,21 @@ export default function ComprasPage() {
 
       return actual.map((item, indice) => {
         if (indice !== indiceExistente) return item;
-
-        // Si el usuario agrega el mismo item de nuevo, consolidamos la fila y
-        // actualizamos cantidades/precios con el ultimo valor ingresado.
         return {
           ...item,
-          cantidad: Number(item.cantidad || 0) + Number(detalle.cantidad || 0),
+          cantidad: Number(item.cantidad || 0) + detalle.cantidad,
           precioCompraUnitario: detalle.precioCompraUnitario,
           precioVentaUnitario: detalle.precioVentaUnitario,
-          calidad: detalle.calidad || item.calidad,
-          sku: detalle.sku || item.sku,
-          nombreProducto: detalle.nombreProducto || item.nombreProducto,
-          marca: detalle.marca || item.marca,
         };
       });
     });
 
-    setDetalleForm(detalleInicial);
-    setBusquedaProductoDetalle('');
+    setDetalleForm((actual) => ({
+      ...detalleInicial,
+      categoriaId: actual.categoriaId,
+      marcaId: actual.marcaId,
+    }));
+    setBusquedaDetalle('');
     setError(null);
   };
 
@@ -237,19 +271,15 @@ export default function ComprasPage() {
     event.preventDefault();
     try {
       if (!detallesCompra.length) {
-        throw new Error('Agrega al menos un item a la compra');
+        throw new Error('Agrega al menos una linea a la compra');
       }
 
       await api.post('/compras', {
         ...compraForm,
         proveedorId: Number(compraForm.proveedorId),
         detalles: detallesCompra.map((detalle) => ({
-          productoId: detalle.productoId,
-          categoriaId: detalle.categoriaId,
-          marcaId: detalle.marcaId,
-          sku: detalle.sku,
-          nombreProducto: detalle.nombreProducto,
-          calidad: detalle.calidad,
+          productoBaseId: detalle.productoBaseId,
+          varianteId: detalle.varianteId,
           cantidad: detalle.cantidad,
           precioCompraUnitario: detalle.precioCompraUnitario,
           precioVentaUnitario: detalle.precioVentaUnitario,
@@ -257,9 +287,9 @@ export default function ComprasPage() {
       });
 
       setModalOpen(false);
-      setCompraForm(compraInicial);
+      setCompraForm(crearCompraInicial());
       setDetalleForm(detalleInicial);
-      setBusquedaProductoDetalle('');
+      setBusquedaDetalle('');
       setDetallesCompra([]);
       await Promise.all([cargarCatalogos(), cargarCompras(0)]);
       setPagina(0);
@@ -272,7 +302,7 @@ export default function ComprasPage() {
 
   return (
     <div className="page-stack purchases-page">
-      <PageHeader title="Compras" subtitle="Registro de abastecimiento con impacto automatico en inventario y contabilidad.">
+      <PageHeader title="Compras" subtitle="Cada linea de compra genera un detalle y un lote nuevo para la variante seleccionada.">
         <button className="inventory-primary-button compact" onClick={abrirModal}>
           <Plus size={16} />
           Compra
@@ -295,7 +325,11 @@ export default function ComprasPage() {
         <div className="inventory-toolbar">
           <label className="inventory-search">
             <Search size={16} />
-            <input value={busqueda} onChange={(event) => setBusqueda(event.target.value)} placeholder="Buscar por proveedor o numero de comprobante" />
+            <input
+              value={busqueda}
+              onChange={(event) => setBusqueda(event.target.value)}
+              placeholder="Buscar por proveedor o numero de comprobante"
+            />
           </label>
         </div>
       </section>
@@ -304,13 +338,13 @@ export default function ComprasPage() {
         <div className="inventory-panel-header">
           <div>
             <h3>Historial de compras</h3>
-            <p>Cada compra aumenta stock y, si es al contado, registra salida contable automatica.</p>
+            <p>Cada compra crea lotes nuevos por linea y conserva trazabilidad de variante y lote origen.</p>
           </div>
           <span className="chip">{comprasPage.totalElements} registros</span>
         </div>
 
         {compras.length === 0 ? (
-          <EmptyState title="Sin compras registradas" description="Registra la primera compra para poblar el inventario desde proveedores." />
+          <EmptyState title="Sin compras registradas" description="Registra la primera compra para poblar los lotes por variante." />
         ) : (
           <>
             <div className="purchases-list">
@@ -331,7 +365,7 @@ export default function ComprasPage() {
                   <div className="purchase-card-items">
                     {(compra.detalles || []).slice(0, 3).map((detalle) => (
                       <span key={detalle.id || `${detalle.sku}-${detalle.nombreProducto}`} className="purchase-item-chip">
-                        {detalle.sku || 'Sin SKU'} · {detalle.nombreProducto} x{detalle.cantidad}
+                        {detalle.sku || 'Sin variante'} · {detalle.nombreProducto} x{detalle.cantidad}
                       </span>
                     ))}
                   </div>
@@ -354,7 +388,7 @@ export default function ComprasPage() {
         )}
       </section>
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Registrar compra" subtitle="La compra aumentara stock y generara movimiento de inventario." size="xl">
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Registrar compra" subtitle="Cada linea genera un lote nuevo. No se reutilizan lotes agotados." size="xl">
         <form className="entity-form purchases-form" onSubmit={guardarCompra}>
           <div className="form-grid two-columns">
             <label>
@@ -374,7 +408,10 @@ export default function ComprasPage() {
             </label>
             <label>
               <span>Numero de comprobante</span>
-              <input value={compraForm.numeroComprobante} onChange={(event) => setCompraForm((actual) => ({ ...actual, numeroComprobante: event.target.value }))} />
+              <input
+                value={compraForm.numeroComprobante}
+                onChange={(event) => setCompraForm((actual) => ({ ...actual, numeroComprobante: event.target.value }))}
+              />
             </label>
             <label>
               <span>Tipo de pago</span>
@@ -394,9 +431,9 @@ export default function ComprasPage() {
             <div className="purchase-builder-header">
               <div>
                 <h3>Detalle de la compra</h3>
-                <p>Puedes elegir un producto existente o registrar uno nuevo desde la misma compra.</p>
+                <p>Cada fila usa producto base, variante, cantidad y costo unitario.</p>
                 <p className="purchase-helper-text">
-                  Si agregas el mismo item dos veces, el sistema consolida la fila y suma la cantidad.
+                  Si agregas la misma variante dos veces, el sistema consolida la fila y crea un solo lote por linea final.
                 </p>
               </div>
               <span className="chip">{detallesCompra.length} items</span>
@@ -404,25 +441,17 @@ export default function ComprasPage() {
 
             <div className="purchase-builder-grid">
               <label>
-                <span>Producto existente</span>
+                <span>Buscar en catalogo</span>
                 <input
-                  value={busquedaProductoDetalle}
-                  onChange={(event) => setBusquedaProductoDetalle(event.target.value)}
-                  placeholder="Filtra por nombre, SKU, categoria o marca"
+                  value={busquedaDetalle}
+                  onChange={(event) => setBusquedaDetalle(event.target.value)}
+                  placeholder="Filtra por codigo base, nombre, modelo o marca"
                 />
-                <select value={detalleForm.productoId} onChange={(event) => setDetalleForm((actual) => ({ ...actual, productoId: event.target.value }))}>
-                  <option value="">Crear como producto nuevo</option>
-                  {productosFiltradosDetalle.map((producto) => (
-                    <option key={producto.id} value={producto.id}>
-                      {producto.sku || 'Sin SKU'} - {producto.nombre} - {obtenerNombreMarca(producto.marca) || 'Sin marca'}
-                    </option>
-                  ))}
-                </select>
               </label>
               <label>
                 <span>Categoria</span>
-                <select value={detalleForm.categoriaId} onChange={(event) => setDetalleForm((actual) => ({ ...actual, categoriaId: event.target.value }))}>
-                  <option value="">Selecciona categoria</option>
+                <select value={detalleForm.categoriaId} onChange={(event) => setDetalleForm((actual) => ({ ...actual, categoriaId: event.target.value, productoBaseId: '', varianteId: '' }))}>
+                  <option value="">Todas las categorias</option>
                   {categorias.map((categoria) => (
                     <option key={categoria.id} value={categoria.id}>
                       {categoria.nombre}
@@ -432,8 +461,8 @@ export default function ComprasPage() {
               </label>
               <label>
                 <span>Marca</span>
-                <select value={detalleForm.marcaId} onChange={(event) => setDetalleForm((actual) => ({ ...actual, marcaId: event.target.value }))}>
-                  <option value="">Selecciona marca</option>
+                <select value={detalleForm.marcaId} onChange={(event) => setDetalleForm((actual) => ({ ...actual, marcaId: event.target.value, productoBaseId: '', varianteId: '' }))}>
+                  <option value="">Todas las marcas</option>
                   {marcas.map((marca) => (
                     <option key={marca.id} value={marca.id}>
                       {marca.nombre}
@@ -442,32 +471,38 @@ export default function ComprasPage() {
                 </select>
               </label>
               <label>
-                <span>SKU</span>
-                <input
-                  value={detalleForm.sku}
-                  onChange={(event) => setDetalleForm((actual) => ({ ...actual, sku: normalizeSku(event.target.value) }))}
-                  placeholder="SKU del producto"
-                />
+                <span>Producto base</span>
+                <select value={detalleForm.productoBaseId} onChange={(event) => setDetalleForm((actual) => ({ ...actual, productoBaseId: event.target.value, varianteId: '' }))}>
+                  <option value="">Selecciona un producto base</option>
+                  {productosBaseFiltrados.map((productoBase) => (
+                    <option key={productoBase.id} value={productoBase.id}>
+                      {productoBase.codigoBase} - {productoBase.nombreBase} - {productoBase.modelo || 'Sin modelo'}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label>
-                <span>Nombre / modelo</span>
-                <input value={detalleForm.nombreProducto} onChange={(event) => setDetalleForm((actual) => ({ ...actual, nombreProducto: event.target.value }))} />
+                <span>Variante</span>
+                <select value={detalleForm.varianteId} onChange={(event) => setDetalleForm((actual) => ({ ...actual, varianteId: event.target.value }))}>
+                  <option value="">Selecciona una variante</option>
+                  {variantesDisponibles.map((variante) => (
+                    <option key={variante.id} value={variante.id}>
+                      {variante.codigoVariante} - {variante.calidad} - {variante.tipoPresentacion || 'Sin presentacion'}
+                    </option>
+                  ))}
+                </select>
               </label>
               <label>
-                <span>Calidad</span>
-                <input value={detalleForm.calidad} onChange={(event) => setDetalleForm((actual) => ({ ...actual, calidad: event.target.value }))} placeholder="Original, Incell, OLED..." />
+                <span>Precio sugerido</span>
+                <input value={varianteSeleccionada?.precioVentaSugerido || ''} readOnly placeholder="Se toma de la variante" />
               </label>
               <label>
                 <span>Cantidad</span>
                 <input type="number" min="1" value={detalleForm.cantidad} onChange={(event) => setDetalleForm((actual) => ({ ...actual, cantidad: event.target.value }))} />
               </label>
               <label>
-                <span>Precio compra</span>
+                <span>Costo unitario</span>
                 <input type="number" min="0" step="0.01" value={detalleForm.precioCompraUnitario} onChange={(event) => setDetalleForm((actual) => ({ ...actual, precioCompraUnitario: event.target.value }))} />
-              </label>
-              <label>
-                <span>Precio venta</span>
-                <input type="number" min="0" step="0.01" value={detalleForm.precioVentaUnitario} onChange={(event) => setDetalleForm((actual) => ({ ...actual, precioVentaUnitario: event.target.value }))} />
               </label>
             </div>
 
@@ -478,25 +513,25 @@ export default function ComprasPage() {
             </div>
 
             {detallesCompra.length === 0 ? (
-              <EmptyState title="Sin items en la compra" description="Agrega productos al detalle antes de guardar." />
+              <EmptyState title="Sin items en la compra" description="Agrega variantes al detalle antes de guardar." />
             ) : (
               <div className="responsive-table-wrap">
                 <table className="table">
                   <thead>
                     <tr>
-                      <th>SKU / Producto</th>
+                      <th>Base / Variante</th>
                       <th>Marca</th>
                       <th>Cantidad</th>
-                      <th>P. compra</th>
-                      <th>P. venta</th>
+                      <th>Costo</th>
+                      <th>P. sugerido</th>
                       <th>Subtotal</th>
                       <th>Accion</th>
                     </tr>
                   </thead>
                   <tbody>
                     {detallesCompra.map((detalle, index) => (
-                      <tr key={`${detalle.nombreProducto}-${index}`}>
-                        <td>{detalle.sku || 'Sin SKU'} · {detalle.nombreProducto}</td>
+                      <tr key={`${detalle.varianteId}-${index}`}>
+                        <td>{detalle.productoBaseCodigo} · {detalle.nombreProducto} · {detalle.codigoVariante}</td>
                         <td>{detalle.marca}</td>
                         <td>{detalle.cantidad}</td>
                         <td>Bs {currency.format(detalle.precioCompraUnitario)}</td>
@@ -518,7 +553,7 @@ export default function ComprasPage() {
           <div className="purchase-total-strip">
             <div>
               <strong>Total de compra</strong>
-              <p>Si es al contado, tambien se registra como salida contable.</p>
+              <p>Cada linea generara un lote nuevo relacionado a su variante y a esta compra.</p>
             </div>
             <span>Bs {currency.format(totalCompra)}</span>
           </div>

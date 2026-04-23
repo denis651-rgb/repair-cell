@@ -1,5 +1,18 @@
 import { useMemo, useState } from 'react';
-import { Search, X, Save, Plus, Trash2, ChevronRight, Funnel } from 'lucide-react';
+import {
+  Search,
+  X,
+  Save,
+  Plus,
+  Trash2,
+  ChevronRight,
+  Funnel,
+  UserRoundPlus,
+  SmartphoneNfc,
+  UserRound,
+  Smartphone,
+  Package,
+} from 'lucide-react';
 import Modal from '../common/Modal';
 
 const initialPart = { productoId: '', nombreParte: '', cantidad: 1, tipoFuente: 'TIENDA' };
@@ -33,6 +46,18 @@ export default function RepairOrderModal({
   onSelectDevice,
   onClearClient,
   onClearDevice,
+  quickClientOpen,
+  setQuickClientOpen,
+  quickDeviceOpen,
+  setQuickDeviceOpen,
+  quickClientForm,
+  setQuickClientForm,
+  quickDeviceForm,
+  setQuickDeviceForm,
+  onQuickCreateClient,
+  onQuickCreateDevice,
+  quickClientLoading,
+  quickDeviceLoading,
 }) {
   const [productQuery, setProductQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
@@ -41,8 +66,8 @@ export default function RepairOrderModal({
   const productCategories = useMemo(() => {
     const categoriesMap = new Map();
     products.forEach((product) => {
-      const id = product?.categoria?.id;
-      const nombre = product?.categoria?.nombre;
+      const id = product?.categoria?.id || product?.categoriaId || product?.categoriaNombre;
+      const nombre = product?.categoria?.nombre || product?.categoriaNombre;
       if (!id || !nombre || categoriesMap.has(String(id))) return;
       categoriesMap.set(String(id), { id: String(id), nombre });
     });
@@ -50,32 +75,42 @@ export default function RepairOrderModal({
   }, [products]);
 
   const filteredProducts = useMemo(() => {
-    const term = productQuery.trim().toLowerCase();
+    const termBusqueda = productQuery.trim().toLowerCase();
+    const termParteLibre = selectedPart.nombreParte.trim().toLowerCase();
+    const term = termBusqueda || termParteLibre;
 
     return products.filter((product) => {
-      const matchesCategory = !selectedCategory || String(product?.categoria?.id) === String(selectedCategory);
+      const categoriaId = product?.categoria?.id || product?.categoriaId || product?.categoriaNombre;
+      const matchesCategory = !selectedCategory || String(categoriaId) === String(selectedCategory);
       if (!matchesCategory) return false;
       if (!term) return true;
 
       return [
         product?.nombre,
+        product?.nombreBase,
+        product?.codigoVariante,
+        product?.marcaNombre,
+        product?.modelo,
+        product?.calidad,
         product?.sku,
         product?.descripcion,
         product?.categoria?.nombre,
+        product?.categoriaNombre,
       ].some((value) => String(value || '').toLowerCase().includes(term));
     });
-  }, [products, productQuery, selectedCategory]);
+  }, [products, productQuery, selectedCategory, selectedPart.nombreParte]);
 
   const selectedProduct = useMemo(
-    () => products.find((product) => String(product.id) === String(selectedPart.productoId)),
-    [products, selectedPart.productoId],
+    () => products.find((product) => String(product.varianteId || product.id) === String(selectedPart.varianteId || selectedPart.productoId)),
+    [products, selectedPart.productoId, selectedPart.varianteId],
   );
 
   const handleSelectProduct = (product) => {
     setSelectedPart({
       ...selectedPart,
-      productoId: String(product.id),
-      nombreParte: selectedPart.nombreParte || product.nombre,
+      productoId: '',
+      varianteId: String(product.varianteId || product.id),
+      nombreParte: selectedPart.nombreParte || product.nombreBase || product.nombre,
     });
     setProductQuery('');
     setShowCategoryFilters(false);
@@ -88,6 +123,7 @@ export default function RepairOrderModal({
     setSelectedPart({
       ...selectedPart,
       productoId: '',
+      varianteId: '',
     });
   };
 
@@ -111,7 +147,21 @@ export default function RepairOrderModal({
 
           <div className="repair-modal-card-area repair-modal-card-area--two">
             <div className="repair-selection-card">
-              <label className="repair-field-label">Cliente</label>
+              <div className="repair-field-label-row">
+                <label className="repair-field-label">Cliente</label>
+                <button
+                  type="button"
+                  className={`repair-inline-icon-btn ${quickClientOpen ? 'active' : ''}`}
+                  onClick={() => {
+                    setQuickClientOpen((current) => !current);
+                    if (quickDeviceOpen) setQuickDeviceOpen(false);
+                  }}
+                  aria-label="Agregar cliente rapido"
+                  title="Agregar cliente rapido"
+                >
+                  <UserRoundPlus size={15} />
+                </button>
+              </div>
 
               <div className="repair-search-box">
                 <Search size={14} />
@@ -131,6 +181,46 @@ export default function RepairOrderModal({
                 )}
               </div>
 
+              {quickClientOpen && (
+                <div className="repair-quick-create-panel">
+                  <div className="repair-quick-create-grid">
+                    <label className="repair-field">
+                      <span className="repair-field-label">Nombre</span>
+                      <input
+                        value={quickClientForm.nombreCompleto}
+                        onChange={(e) => setQuickClientForm({ ...quickClientForm, nombreCompleto: e.target.value })}
+                        placeholder="Nombre del cliente"
+                      />
+                    </label>
+                    <label className="repair-field">
+                      <span className="repair-field-label">Telefono</span>
+                      <input
+                        value={quickClientForm.telefono}
+                        onChange={(e) => setQuickClientForm({ ...quickClientForm, telefono: e.target.value })}
+                        placeholder="Telefono"
+                      />
+                    </label>
+                  </div>
+                  <div className="repair-quick-create-actions">
+                    <button
+                      type="button"
+                      className="repair-secondary-btn"
+                      onClick={() => setQuickClientOpen(false)}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      className="repair-primary-mini-btn"
+                      onClick={onQuickCreateClient}
+                      disabled={quickClientLoading}
+                    >
+                      {quickClientLoading ? 'Guardando...' : 'Guardar cliente'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {clientQuery.trim() && (
                 <div className="repair-search-results">
                   {clientes.length === 0 ? (
@@ -143,7 +233,9 @@ export default function RepairOrderModal({
                         className={`repair-result-card ${String(form.clienteId) === String(cliente.id) ? 'active' : ''}`}
                         onClick={() => onSelectClient(cliente)}
                       >
-                        <div className="repair-result-card__icon">👤</div>
+                        <div className="repair-result-card__icon">
+                          <UserRound size={16} />
+                        </div>
                         <div className="repair-result-card__content">
                           <strong>{cliente.nombreCompleto}</strong>
                           <span>{cliente.telefono || cliente.email || 'Sin contacto'}</span>
@@ -156,7 +248,9 @@ export default function RepairOrderModal({
 
               {selectedClientLabel && !clientQuery.trim() && (
                 <div className="repair-selected-card">
-                  <div className="repair-selected-card__icon">👤</div>
+                  <div className="repair-selected-card__icon">
+                    <UserRound size={16} />
+                  </div>
                   <div className="repair-selected-card__content">
                     <strong>{selectedClientLabel}</strong>
                     <span>Cliente seleccionado</span>
@@ -173,7 +267,22 @@ export default function RepairOrderModal({
             </div>
 
             <div className="repair-selection-card">
-              <label className="repair-field-label">Dispositivo</label>
+              <div className="repair-field-label-row">
+                <label className="repair-field-label">Dispositivo</label>
+                <button
+                  type="button"
+                  className={`repair-inline-icon-btn ${quickDeviceOpen ? 'active' : ''}`}
+                  onClick={() => {
+                    setQuickDeviceOpen((current) => !current);
+                    if (quickClientOpen) setQuickClientOpen(false);
+                  }}
+                  aria-label="Agregar dispositivo rapido"
+                  title="Agregar dispositivo rapido"
+                  disabled={!form.clienteId}
+                >
+                  <SmartphoneNfc size={15} />
+                </button>
+              </div>
 
               <div className="repair-search-box">
                 <Search size={14} />
@@ -198,6 +307,54 @@ export default function RepairOrderModal({
                 )}
               </div>
 
+              {quickDeviceOpen && form.clienteId && (
+                <div className="repair-quick-create-panel">
+                  <div className="repair-quick-create-grid">
+                    <label className="repair-field">
+                      <span className="repair-field-label">Marca</span>
+                      <input
+                        value={quickDeviceForm.marca}
+                        onChange={(e) => setQuickDeviceForm({ ...quickDeviceForm, marca: e.target.value })}
+                        placeholder="Marca"
+                      />
+                    </label>
+                    <label className="repair-field">
+                      <span className="repair-field-label">Modelo</span>
+                      <input
+                        value={quickDeviceForm.modelo}
+                        onChange={(e) => setQuickDeviceForm({ ...quickDeviceForm, modelo: e.target.value })}
+                        placeholder="Modelo"
+                      />
+                    </label>
+                    <label className="repair-field repair-field--full">
+                      <span className="repair-field-label">IMEI / serie</span>
+                      <input
+                        value={quickDeviceForm.imeiSerie}
+                        onChange={(e) => setQuickDeviceForm({ ...quickDeviceForm, imeiSerie: e.target.value })}
+                        placeholder="Opcional"
+                      />
+                    </label>
+                  </div>
+                  <div className="repair-quick-create-actions">
+                    <button
+                      type="button"
+                      className="repair-secondary-btn"
+                      onClick={() => setQuickDeviceOpen(false)}
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      className="repair-primary-mini-btn"
+                      onClick={onQuickCreateDevice}
+                      disabled={quickDeviceLoading}
+                    >
+                      {quickDeviceLoading ? 'Guardando...' : 'Guardar dispositivo'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {form.clienteId && deviceQuery.trim() && (
                 <div className="repair-search-results">
                   {dispositivos.length === 0 ? (
@@ -210,7 +367,9 @@ export default function RepairOrderModal({
                         className={`repair-result-card ${String(form.dispositivoId) === String(dispositivo.id) ? 'active' : ''}`}
                         onClick={() => onSelectDevice(dispositivo)}
                       >
-                        <div className="repair-result-card__icon">📱</div>
+                        <div className="repair-result-card__icon">
+                          <Smartphone size={16} />
+                        </div>
                         <div className="repair-result-card__content">
                           <strong>{dispositivo.marca} {dispositivo.modelo}</strong>
                           <span>{dispositivo.imeiSerie || 'Sin IMEI / serie'}</span>
@@ -223,7 +382,9 @@ export default function RepairOrderModal({
 
               {selectedDeviceLabel && !deviceQuery.trim() && (
                 <div className="repair-selected-card">
-                  <div className="repair-selected-card__icon">📱</div>
+                  <div className="repair-selected-card__icon">
+                    <Smartphone size={16} />
+                  </div>
                   <div className="repair-selected-card__content">
                     <strong>{selectedDeviceLabel}</strong>
                     <span>Dispositivo seleccionado</span>
@@ -347,7 +508,7 @@ export default function RepairOrderModal({
           </div>
 
           <div className="repair-soft-panel">
-            <div className="repair-grid repair-grid--parts">
+            <div className="repair-parts-builder">
               <label className="repair-field">
                 <span className="repair-field-label">Producto inventario</span>
                 <div className="repair-search-box repair-search-box--product">
@@ -366,7 +527,7 @@ export default function RepairOrderModal({
                   >
                     <Funnel size={14} />
                   </button>
-                  {(productQuery || selectedPart.productoId || selectedCategory) && (
+                  {(productQuery || selectedPart.productoId || selectedPart.varianteId || selectedCategory) && (
                     <button
                       type="button"
                       className="repair-search-clear"
@@ -376,107 +537,116 @@ export default function RepairOrderModal({
                     </button>
                   )}
                 </div>
+              </label>
 
-                {showCategoryFilters && (
-                  <div className="repair-category-filters">
+              {showCategoryFilters && (
+                <div className="repair-category-filters">
+                  <button
+                    type="button"
+                    className={`repair-category-chip ${selectedCategory === '' ? 'active' : ''}`}
+                    onClick={() => setSelectedCategory('')}
+                  >
+                    Todas
+                  </button>
+                  {productCategories.map((category) => (
                     <button
                       type="button"
-                      className={`repair-category-chip ${selectedCategory === '' ? 'active' : ''}`}
-                      onClick={() => setSelectedCategory('')}
+                      key={category.id}
+                      className={`repair-category-chip ${String(selectedCategory) === String(category.id) ? 'active' : ''}`}
+                      onClick={() => setSelectedCategory(category.id)}
                     >
-                      Todas
+                      {category.nombre}
                     </button>
-                    {productCategories.map((category) => (
+                  ))}
+                </div>
+              )}
+
+              {(productQuery.trim() || selectedCategory || selectedPart.nombreParte.trim()) && (
+                <div className="repair-product-list">
+                  {filteredProducts.length === 0 ? (
+                    <div className="repair-search-empty">No se encontraron productos</div>
+                  ) : (
+                    filteredProducts.map((product) => (
                       <button
                         type="button"
-                        key={category.id}
-                        className={`repair-category-chip ${String(selectedCategory) === String(category.id) ? 'active' : ''}`}
-                        onClick={() => setSelectedCategory(category.id)}
+                        key={product.varianteId || product.id}
+                        className={`repair-product-list-item ${String(selectedPart.varianteId || selectedPart.productoId) === String(product.varianteId || product.id) ? 'active' : ''}`}
+                        onClick={() => handleSelectProduct(product)}
                       >
-                        {category.nombre}
+                        <span className="repair-product-list-main">
+                          <strong>{product.nombreBase || product.nombre}</strong>
+                          <small>{product.codigoVariante || product.sku || 'Sin codigo'}</small>
+                        </span>
+                        <span className="repair-product-list-meta">
+                          {product.categoriaNombre || product.categoria?.nombre || 'Sin categoria'}
+                        </span>
+                        <span className="repair-product-list-stock">
+                          Stock {product.stockDisponibleTotal ?? product.cantidadStock ?? 0}
+                        </span>
                       </button>
-                    ))}
+                    ))
+                  )}
+                </div>
+              )}
+
+              {selectedProduct && !productQuery.trim() && !selectedCategory && (
+                <div className="repair-selected-card">
+                  <div className="repair-selected-card__icon">
+                    <Package size={16} />
                   </div>
-                )}
-
-                {(productQuery.trim() || selectedCategory) && (
-                  <div className="repair-search-results repair-search-results--products">
-                    {filteredProducts.length === 0 ? (
-                      <div className="repair-search-empty">No se encontraron productos</div>
-                    ) : (
-                      filteredProducts.map((product) => (
-                        <button
-                          type="button"
-                          key={product.id}
-                          className={`repair-result-card ${String(selectedPart.productoId) === String(product.id) ? 'active' : ''}`}
-                          onClick={() => handleSelectProduct(product)}
-                        >
-                          <div className="repair-result-card__icon">📦</div>
-                          <div className="repair-result-card__content">
-                            <strong>{product.nombre}</strong>
-                            <span>{product.sku || 'Sin SKU'} · {product.categoria?.nombre || 'Sin categoria'} · Stock {product.cantidadStock}</span>
-                          </div>
-                        </button>
-                      ))
-                    )}
+                  <div className="repair-selected-card__content">
+                    <strong>{selectedProduct.nombreBase || selectedProduct.nombre}</strong>
+                    <span>{selectedProduct.codigoVariante || selectedProduct.sku || 'Sin codigo'} · {selectedProduct.categoriaNombre || selectedProduct.categoria?.nombre || 'Sin categoria'} · Stock {selectedProduct.stockDisponibleTotal ?? selectedProduct.cantidadStock ?? 0}</span>
                   </div>
-                )}
+                  <button
+                    type="button"
+                    className="repair-selected-card__remove"
+                    onClick={handleClearProduct}
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
 
-                {selectedProduct && !productQuery.trim() && !selectedCategory && (
-                  <div className="repair-selected-card">
-                    <div className="repair-selected-card__icon">📦</div>
-                    <div className="repair-selected-card__content">
-                      <strong>{selectedProduct.nombre}</strong>
-                      <span>{selectedProduct.sku || 'Sin SKU'} · {selectedProduct.categoria?.nombre || 'Sin categoria'} · Stock {selectedProduct.cantidadStock}</span>
-                    </div>
-                    <button
-                      type="button"
-                      className="repair-selected-card__remove"
-                      onClick={handleClearProduct}
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-                )}
-              </label>
+              <div className="repair-grid repair-grid--parts-form">
+                <label className="repair-field">
+                  <span className="repair-field-label">Nombre parte libre</span>
+                  <input
+                    value={selectedPart.nombreParte}
+                    onChange={(e) => setSelectedPart({ ...selectedPart, nombreParte: e.target.value })}
+                    maxLength={120}
+                    placeholder="Ej. Pantalla OLED"
+                  />
+                </label>
 
-              <label className="repair-field">
-                <span className="repair-field-label">Nombre parte libre</span>
-                <input
-                  value={selectedPart.nombreParte}
-                  onChange={(e) => setSelectedPart({ ...selectedPart, nombreParte: e.target.value })}
-                  maxLength={120}
-                  placeholder="Ej. Pantalla OLED"
-                />
-              </label>
+                <label className="repair-field">
+                  <span className="repair-field-label">Cantidad</span>
+                  <input
+                    type="number"
+                    min="1"
+                    value={selectedPart.cantidad}
+                    onChange={(e) => setSelectedPart({ ...selectedPart, cantidad: e.target.value })}
+                  />
+                </label>
 
-              <label className="repair-field">
-                <span className="repair-field-label">Cantidad</span>
-                <input
-                  type="number"
-                  min="1"
-                  value={selectedPart.cantidad}
-                  onChange={(e) => setSelectedPart({ ...selectedPart, cantidad: e.target.value })}
-                />
-              </label>
+                <label className="repair-field">
+                  <span className="repair-field-label">Fuente</span>
+                  <select
+                    value={selectedPart.tipoFuente}
+                    onChange={(e) => setSelectedPart({ ...selectedPart, tipoFuente: e.target.value })}
+                  >
+                    <option value="TIENDA">Tienda</option>
+                    <option value="CLIENTE">Cliente</option>
+                    <option value="EXTERNO">Externo</option>
+                  </select>
+                </label>
 
-              <label className="repair-field">
-                <span className="repair-field-label">Fuente</span>
-                <select
-                  value={selectedPart.tipoFuente}
-                  onChange={(e) => setSelectedPart({ ...selectedPart, tipoFuente: e.target.value })}
-                >
-                  <option value="TIENDA">Tienda</option>
-                  <option value="CLIENTE">Cliente</option>
-                  <option value="EXTERNO">Externo</option>
-                </select>
-              </label>
-
-              <div className="repair-part-add-wrap">
-                <button type="button" className="repair-primary-mini-btn" onClick={addPart}>
-                  <Plus size={14} />
-                  Añadir
-                </button>
+                <div className="repair-part-add-wrap">
+                  <button type="button" className="repair-primary-mini-btn" onClick={addPart}>
+                    <Plus size={14} />
+                    Añadir
+                  </button>
+                </div>
               </div>
             </div>
 
