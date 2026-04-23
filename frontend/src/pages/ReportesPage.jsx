@@ -44,6 +44,7 @@ const BLOQUES_INICIALES = {
   panelGlobal: null,
   panelOperativo: null,
   ordenes: null,
+  rentabilidad: null,
 };
 
 function diffDays(inicio, fin) {
@@ -80,6 +81,14 @@ export default function ReportesPage() {
   const [panelGlobal, setPanelGlobal] = useState(null);
   const [panelOperativo, setPanelOperativo] = useState(null);
   const [ordenes, setOrdenes] = useState([]);
+  const [rentabilidad, setRentabilidad] = useState(null);
+  const [categorias, setCategorias] = useState([]);
+  const [marcas, setMarcas] = useState([]);
+  const [filtrosRentabilidad, setFiltrosRentabilidad] = useState({
+    categoriaId: '',
+    marcaId: '',
+    calidad: '',
+  });
   const [bloquesError, setBloquesError] = useState(BLOQUES_INICIALES);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -120,6 +129,24 @@ export default function ReportesPage() {
         params: {},
         request: api.get('/ordenes-reparacion'),
       },
+      {
+        key: 'rentabilidad',
+        endpoint: '/reportes/rentabilidad',
+        params: {
+          inicio,
+          fin,
+          categoriaId: filtrosRentabilidad.categoriaId || undefined,
+          marcaId: filtrosRentabilidad.marcaId || undefined,
+          calidad: filtrosRentabilidad.calidad || undefined,
+        },
+        request: api.get('/reportes/rentabilidad', {
+          inicio,
+          fin,
+          categoriaId: filtrosRentabilidad.categoriaId || undefined,
+          marcaId: filtrosRentabilidad.marcaId || undefined,
+          calidad: filtrosRentabilidad.calidad || undefined,
+        }),
+      },
     ];
 
     const resultados = await Promise.allSettled(solicitudes.map((solicitud) => solicitud.request));
@@ -134,6 +161,7 @@ export default function ReportesPage() {
         if (solicitud.key === 'panelGlobal') setPanelGlobal(valor || null);
         if (solicitud.key === 'panelOperativo') setPanelOperativo(valor || null);
         if (solicitud.key === 'ordenes') setOrdenes(valor || []);
+        if (solicitud.key === 'rentabilidad') setRentabilidad(valor || null);
         return;
       }
 
@@ -149,6 +177,7 @@ export default function ReportesPage() {
       if (solicitud.key === 'panelGlobal') setPanelGlobal(null);
       if (solicitud.key === 'panelOperativo') setPanelOperativo(null);
       if (solicitud.key === 'ordenes') setOrdenes([]);
+      if (solicitud.key === 'rentabilidad') setRentabilidad(null);
     });
 
     setBloquesError(errores);
@@ -167,6 +196,25 @@ export default function ReportesPage() {
 
   useEffect(() => {
     cargarTodo();
+  }, []);
+
+  useEffect(() => {
+    Promise.all([
+      api.get('/inventario/categorias'),
+      api.get('/inventario/marcas'),
+    ])
+      .then(([listaCategorias, listaMarcas]) => {
+        setCategorias(listaCategorias || []);
+        setMarcas(listaMarcas || []);
+      })
+      .catch((err) => {
+        logFrontendRequestError({
+          endpoint: 'catalogos-reportes',
+          params: {},
+          error: err,
+          contexto: 'Fallo al cargar catalogos para filtros de rentabilidad',
+        });
+      });
   }, []);
 
   const resumenFinanciero = useMemo(() => {
@@ -222,6 +270,13 @@ export default function ReportesPage() {
     };
   }, [ordenes]);
 
+  const resumenRentabilidad = rentabilidad?.resumen || {
+    totalVendido: 0,
+    costoTotal: 0,
+    gananciaBruta: 0,
+    margenPorcentaje: 0,
+  };
+
   const exportarExcel = () => {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(serieFinanciera), 'Financiero');
@@ -229,6 +284,9 @@ export default function ReportesPage() {
     XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(panelGlobal?.productosStockBajo || []), 'Stock critico');
     XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(estadosOperativos), 'Estados orden');
     XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(tiemposReparacion.cerradas), 'Tiempos reparacion');
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rentabilidad?.porLote || []), 'Rentabilidad lotes');
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rentabilidad?.porVariante || []), 'Rentabilidad variantes');
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rentabilidad?.porProductoBase || []), 'Rentabilidad bases');
     XLSX.writeFile(workbook, `reportes-negocio-${hoy}.xlsx`);
   };
 
@@ -292,6 +350,44 @@ export default function ReportesPage() {
             Generar reporte
           </button>
         </div>
+        <div className="reports-filter-grid reports-filter-grid-secondary">
+          <label>
+            <span>Categoria</span>
+            <select
+              value={filtrosRentabilidad.categoriaId}
+              onChange={(event) => setFiltrosRentabilidad((actual) => ({ ...actual, categoriaId: event.target.value }))}
+            >
+              <option value="">Todas</option>
+              {categorias.map((categoria) => (
+                <option key={categoria.id} value={categoria.id}>
+                  {categoria.nombre}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Marca</span>
+            <select
+              value={filtrosRentabilidad.marcaId}
+              onChange={(event) => setFiltrosRentabilidad((actual) => ({ ...actual, marcaId: event.target.value }))}
+            >
+              <option value="">Todas</option>
+              {marcas.map((marca) => (
+                <option key={marca.id} value={marca.id}>
+                  {marca.nombre}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>Calidad</span>
+            <input
+              value={filtrosRentabilidad.calidad}
+              onChange={(event) => setFiltrosRentabilidad((actual) => ({ ...actual, calidad: event.target.value }))}
+              placeholder="Original, Incell, OLED..."
+            />
+          </label>
+        </div>
         <div className="reports-filter-summary">
           <div>
             <span>Periodo actual</span>
@@ -326,6 +422,194 @@ export default function ReportesPage() {
             <p>Estados de orden y tiempos de reparacion.</p>
           </div>
         </article>
+        <article className="reports-nav-card">
+          <CircleDollarSign size={20} />
+          <div>
+            <strong>Rentabilidad real</strong>
+            <p>Utilidad neta por lote, variante y producto base.</p>
+          </div>
+        </article>
+      </section>
+
+      <section className="reports-section">
+        <div className="reports-section-header">
+          <div>
+            <span className="reports-kicker">Rentabilidad</span>
+            <h2>Ganancia real por lote, variante y producto base</h2>
+          </div>
+        </div>
+
+        {bloquesError.rentabilidad && (
+          <div className="reports-block-alert" role="alert">
+            <div>
+              <strong>No se pudo cargar el bloque de rentabilidad.</strong>
+              <p>{bloquesError.rentabilidad.detalle}</p>
+            </div>
+            <button type="button" className="secondary reports-ghost-button" onClick={() => cargarTodo(rango.inicio, rango.fin)}>
+              Reintentar
+            </button>
+          </div>
+        )}
+
+        <section className="reports-kpi-grid">
+          <article className="reports-kpi-card">
+            <div className="reports-kpi-icon icon-safe"><CircleDollarSign size={20} /></div>
+            <span className="reports-kpi-label">Total vendido</span>
+            <strong className="reports-kpi-value reports-kpi-value-money">{money.format(resumenRentabilidad.totalVendido || 0)}</strong>
+            <p>Venta neta despues de devoluciones</p>
+          </article>
+
+          <article className="reports-kpi-card">
+            <div className="reports-kpi-icon icon-warning"><Package size={20} /></div>
+            <span className="reports-kpi-label">Costo total</span>
+            <strong className="reports-kpi-value reports-kpi-value-money">{money.format(resumenRentabilidad.costoTotal || 0)}</strong>
+            <p>Costo aplicado desde lotes realmente consumidos</p>
+          </article>
+
+          <article className="reports-kpi-card reports-kpi-card-accent">
+            <div className="reports-kpi-icon icon-soft"><TrendingUp size={20} /></div>
+            <span className="reports-kpi-label">Ganancia bruta</span>
+            <strong className="reports-kpi-value reports-kpi-value-money">{money.format(resumenRentabilidad.gananciaBruta || 0)}</strong>
+            <p>Utilidad neta del rango filtrado</p>
+          </article>
+
+          <article className="reports-kpi-card">
+            <div className="reports-kpi-icon icon-danger"><BarChart3 size={20} /></div>
+            <span className="reports-kpi-label">Margen</span>
+            <strong className="reports-kpi-value">{Number(resumenRentabilidad.margenPorcentaje || 0).toFixed(2)}%</strong>
+            <p>Ganancia sobre venta neta</p>
+          </article>
+        </section>
+
+        <section className="reports-grid-2">
+          <article className="card reports-table-card">
+            <div className="reports-table-header">
+              <div>
+                <h3>Rentabilidad por lote</h3>
+                <p>Te muestra exactamente que lote dio mas utilidad real.</p>
+              </div>
+              <span className="chip">{rentabilidad?.porLote?.length || 0} lotes</span>
+            </div>
+            <div className="responsive-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Variante / lote</th>
+                    <th>Cant.</th>
+                    <th>Ventas</th>
+                    <th>Costo</th>
+                    <th>Ganancia</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(rentabilidad?.porLote || []).map((fila) => (
+                    <tr key={fila.loteId}>
+                      <td>
+                        <strong>{fila.codigoVariante}</strong>
+                        <div>{fila.codigoLote} · {fila.nombreBase}</div>
+                      </td>
+                      <td>{fila.cantidadVendida}</td>
+                      <td>{money.format(fila.ventas || 0)}</td>
+                      <td>{money.format(fila.costo || 0)}</td>
+                      <td>{money.format(fila.ganancia || 0)}</td>
+                    </tr>
+                  ))}
+                  {(rentabilidad?.porLote || []).length === 0 && (
+                    <tr>
+                      <td colSpan="5" className="table-empty-cell">No hay lotes con rentabilidad para este filtro.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </article>
+
+          <article className="card reports-table-card">
+            <div className="reports-table-header">
+              <div>
+                <h3>Rentabilidad por variante</h3>
+                <p>Suma todos los lotes vendidos de la misma variante.</p>
+              </div>
+              <span className="chip">{rentabilidad?.porVariante?.length || 0} variantes</span>
+            </div>
+            <div className="responsive-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Variante</th>
+                    <th>Cant.</th>
+                    <th>Ventas</th>
+                    <th>Costo</th>
+                    <th>Ganancia</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(rentabilidad?.porVariante || []).map((fila) => (
+                    <tr key={fila.varianteId}>
+                      <td>
+                        <strong>{fila.codigoVariante}</strong>
+                        <div>{fila.nombreBase} · {fila.calidad || 'Sin calidad'}</div>
+                      </td>
+                      <td>{fila.cantidadVendida}</td>
+                      <td>{money.format(fila.ventas || 0)}</td>
+                      <td>{money.format(fila.costo || 0)}</td>
+                      <td>{money.format(fila.ganancia || 0)}</td>
+                    </tr>
+                  ))}
+                  {(rentabilidad?.porVariante || []).length === 0 && (
+                    <tr>
+                      <td colSpan="5" className="table-empty-cell">No hay variantes con rentabilidad para este filtro.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section className="reports-grid-1">
+          <article className="card reports-table-card">
+            <div className="reports-table-header">
+              <div>
+                <h3>Rentabilidad por producto base</h3>
+                <p>Consolida todas las variantes del mismo producto base.</p>
+              </div>
+              <span className="chip">{rentabilidad?.porProductoBase?.length || 0} bases</span>
+            </div>
+            <div className="responsive-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Producto base</th>
+                    <th>Cant.</th>
+                    <th>Ventas</th>
+                    <th>Costo</th>
+                    <th>Ganancia</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(rentabilidad?.porProductoBase || []).map((fila) => (
+                    <tr key={fila.productoBaseId}>
+                      <td>
+                        <strong>{fila.codigoBase}</strong>
+                        <div>{fila.nombreBase} · {fila.marcaNombre || 'Sin marca'}</div>
+                      </td>
+                      <td>{fila.cantidadVendida}</td>
+                      <td>{money.format(fila.ventas || 0)}</td>
+                      <td>{money.format(fila.costo || 0)}</td>
+                      <td>{money.format(fila.ganancia || 0)}</td>
+                    </tr>
+                  ))}
+                  {(rentabilidad?.porProductoBase || []).length === 0 && (
+                    <tr>
+                      <td colSpan="5" className="table-empty-cell">No hay productos base con rentabilidad para este filtro.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </article>
+        </section>
       </section>
 
       <section className="reports-section">

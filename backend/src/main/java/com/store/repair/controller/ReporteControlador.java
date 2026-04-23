@@ -2,6 +2,7 @@ package com.store.repair.controller;
 
 import com.store.repair.dto.PanelResumenResponse;
 import com.store.repair.dto.PanelTallerResponse;
+import com.store.repair.dto.RentabilidadReporteResponse;
 import com.store.repair.dto.ReporteClienteGlobalResponse;
 import com.store.repair.dto.ReporteClienteResponse;
 import com.store.repair.dto.ReporteResumenResponse;
@@ -74,5 +75,15 @@ public class ReporteControlador {
     @GetMapping("/clientes-global")
     public List<ReporteClienteGlobalResponse> obtenerClientesGlobal() {
         return reporteServicio.obtenerClientesGlobal();
+    }
+
+    @GetMapping("/rentabilidad")
+    public RentabilidadReporteResponse obtenerRentabilidad(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate inicio,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fin,
+            @RequestParam(required = false) Long marcaId,
+            @RequestParam(required = false) Long categoriaId,
+            @RequestParam(required = false) String calidad) {
+        return reporteServicio.obtenerRentabilidad(inicio, fin, marcaId, categoriaId, calidad);
     }
 }

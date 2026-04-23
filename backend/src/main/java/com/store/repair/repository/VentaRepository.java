@@ -12,7 +12,7 @@ import org.springframework.data.repository.query.Param;
 public interface VentaRepository extends JpaRepository<Venta, Long> {
 
     @Override
-    @EntityGraph(attributePaths = { "cliente", "detalles", "detalles.producto" })
+    @EntityGraph(attributePaths = { "cliente", "detalles", "detalles.producto", "detalles.variante", "detalles.variante.productoBase", "detalles.detallesLote", "detalles.detallesLote.lote" })
     java.util.Optional<Venta> findById(Long id);
 
     @Query(
@@ -52,4 +52,11 @@ public interface VentaRepository extends JpaRepository<Venta, Long> {
             where d.producto.id = :productoId
             """)
     boolean existsByProductoId(@Param("productoId") Long productoId);
+
+    @Query("""
+            select (count(v) > 0) from Venta v
+            join v.detalles d
+            where d.variante.id = :varianteId
+            """)
+    boolean existsByVarianteId(@Param("varianteId") Long varianteId);
 }

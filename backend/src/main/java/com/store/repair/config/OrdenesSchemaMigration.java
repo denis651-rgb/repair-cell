@@ -25,6 +25,7 @@ public class OrdenesSchemaMigration implements ApplicationRunner {
         try (Connection connection = dataSource.getConnection()) {
             connection.setAutoCommit(false);
             try {
+                asegurarVarianteIdEnPartes(connection);
                 migrarCostoFinalDesdePartes(connection);
                 connection.commit();
             } catch (Exception exception) {
@@ -64,6 +65,22 @@ public class OrdenesSchemaMigration implements ApplicationRunner {
         }
     }
 
+    private void asegurarVarianteIdEnPartes(Connection connection) throws SQLException {
+        if (!existeTabla(connection, "partes_orden_reparacion")) {
+            return;
+        }
+
+        if (!existeColumna(connection, "partes_orden_reparacion", "variante_id")) {
+            try (Statement statement = connection.createStatement()) {
+                statement.execute("ALTER TABLE partes_orden_reparacion ADD COLUMN variante_id INTEGER");
+            }
+        }
+
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("CREATE INDEX IF NOT EXISTS idx_partes_orden_reparacion_variante ON partes_orden_reparacion(variante_id)");
+        }
+    }
+
     private boolean existeTabla(Connection connection, String nombreTabla) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement("""
                 SELECT name FROM sqlite_master
@@ -72,6 +89,19 @@ public class OrdenesSchemaMigration implements ApplicationRunner {
             statement.setString(1, nombreTabla);
             try (ResultSet resultSet = statement.executeQuery()) {
                 return resultSet.next();
+            }
+        }
+    }
+
+    private boolean existeColumna(Connection connection, String tabla, String columna) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("PRAGMA table_info(" + tabla + ")")) {
+            try (ResultSet resultSet = statement.executeQuery()) {
+                while (resultSet.next()) {
+                    if (columna.equalsIgnoreCase(resultSet.getString("name"))) {
+                        return true;
+                    }
+                }
+                return false;
             }
         }
     }

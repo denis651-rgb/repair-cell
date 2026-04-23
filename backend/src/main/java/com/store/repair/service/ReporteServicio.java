@@ -11,6 +11,12 @@ import com.store.repair.dto.ClienteMontoAcumuladoDto;
 import com.store.repair.dto.PanelResumenResponse;
 import com.store.repair.dto.PanelTallerResponse;
 import com.store.repair.dto.ProductoStockBajoResponse;
+import com.store.repair.dto.RentabilidadDetalleLoteResponse;
+import com.store.repair.dto.RentabilidadMovimientoProjection;
+import com.store.repair.dto.RentabilidadProductoBaseResponse;
+import com.store.repair.dto.RentabilidadReporteResponse;
+import com.store.repair.dto.RentabilidadResumenResponse;
+import com.store.repair.dto.RentabilidadVarianteResponse;
 import com.store.repair.dto.ReporteClienteGlobalResponse;
 import com.store.repair.dto.ReporteClienteResponse;
 import com.store.repair.dto.ReporteEstadoResponse;
@@ -26,6 +32,7 @@ import com.store.repair.repository.OrdenReparacionRepository;
 import com.store.repair.repository.ProductoInventarioRepository;
 import com.store.repair.repository.VentaRepository;
 import com.store.repair.repository.AbonoCuentaPorCobrarRepository;
+import com.store.repair.repository.VentaDetalleLoteRepository;
 import com.store.repair.util.OrdenMontoUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.Cacheable;
@@ -52,6 +59,7 @@ public class ReporteServicio {
     private final CompraRepository compraRepositorio;
     private final CuentaPorCobrarRepository cuentaPorCobrarRepositorio;
     private final AbonoCuentaPorCobrarRepository abonoCuentaPorCobrarRepositorio;
+    private final VentaDetalleLoteRepository ventaDetalleLoteRepositorio;
 
     @Cacheable("reportes_resumen")
     public ReporteResumenResponse obtenerResumen() {
@@ -328,6 +336,41 @@ public class ReporteServicio {
                 .toList();
     }
 
+    public RentabilidadReporteResponse obtenerRentabilidad(
+            LocalDate inicio,
+            LocalDate fin,
+            Long marcaId,
+            Long categoriaId,
+            String calidad) {
+        LocalDate fechaInicio = resolverFechaInicio(inicio);
+        LocalDate fechaFin = resolverFechaFin(fin);
+        validarRangoFechas(fechaInicio, fechaFin);
+
+        List<RentabilidadMovimientoProjection> movimientos = ventaDetalleLoteRepositorio.findRentabilidadMovimientos(
+                fechaInicio,
+                fechaFin,
+                marcaId,
+                categoriaId,
+                calidad == null ? "" : calidad.trim());
+
+        List<MovimientoRentabilidad> netos = movimientos.stream()
+                .map(this::aMovimientoRentabilidad)
+                .filter(item -> item.cantidadVendida > 0)
+                .toList();
+
+        List<RentabilidadDetalleLoteResponse> porLote = agruparPorLote(netos);
+        List<RentabilidadVarianteResponse> porVariante = agruparPorVariante(netos);
+        List<RentabilidadProductoBaseResponse> porProductoBase = agruparPorProductoBase(netos);
+        RentabilidadResumenResponse resumen = construirResumen(netos);
+
+        return RentabilidadReporteResponse.builder()
+                .resumen(resumen)
+                .porLote(porLote)
+                .porVariante(porVariante)
+                .porProductoBase(porProductoBase)
+                .build();
+    }
+
     private List<ProductoInventario> obtenerProductosConStockBajo() {
         return productoRepositorio.findByCantidadStockLessThanEqualOrderByCantidadStockAsc(Integer.MAX_VALUE)
                 .stream()
@@ -456,6 +499,157 @@ public class ReporteServicio {
         return valor == null ? 0D : valor;
     }
 
+    private MovimientoRentabilidad aMovimientoRentabilidad(RentabilidadMovimientoProjection item) {
+        int cantidad = item.getCantidad() == null ? 0 : item.getCantidad();
+        int cantidadDevuelta = item.getCantidadDevuelta() == null ? 0 : item.getCantidadDevuelta();
+        int cantidadNeta = Math.max(cantidad - cantidadDevuelta, 0);
+        double precioVenta = valorSeguro(item.getPrecioVentaUnitario());
+        double costoUnitario = valorSeguro(item.getCostoUnitarioAplicado());
+        double ventas = redondearDosDecimales(cantidadNeta * precioVenta);
+        double costo = redondearDosDecimales(cantidadNeta * costoUnitario);
+        double ganancia = redondearDosDecimales(ventas - costo);
+
+        return new MovimientoRentabilidad(
+                item.getLoteId(),
+                item.getCodigoLote(),
+                item.getVarianteId(),
+                item.getCodigoVariante(),
+                item.getProductoBaseId(),
+                item.getCodigoBase(),
+                item.getNombreBase(),
+                item.getMarcaNombre(),
+                item.getCategoriaNombre(),
+                item.getModelo(),
+                item.getCalidad(),
+                cantidadNeta,
+                ventas,
+                costo,
+                ganancia);
+    }
+
+    private List<RentabilidadDetalleLoteResponse> agruparPorLote(List<MovimientoRentabilidad> movimientos) {
+        Map<Long, AcumuladorRentabilidad> acumulado = new LinkedHashMap<>();
+
+        for (MovimientoRentabilidad item : movimientos) {
+            AcumuladorRentabilidad grupo = acumulado.computeIfAbsent(
+                    item.loteId(),
+                    unused -> AcumuladorRentabilidad.desde(item));
+            grupo.cantidadVendida += item.cantidadVendida();
+            grupo.ventas += item.ventas();
+            grupo.costo += item.costo();
+            grupo.ganancia += item.ganancia();
+        }
+
+        return acumulado.values().stream()
+                .map(grupo -> RentabilidadDetalleLoteResponse.builder()
+                        .loteId(grupo.loteId)
+                        .codigoLote(grupo.codigoLote)
+                        .varianteId(grupo.varianteId)
+                        .codigoVariante(grupo.codigoVariante)
+                        .productoBaseId(grupo.productoBaseId)
+                        .codigoBase(grupo.codigoBase)
+                        .nombreBase(grupo.nombreBase)
+                        .marcaNombre(grupo.marcaNombre)
+                        .categoriaNombre(grupo.categoriaNombre)
+                        .modelo(grupo.modelo)
+                        .calidad(grupo.calidad)
+                        .cantidadVendida(grupo.cantidadVendida)
+                        .ventas(redondearDosDecimales(grupo.ventas))
+                        .costo(redondearDosDecimales(grupo.costo))
+                        .ganancia(redondearDosDecimales(grupo.ganancia))
+                        .build())
+                .sorted(Comparator.comparingDouble(RentabilidadDetalleLoteResponse::getGanancia).reversed())
+                .toList();
+    }
+
+    private List<RentabilidadVarianteResponse> agruparPorVariante(List<MovimientoRentabilidad> movimientos) {
+        Map<Long, AcumuladorRentabilidad> acumulado = new LinkedHashMap<>();
+
+        for (MovimientoRentabilidad item : movimientos) {
+            AcumuladorRentabilidad grupo = acumulado.computeIfAbsent(
+                    item.varianteId(),
+                    unused -> AcumuladorRentabilidad.desde(item));
+            grupo.cantidadVendida += item.cantidadVendida();
+            grupo.ventas += item.ventas();
+            grupo.costo += item.costo();
+            grupo.ganancia += item.ganancia();
+            grupo.loteId = null;
+            grupo.codigoLote = null;
+        }
+
+        return acumulado.values().stream()
+                .map(grupo -> RentabilidadVarianteResponse.builder()
+                        .varianteId(grupo.varianteId)
+                        .codigoVariante(grupo.codigoVariante)
+                        .productoBaseId(grupo.productoBaseId)
+                        .codigoBase(grupo.codigoBase)
+                        .nombreBase(grupo.nombreBase)
+                        .marcaNombre(grupo.marcaNombre)
+                        .categoriaNombre(grupo.categoriaNombre)
+                        .modelo(grupo.modelo)
+                        .calidad(grupo.calidad)
+                        .cantidadVendida(grupo.cantidadVendida)
+                        .ventas(redondearDosDecimales(grupo.ventas))
+                        .costo(redondearDosDecimales(grupo.costo))
+                        .ganancia(redondearDosDecimales(grupo.ganancia))
+                        .build())
+                .sorted(Comparator.comparingDouble(RentabilidadVarianteResponse::getGanancia).reversed())
+                .toList();
+    }
+
+    private List<RentabilidadProductoBaseResponse> agruparPorProductoBase(List<MovimientoRentabilidad> movimientos) {
+        Map<Long, AcumuladorRentabilidad> acumulado = new LinkedHashMap<>();
+
+        for (MovimientoRentabilidad item : movimientos) {
+            AcumuladorRentabilidad grupo = acumulado.computeIfAbsent(
+                    item.productoBaseId(),
+                    unused -> AcumuladorRentabilidad.desde(item));
+            grupo.cantidadVendida += item.cantidadVendida();
+            grupo.ventas += item.ventas();
+            grupo.costo += item.costo();
+            grupo.ganancia += item.ganancia();
+            grupo.loteId = null;
+            grupo.codigoLote = null;
+            grupo.varianteId = null;
+            grupo.codigoVariante = null;
+            grupo.calidad = null;
+        }
+
+        return acumulado.values().stream()
+                .map(grupo -> RentabilidadProductoBaseResponse.builder()
+                        .productoBaseId(grupo.productoBaseId)
+                        .codigoBase(grupo.codigoBase)
+                        .nombreBase(grupo.nombreBase)
+                        .marcaNombre(grupo.marcaNombre)
+                        .categoriaNombre(grupo.categoriaNombre)
+                        .modelo(grupo.modelo)
+                        .cantidadVendida(grupo.cantidadVendida)
+                        .ventas(redondearDosDecimales(grupo.ventas))
+                        .costo(redondearDosDecimales(grupo.costo))
+                        .ganancia(redondearDosDecimales(grupo.ganancia))
+                        .build())
+                .sorted(Comparator.comparingDouble(RentabilidadProductoBaseResponse::getGanancia).reversed())
+                .toList();
+    }
+
+    private RentabilidadResumenResponse construirResumen(List<MovimientoRentabilidad> movimientos) {
+        double ventas = movimientos.stream().mapToDouble(item -> item.ventas).sum();
+        double costo = movimientos.stream().mapToDouble(item -> item.costo).sum();
+        double ganancia = movimientos.stream().mapToDouble(item -> item.ganancia).sum();
+        double margen = ventas <= 0 ? 0D : redondearDosDecimales((ganancia / ventas) * 100D);
+
+        return RentabilidadResumenResponse.builder()
+                .totalVendido(redondearDosDecimales(ventas))
+                .costoTotal(redondearDosDecimales(costo))
+                .gananciaBruta(redondearDosDecimales(ganancia))
+                .margenPorcentaje(margen)
+                .build();
+    }
+
+    private double redondearDosDecimales(double valor) {
+        return Math.round(valor * 100D) / 100D;
+    }
+
     private static class AcumuladorFinancieroDiario {
         private double ingresos;
         private double egresos;
@@ -476,6 +670,58 @@ public class ReporteServicio {
         private ReporteClienteGlobalBuilder(Long clienteId, String cliente) {
             this.clienteId = clienteId;
             this.cliente = cliente;
+        }
+    }
+
+    private record MovimientoRentabilidad(
+            Long loteId,
+            String codigoLote,
+            Long varianteId,
+            String codigoVariante,
+            Long productoBaseId,
+            String codigoBase,
+            String nombreBase,
+            String marcaNombre,
+            String categoriaNombre,
+            String modelo,
+            String calidad,
+            int cantidadVendida,
+            double ventas,
+            double costo,
+            double ganancia) {
+    }
+
+    private static class AcumuladorRentabilidad {
+        private Long loteId;
+        private String codigoLote;
+        private Long varianteId;
+        private String codigoVariante;
+        private Long productoBaseId;
+        private String codigoBase;
+        private String nombreBase;
+        private String marcaNombre;
+        private String categoriaNombre;
+        private String modelo;
+        private String calidad;
+        private int cantidadVendida;
+        private double ventas;
+        private double costo;
+        private double ganancia;
+
+        private static AcumuladorRentabilidad desde(MovimientoRentabilidad item) {
+            AcumuladorRentabilidad acumulador = new AcumuladorRentabilidad();
+            acumulador.loteId = item.loteId();
+            acumulador.codigoLote = item.codigoLote();
+            acumulador.varianteId = item.varianteId();
+            acumulador.codigoVariante = item.codigoVariante();
+            acumulador.productoBaseId = item.productoBaseId();
+            acumulador.codigoBase = item.codigoBase();
+            acumulador.nombreBase = item.nombreBase();
+            acumulador.marcaNombre = item.marcaNombre();
+            acumulador.categoriaNombre = item.categoriaNombre();
+            acumulador.modelo = item.modelo();
+            acumulador.calidad = item.calidad();
+            return acumulador;
         }
     }
 }

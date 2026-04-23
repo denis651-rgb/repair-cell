@@ -35,7 +35,9 @@ const initialForm = {
   partes: [],
 };
 
-const initialPart = { productoId: '', nombreParte: '', cantidad: 1, tipoFuente: 'TIENDA' };
+const initialPart = { productoId: '', varianteId: '', nombreParte: '', cantidad: 1, tipoFuente: 'TIENDA' };
+const initialQuickClientForm = { nombreCompleto: '', telefono: '' };
+const initialQuickDeviceForm = { marca: '', modelo: '', imeiSerie: '' };
 const estados = ['RECIBIDO', 'EN_DIAGNOSTICO', 'EN_REPARACION', 'LISTO', 'ENTREGADO', 'CANCELADO'];
 
 function getSessionUser() {
@@ -112,6 +114,12 @@ export default function RepairOrdersPage() {
   const [drafts, setDrafts] = useState([]);
   const [draftsModalOpen, setDraftsModalOpen] = useState(false);
   const [editingDraftId, setEditingDraftId] = useState(null);
+  const [quickClientOpen, setQuickClientOpen] = useState(false);
+  const [quickDeviceOpen, setQuickDeviceOpen] = useState(false);
+  const [quickClientForm, setQuickClientForm] = useState(initialQuickClientForm);
+  const [quickDeviceForm, setQuickDeviceForm] = useState(initialQuickDeviceForm);
+  const [quickClientLoading, setQuickClientLoading] = useState(false);
+  const [quickDeviceLoading, setQuickDeviceLoading] = useState(false);
 
   const debouncedOrderSearch = useDebouncedValue(searchOrders, 400);
   const debouncedClientQuery = useDebouncedValue(clientQuery, 250);
@@ -121,11 +129,15 @@ export default function RepairOrdersPage() {
     const [clientesData, dispositivosData, productosData] = await Promise.all([
       api.get('/clientes'),
       api.get('/dispositivos'),
-      api.get('/inventario/productos'),
+      api.get('/catalogo/inventario-operativo', {
+        pagina: 0,
+        tamano: 200,
+        soloConStock: true,
+      }),
     ]);
     setClientes(clientesData || []);
     setDispositivos(dispositivosData || []);
-    setProducts(productosData || []);
+    setProducts(productosData?.content || []);
   };
 
   const loadOrders = async (pagina = currentPage, busqueda = debouncedOrderSearch) => {
@@ -201,7 +213,7 @@ export default function RepairOrdersPage() {
   }, [selectedClient?.id]);
 
   const addPart = () => {
-    if (!selectedPart.productoId && !selectedPart.nombreParte.trim()) return;
+    if (!selectedPart.productoId && !selectedPart.varianteId && !selectedPart.nombreParte.trim()) return;
 
     setForm((current) => ({
       ...current,
@@ -211,6 +223,7 @@ export default function RepairOrdersPage() {
           ...selectedPart,
           cantidad: Number(selectedPart.cantidad || 1),
           productoId: selectedPart.productoId || null,
+          varianteId: selectedPart.varianteId || null,
         },
       ],
     }));
@@ -247,6 +260,10 @@ export default function RepairOrdersPage() {
   const closeCreateModal = () => {
     setCreateModalOpen(false);
     resetFormWithSessionUser();
+    setQuickClientOpen(false);
+    setQuickDeviceOpen(false);
+    setQuickClientForm(initialQuickClientForm);
+    setQuickDeviceForm(initialQuickDeviceForm);
   };
 
   const handleSelectClient = (cliente) => {
@@ -291,6 +308,62 @@ export default function RepairOrdersPage() {
     }));
   };
 
+  const handleQuickCreateClient = async () => {
+    setQuickClientLoading(true);
+    setError('');
+
+    try {
+      const nuevoCliente = await api.post('/clientes', {
+        nombreCompleto: quickClientForm.nombreCompleto,
+        telefono: quickClientForm.telefono,
+        email: '',
+        direccion: '',
+        notas: '',
+      });
+
+      setClientes((current) => [nuevoCliente, ...current]);
+      handleSelectClient(nuevoCliente);
+      setQuickClientForm(initialQuickClientForm);
+      setQuickClientOpen(false);
+      setQuickDeviceOpen(false);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setQuickClientLoading(false);
+    }
+  };
+
+  const handleQuickCreateDevice = async () => {
+    if (!form.clienteId) {
+      setError('Selecciona o crea un cliente antes de registrar un dispositivo.');
+      return;
+    }
+
+    setQuickDeviceLoading(true);
+    setError('');
+
+    try {
+      const nuevoDispositivo = await api.post('/dispositivos', {
+        marca: quickDeviceForm.marca,
+        modelo: quickDeviceForm.modelo,
+        imeiSerie: quickDeviceForm.imeiSerie,
+        color: '',
+        codigoBloqueo: '',
+        accesorios: '',
+        observaciones: '',
+      }, { clienteId: Number(form.clienteId) });
+
+      setDispositivos((current) => [nuevoDispositivo, ...current]);
+      handleSelectDevice(nuevoDispositivo);
+      setQuickDeviceForm(initialQuickDeviceForm);
+      setQuickDeviceOpen(false);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setQuickDeviceLoading(false);
+    }
+  };
+
   const persistDrafts = (nextDrafts) => {
     setDrafts(nextDrafts);
     saveDrafts(nextDrafts);
@@ -313,11 +386,12 @@ export default function RepairOrdersPage() {
         costoEstimado: Number(form.costoEstimado || 0),
         costoFinal: Number(form.costoFinal || 0),
         diasGarantia: Number(form.diasGarantia || 0),
-        partes: form.partes.map((part) => ({
-          ...part,
-          cantidad: Number(part.cantidad || 1),
-          productoId: part.productoId ? String(part.productoId) : '',
-        })),
+          partes: form.partes.map((part) => ({
+            ...part,
+            cantidad: Number(part.cantidad || 1),
+            productoId: part.productoId ? String(part.productoId) : '',
+            varianteId: part.varianteId ? String(part.varianteId) : '',
+          })),
       },
     };
 
@@ -374,6 +448,7 @@ export default function RepairOrdersPage() {
         partes: form.partes.map((part) => ({
           ...part,
           productoId: part.productoId ? Number(part.productoId) : null,
+          varianteId: part.varianteId ? Number(part.varianteId) : null,
         })),
       });
 
@@ -586,6 +661,18 @@ export default function RepairOrdersPage() {
         onSelectDevice={handleSelectDevice}
         onClearClient={handleClearClient}
         onClearDevice={handleClearDevice}
+        quickClientOpen={quickClientOpen}
+        setQuickClientOpen={setQuickClientOpen}
+        quickDeviceOpen={quickDeviceOpen}
+        setQuickDeviceOpen={setQuickDeviceOpen}
+        quickClientForm={quickClientForm}
+        setQuickClientForm={setQuickClientForm}
+        quickDeviceForm={quickDeviceForm}
+        setQuickDeviceForm={setQuickDeviceForm}
+        onQuickCreateClient={handleQuickCreateClient}
+        onQuickCreateDevice={handleQuickCreateDevice}
+        quickClientLoading={quickClientLoading}
+        quickDeviceLoading={quickDeviceLoading}
       />
 
       <Modal

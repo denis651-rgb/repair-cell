@@ -7,6 +7,7 @@ import lombok.Data;
 @Data
 public class ParteOrdenReparacionRequest {
     private Long productoId;
+    private Long varianteId;
     private String nombreParte;
 
     @Min(value = 1, message = "La cantidad debe ser mayor a cero")

@@ -63,6 +63,56 @@ CREATE TABLE IF NOT EXISTS productos_inventario (
     FOREIGN KEY (marca_id) REFERENCES marcas_inventario(id)
 );
 
+CREATE TABLE IF NOT EXISTS productos_base (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    codigo_base TEXT NOT NULL UNIQUE,
+    nombre_base TEXT NOT NULL,
+    categoria_id INTEGER NOT NULL,
+    marca_id INTEGER NOT NULL,
+    modelo TEXT,
+    descripcion TEXT,
+    activo INTEGER NOT NULL DEFAULT 1,
+    creado_en TEXT NOT NULL,
+    actualizado_en TEXT NOT NULL,
+    FOREIGN KEY (categoria_id) REFERENCES categorias_inventario(id),
+    FOREIGN KEY (marca_id) REFERENCES marcas_inventario(id)
+);
+
+CREATE TABLE IF NOT EXISTS productos_variantes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    producto_base_id INTEGER NOT NULL,
+    codigo_variante TEXT NOT NULL UNIQUE,
+    calidad TEXT NOT NULL,
+    tipo_presentacion TEXT,
+    color TEXT,
+    precio_venta_sugerido REAL NOT NULL DEFAULT 0,
+    activo INTEGER NOT NULL DEFAULT 1,
+    creado_en TEXT NOT NULL,
+    actualizado_en TEXT NOT NULL,
+    FOREIGN KEY (producto_base_id) REFERENCES productos_base(id)
+);
+
+CREATE TABLE IF NOT EXISTS lotes_inventario (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    variante_id INTEGER NOT NULL,
+    codigo_lote TEXT NOT NULL UNIQUE,
+    codigo_proveedor TEXT,
+    fecha_ingreso TEXT NOT NULL,
+    cantidad_inicial INTEGER NOT NULL DEFAULT 0,
+    cantidad_disponible INTEGER NOT NULL DEFAULT 0,
+    costo_unitario REAL NOT NULL DEFAULT 0,
+    subtotal_compra REAL NOT NULL DEFAULT 0,
+    estado TEXT NOT NULL,
+    compra_id INTEGER,
+    activo INTEGER NOT NULL DEFAULT 1,
+    visible_en_ventas INTEGER NOT NULL DEFAULT 1,
+    fecha_cierre TEXT,
+    motivo_cierre TEXT,
+    creado_en TEXT NOT NULL,
+    actualizado_en TEXT NOT NULL,
+    FOREIGN KEY (variante_id) REFERENCES productos_variantes(id)
+);
+
 CREATE TABLE IF NOT EXISTS ordenes_reparacion (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     numero_orden TEXT NOT NULL UNIQUE,
@@ -90,6 +140,7 @@ CREATE TABLE IF NOT EXISTS partes_orden_reparacion (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     orden_reparacion_id INTEGER NOT NULL,
     producto_id INTEGER,
+    variante_id INTEGER,
     nombre_parte TEXT NOT NULL,
     cantidad INTEGER NOT NULL DEFAULT 1,
     costo_unitario REAL NOT NULL DEFAULT 0,
@@ -99,7 +150,8 @@ CREATE TABLE IF NOT EXISTS partes_orden_reparacion (
     creado_en TEXT NOT NULL,
     actualizado_en TEXT NOT NULL,
     FOREIGN KEY (orden_reparacion_id) REFERENCES ordenes_reparacion(id),
-    FOREIGN KEY (producto_id) REFERENCES productos_inventario(id)
+    FOREIGN KEY (producto_id) REFERENCES productos_inventario(id),
+    FOREIGN KEY (variante_id) REFERENCES productos_variantes(id)
 );
 
 CREATE TABLE IF NOT EXISTS movimientos_stock (
@@ -211,6 +263,45 @@ CREATE TABLE IF NOT EXISTS backup_records (
     actualizado_en TEXT
 );
 
+CREATE TABLE IF NOT EXISTS compras (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    proveedor_id INTEGER NOT NULL,
+    fecha_compra TEXT NOT NULL,
+    numero_comprobante TEXT,
+    observaciones TEXT,
+    tipo_pago TEXT NOT NULL,
+    total REAL NOT NULL DEFAULT 0,
+    activa INTEGER NOT NULL DEFAULT 1,
+    creado_en TEXT NOT NULL,
+    actualizado_en TEXT NOT NULL,
+    FOREIGN KEY (proveedor_id) REFERENCES proveedores(id)
+);
+
+CREATE TABLE IF NOT EXISTS compras_detalle (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    compra_id INTEGER NOT NULL,
+    producto_id INTEGER,
+    variante_id INTEGER,
+    categoria_nombre TEXT NOT NULL,
+    sku TEXT NOT NULL,
+    nombre_producto TEXT NOT NULL,
+    producto_base_codigo TEXT,
+    marca TEXT NOT NULL,
+    calidad TEXT,
+    tipo_presentacion TEXT,
+    color TEXT,
+    codigo_lote TEXT,
+    cantidad INTEGER NOT NULL,
+    precio_compra_unitario REAL NOT NULL,
+    precio_venta_unitario REAL NOT NULL,
+    subtotal REAL NOT NULL,
+    creado_en TEXT NOT NULL,
+    actualizado_en TEXT NOT NULL,
+    FOREIGN KEY (compra_id) REFERENCES compras(id),
+    FOREIGN KEY (producto_id) REFERENCES productos_inventario(id),
+    FOREIGN KEY (variante_id) REFERENCES productos_variantes(id)
+);
+
 CREATE TABLE IF NOT EXISTS ventas (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     cliente_id INTEGER NOT NULL,
@@ -230,20 +321,41 @@ CREATE TABLE IF NOT EXISTS ventas (
 CREATE TABLE IF NOT EXISTS ventas_detalle (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     venta_id INTEGER NOT NULL,
-    producto_id INTEGER NOT NULL,
+    producto_id INTEGER,
+    variante_id INTEGER,
     categoria_nombre TEXT NOT NULL,
     sku TEXT NOT NULL,
     nombre_producto TEXT NOT NULL,
+    producto_base_codigo TEXT,
     marca TEXT NOT NULL,
     calidad TEXT,
+    tipo_presentacion TEXT,
+    color TEXT,
     cantidad INTEGER NOT NULL,
     cantidad_devuelta INTEGER NOT NULL DEFAULT 0,
+    precio_lista_unitario REAL NOT NULL DEFAULT 0,
     precio_venta_unitario REAL NOT NULL,
     subtotal REAL NOT NULL,
     creado_en TEXT NOT NULL,
     actualizado_en TEXT NOT NULL,
     FOREIGN KEY (venta_id) REFERENCES ventas(id),
-    FOREIGN KEY (producto_id) REFERENCES productos_inventario(id)
+    FOREIGN KEY (producto_id) REFERENCES productos_inventario(id),
+    FOREIGN KEY (variante_id) REFERENCES productos_variantes(id)
+);
+
+CREATE TABLE IF NOT EXISTS venta_detalle_lote (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    venta_detalle_id INTEGER NOT NULL,
+    lote_id INTEGER NOT NULL,
+    cantidad INTEGER NOT NULL,
+    cantidad_devuelta INTEGER NOT NULL DEFAULT 0,
+    costo_unitario_aplicado REAL NOT NULL,
+    costo_total REAL NOT NULL,
+    ganancia_bruta REAL NOT NULL,
+    creado_en TEXT NOT NULL,
+    actualizado_en TEXT NOT NULL,
+    FOREIGN KEY (venta_detalle_id) REFERENCES ventas_detalle(id),
+    FOREIGN KEY (lote_id) REFERENCES lotes_inventario(id)
 );
 
 CREATE TABLE IF NOT EXISTS cuentas_por_cobrar (
@@ -273,19 +385,35 @@ CREATE TABLE IF NOT EXISTS abonos_cuentas_por_cobrar (
 
 CREATE INDEX IF NOT EXISTS idx_clientes_nombre ON clientes(nombre_completo);
 CREATE INDEX IF NOT EXISTS idx_dispositivos_cliente ON dispositivos(cliente_id);
+CREATE INDEX IF NOT EXISTS idx_compras_proveedor ON compras(proveedor_id);
+CREATE INDEX IF NOT EXISTS idx_compras_fecha ON compras(fecha_compra);
+CREATE INDEX IF NOT EXISTS idx_compras_detalle_compra ON compras_detalle(compra_id);
+CREATE INDEX IF NOT EXISTS idx_compras_detalle_variante ON compras_detalle(variante_id);
 CREATE INDEX IF NOT EXISTS idx_productos_categoria ON productos_inventario(categoria_id);
 CREATE INDEX IF NOT EXISTS idx_productos_marca ON productos_inventario(marca_id);
 CREATE INDEX IF NOT EXISTS idx_productos_stock_bajo ON productos_inventario(cantidad_stock, stock_minimo);
+CREATE INDEX IF NOT EXISTS idx_productos_base_categoria ON productos_base(categoria_id);
+CREATE INDEX IF NOT EXISTS idx_productos_base_marca ON productos_base(marca_id);
+CREATE INDEX IF NOT EXISTS idx_productos_base_modelo ON productos_base(modelo);
+CREATE INDEX IF NOT EXISTS idx_productos_variantes_producto_base ON productos_variantes(producto_base_id);
+CREATE INDEX IF NOT EXISTS idx_productos_variantes_calidad ON productos_variantes(calidad);
+CREATE INDEX IF NOT EXISTS idx_lotes_variante ON lotes_inventario(variante_id);
+CREATE INDEX IF NOT EXISTS idx_lotes_estado ON lotes_inventario(estado);
+CREATE INDEX IF NOT EXISTS idx_lotes_fecha_ingreso ON lotes_inventario(fecha_ingreso);
 CREATE INDEX IF NOT EXISTS idx_ordenes_reparacion_cliente ON ordenes_reparacion(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_ordenes_reparacion_dispositivo ON ordenes_reparacion(dispositivo_id);
 CREATE INDEX IF NOT EXISTS idx_ordenes_reparacion_estado ON ordenes_reparacion(estado);
 CREATE INDEX IF NOT EXISTS idx_ordenes_reparacion_recibido ON ordenes_reparacion(recibido_en);
 CREATE INDEX IF NOT EXISTS idx_partes_orden_reparacion_orden ON partes_orden_reparacion(orden_reparacion_id);
+CREATE INDEX IF NOT EXISTS idx_partes_orden_reparacion_variante ON partes_orden_reparacion(variante_id);
 CREATE INDEX IF NOT EXISTS idx_movimientos_stock_producto ON movimientos_stock(producto_id);
 CREATE INDEX IF NOT EXISTS idx_ventas_cliente ON ventas(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_ventas_fecha ON ventas(fecha_venta);
 CREATE INDEX IF NOT EXISTS idx_ventas_estado ON ventas(estado);
 CREATE INDEX IF NOT EXISTS idx_ventas_detalle_venta ON ventas_detalle(venta_id);
+CREATE INDEX IF NOT EXISTS idx_ventas_detalle_variante ON ventas_detalle(variante_id);
+CREATE INDEX IF NOT EXISTS idx_venta_detalle_lote_detalle ON venta_detalle_lote(venta_detalle_id);
+CREATE INDEX IF NOT EXISTS idx_venta_detalle_lote_lote ON venta_detalle_lote(lote_id);
 CREATE INDEX IF NOT EXISTS idx_cuentas_por_cobrar_cliente ON cuentas_por_cobrar(cliente_id);
 CREATE INDEX IF NOT EXISTS idx_entradas_contables_fecha ON entradas_contables(fecha_entrada);
 CREATE INDEX IF NOT EXISTS idx_entradas_contables_caja ON entradas_contables(caja_id);

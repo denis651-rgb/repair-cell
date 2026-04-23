@@ -27,6 +27,10 @@ public class CompraDetalle extends EntidadBase {
     @JoinColumn(name = "producto_id")
     private ProductoInventario producto;
 
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "variante_id")
+    private ProductoVariante variante;
+
     @Column(name = "categoria_nombre", nullable = false)
     private String categoriaNombre;
 
@@ -36,10 +40,22 @@ public class CompraDetalle extends EntidadBase {
     @Column(name = "nombre_producto", nullable = false)
     private String nombreProducto;
 
+    @Column(name = "producto_base_codigo")
+    private String productoBaseCodigo;
+
     @Column(nullable = false)
     private String marca;
 
     private String calidad;
+
+    @Column(name = "tipo_presentacion")
+    private String tipoPresentacion;
+
+    @Column(name = "color")
+    private String color;
+
+    @Column(name = "codigo_lote")
+    private String codigoLote;
 
     @Column(nullable = false)
     private Integer cantidad;

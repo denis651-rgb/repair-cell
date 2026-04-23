@@ -391,6 +391,38 @@
     color: #6f7d95;
 }
 
+.repair-field-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.repair-inline-icon-btn {
+    width: 32px;
+    height: 32px;
+    border: 1px solid #dbe4f0;
+    border-radius: 10px;
+    background: #fff;
+    color: #4f46e5;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex: 0 0 auto;
+}
+
+.repair-inline-icon-btn.active {
+    background: #0d1b8c;
+    color: #fff;
+    border-color: #0d1b8c;
+}
+
+.repair-inline-icon-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
 .repair-search-box {
     display: flex;
     align-items: center;
@@ -491,6 +523,89 @@
 
 .repair-search-results--products {
     max-height: 220px;
+}
+
+.repair-parts-builder {
+    display: grid;
+    gap: 12px;
+}
+
+.repair-product-list {
+    display: grid;
+    gap: 8px;
+    max-height: 220px;
+    overflow-y: auto;
+}
+
+.repair-product-list-item {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(120px, 0.9fr) auto;
+    gap: 12px;
+    align-items: center;
+    padding: 10px 12px;
+    border: 1px solid #dde5f0;
+    border-radius: 12px;
+    background: #fff;
+    text-align: left;
+    cursor: pointer;
+}
+
+.repair-product-list-item:hover,
+.repair-product-list-item.active {
+    border-color: #9fb2ff;
+    box-shadow: 0 0 0 3px rgba(61, 92, 255, 0.08);
+}
+
+.repair-product-list-main {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+}
+
+.repair-product-list-main strong {
+    color: #102046;
+    font-size: 0.92rem;
+    overflow-wrap: anywhere;
+}
+
+.repair-product-list-main small,
+.repair-product-list-meta,
+.repair-product-list-stock {
+    color: #6a7690;
+    font-size: 0.8rem;
+}
+
+.repair-product-list-meta,
+.repair-product-list-stock {
+    white-space: nowrap;
+}
+
+.repair-quick-create-panel {
+    margin-top: 10px;
+    padding: 12px;
+    border-radius: 12px;
+    background: #fff;
+    border: 1px solid #dde5f0;
+    display: grid;
+    gap: 10px;
+}
+
+.repair-quick-create-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.repair-quick-create-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.repair-field--full {
+    grid-column: 1 / -1;
 }
 
 .repair-search-empty {
@@ -596,6 +711,11 @@
 
 .repair-grid--parts {
     grid-template-columns: 2fr 1.4fr 0.8fr 1fr auto;
+    align-items: end;
+}
+
+.repair-grid--parts-form {
+    grid-template-columns: minmax(0, 1.8fr) minmax(90px, 0.7fr) minmax(120px, 0.9fr) auto;
     align-items: end;
 }
 
@@ -826,7 +946,8 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    .repair-grid--parts {
+    .repair-grid--parts,
+    .repair-grid--parts-form {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
@@ -847,9 +968,11 @@
         border-radius: 24px;
     }
 
+    .repair-product-list-item,
     .repair-modal-card-area--two,
     .repair-grid--two,
-    .repair-grid--four {
+    .repair-grid--four,
+    .repair-quick-create-grid {
         grid-template-columns: 1fr;
     }
 

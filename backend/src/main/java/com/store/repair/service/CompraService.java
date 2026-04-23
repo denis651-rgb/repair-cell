@@ -1,20 +1,18 @@
 package com.store.repair.service;
 
 import com.store.repair.config.SanitizadorTexto;
-import com.store.repair.domain.CategoriaInventario;
 import com.store.repair.domain.Compra;
 import com.store.repair.domain.CompraDetalle;
 import com.store.repair.domain.EntradaContable;
-import com.store.repair.domain.MarcaInventario;
-import com.store.repair.domain.ProductoInventario;
+import com.store.repair.domain.LoteInventario;
+import com.store.repair.domain.ProductoVariante;
 import com.store.repair.domain.TipoEntrada;
-import com.store.repair.domain.TipoMovimientoStock;
 import com.store.repair.domain.TipoPagoCompra;
 import com.store.repair.dto.CompraDetalleRegistroRequest;
 import com.store.repair.dto.CompraRegistroRequest;
+import com.store.repair.dto.LoteInventarioRequest;
 import com.store.repair.repository.CompraRepository;
 import com.store.repair.repository.EntradaContableRepository;
-import com.store.repair.util.SkuUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.Page;
@@ -34,11 +32,11 @@ public class CompraService {
 
     private final CompraRepository repositorio;
     private final ProveedorService proveedorService;
-    private final CategoriaInventarioService categoriaService;
-    private final MarcaInventarioService marcaService;
-    private final ProductoInventarioService productoService;
+    private final ProductoVarianteService productoVarianteService;
+    private final LoteInventarioService loteInventarioService;
     private final AccountingService accountingService;
     private final EntradaContableRepository entradaContableRepository;
+    private final ComprobanteService comprobanteService;
 
     public Page<Compra> findPage(String busqueda, int pagina, int tamano) {
         return repositorio.search(
@@ -62,13 +60,13 @@ public class CompraService {
     public Compra registrarCompra(CompraRegistroRequest solicitud) {
         List<CompraDetalleRegistroRequest> detallesNormalizados = normalizarDetallesCompra(solicitud.getDetalles());
         if (detallesNormalizados.isEmpty()) {
-            throw new BusinessException("La compra debe incluir al menos un producto");
+            throw new BusinessException("La compra debe incluir al menos una variante");
         }
 
         Compra compra = Compra.builder()
                 .proveedor(proveedorService.findById(solicitud.getProveedorId()))
                 .fechaCompra(solicitud.getFechaCompra() == null ? LocalDate.now() : solicitud.getFechaCompra())
-                .numeroComprobante(SanitizadorTexto.limpiar(solicitud.getNumeroComprobante()))
+                .numeroComprobante(obtenerNumeroComprobante(solicitud.getNumeroComprobante()))
                 .observaciones(SanitizadorTexto.limpiar(solicitud.getObservaciones()))
                 .tipoPago(solicitud.getTipoPago())
                 .activa(Boolean.TRUE)
@@ -79,39 +77,45 @@ public class CompraService {
 
         double totalCompra = 0D;
         List<CompraDetalle> detallesGuardados = new ArrayList<>();
+        int indiceLote = 1;
 
-        // Procesamos cada detalle ya consolidado para que el backend siga siendo
-        // la fuente de verdad aunque el frontend cambie o reintente datos.
         for (CompraDetalleRegistroRequest detalleSolicitud : detallesNormalizados) {
-            ProductoInventario producto = resolverProductoParaCompra(detalleSolicitud);
+            ProductoVariante variante = productoVarianteService.findById(detalleSolicitud.getVarianteId());
+            var productoBase = variante.getProductoBase();
+            double precioVentaSugerido = detalleSolicitud.getPrecioVentaUnitario() != null
+                    ? detalleSolicitud.getPrecioVentaUnitario()
+                    : (variante.getPrecioVentaSugerido() == null ? 0D : variante.getPrecioVentaSugerido());
             double subtotal = detalleSolicitud.getCantidad() * detalleSolicitud.getPrecioCompraUnitario();
 
-            productoService.adjustStock(
-                    producto.getId(),
-                    detalleSolicitud.getCantidad(),
-                    TipoMovimientoStock.ENTRADA,
-                    "Compra " + referenciaCompra(compraGuardada),
-                    "COMPRA",
-                    compraGuardada.getId(),
-                    detalleSolicitud.getPrecioCompraUnitario(),
-                    detalleSolicitud.getPrecioVentaUnitario());
+            LoteInventario lote = loteInventarioService.save(null, construirLoteRequest(
+                    compraGuardada,
+                    variante,
+                    detalleSolicitud,
+                    subtotal,
+                    indiceLote));
 
             CompraDetalle detalle = CompraDetalle.builder()
                     .compra(compraGuardada)
-                    .producto(productoService.findById(producto.getId()))
-                    .categoriaNombre(producto.getCategoria().getNombre())
-                    .sku(producto.getSku())
-                    .nombreProducto(producto.getNombre())
-                    .marca(producto.getMarca().getNombre())
-                    .calidad(producto.getCalidad())
+                    .producto(null)
+                    .variante(productoVarianteService.findById(variante.getId()))
+                    .categoriaNombre(productoBase.getCategoria().getNombre())
+                    .sku(variante.getCodigoVariante())
+                    .nombreProducto(productoBase.getNombreBase())
+                    .productoBaseCodigo(productoBase.getCodigoBase())
+                    .marca(productoBase.getMarca().getNombre())
+                    .calidad(variante.getCalidad())
+                    .tipoPresentacion(variante.getTipoPresentacion())
+                    .color(variante.getColor())
+                    .codigoLote(lote.getCodigoLote())
                     .cantidad(detalleSolicitud.getCantidad())
                     .precioCompraUnitario(detalleSolicitud.getPrecioCompraUnitario())
-                    .precioVentaUnitario(detalleSolicitud.getPrecioVentaUnitario())
+                    .precioVentaUnitario(precioVentaSugerido)
                     .subtotal(subtotal)
                     .build();
 
             detallesGuardados.add(detalle);
             totalCompra += subtotal;
+            indiceLote++;
         }
 
         compraGuardada.replaceDetalles(detallesGuardados);
@@ -130,37 +134,23 @@ public class CompraService {
             return List.of();
         }
 
-        Map<String, CompraDetalleRegistroRequest> detallesConsolidados = new LinkedHashMap<>();
+        Map<Long, CompraDetalleRegistroRequest> detallesConsolidados = new LinkedHashMap<>();
 
         for (CompraDetalleRegistroRequest detalle : detallesOriginales) {
             validarDetalleCompra(detalle);
-
-            String clave = construirClaveDetalle(detalle);
-            CompraDetalleRegistroRequest existente = detallesConsolidados.get(clave);
+            CompraDetalleRegistroRequest existente = detallesConsolidados.get(detalle.getVarianteId());
 
             if (existente == null) {
-                detallesConsolidados.put(clave, clonarDetalle(detalle));
+                detallesConsolidados.put(detalle.getVarianteId(), clonarDetalle(detalle));
                 continue;
             }
 
-            // Consolidamos cantidades para que la compra final no cree filas
-            // repetidas del mismo item aunque vengan duplicadas desde UI.
             existente.setCantidad(existente.getCantidad() + detalle.getCantidad());
-
             if (detalle.getPrecioCompraUnitario() != null) {
                 existente.setPrecioCompraUnitario(detalle.getPrecioCompraUnitario());
             }
-
             if (detalle.getPrecioVentaUnitario() != null) {
                 existente.setPrecioVentaUnitario(detalle.getPrecioVentaUnitario());
-            }
-
-            if (SanitizadorTexto.limpiar(detalle.getCalidad()) != null) {
-                existente.setCalidad(detalle.getCalidad());
-            }
-
-            if (SkuUtils.normalize(detalle.getSku()) != null) {
-                existente.setSku(SkuUtils.normalize(detalle.getSku()));
             }
         }
 
@@ -172,39 +162,27 @@ public class CompraService {
             throw new BusinessException("Se recibio un detalle de compra vacio");
         }
 
+        if (detalle.getVarianteId() == null) {
+            throw new BusinessException("Cada linea de compra debe indicar una variante");
+        }
+
         if (detalle.getCantidad() == null || detalle.getCantidad() <= 0) {
-            throw new BusinessException("Cada item de compra debe tener una cantidad mayor a cero");
+            throw new BusinessException("Cada linea de compra debe tener una cantidad mayor a cero");
         }
 
         if (detalle.getPrecioCompraUnitario() == null || detalle.getPrecioCompraUnitario() < 0) {
-            throw new BusinessException("Cada item de compra debe tener un precio de compra valido");
-        }
-
-        if (detalle.getPrecioVentaUnitario() == null || detalle.getPrecioVentaUnitario() < 0) {
-            throw new BusinessException("Cada item de compra debe tener un precio de venta valido");
-        }
-
-        if (detalle.getProductoId() == null) {
-            if (detalle.getCategoriaId() == null) {
-                throw new BusinessException("Debes seleccionar una categoria para el item nuevo");
-            }
-
-            if (detalle.getMarcaId() == null) {
-                throw new BusinessException("Debes seleccionar una marca para el item nuevo");
-            }
-
-            if (SanitizadorTexto.limpiar(detalle.getNombreProducto()) == null) {
-                throw new BusinessException("Debes registrar el nombre del producto para el item nuevo");
-            }
+            throw new BusinessException("Cada linea de compra debe tener un costo unitario valido");
         }
     }
 
     private CompraDetalleRegistroRequest clonarDetalle(CompraDetalleRegistroRequest origen) {
         CompraDetalleRegistroRequest copia = new CompraDetalleRegistroRequest();
+        copia.setProductoBaseId(origen.getProductoBaseId());
+        copia.setVarianteId(origen.getVarianteId());
         copia.setProductoId(origen.getProductoId());
         copia.setCategoriaId(origen.getCategoriaId());
         copia.setMarcaId(origen.getMarcaId());
-        copia.setSku(SkuUtils.normalize(origen.getSku()));
+        copia.setSku(SanitizadorTexto.limpiar(origen.getSku()));
         copia.setNombreProducto(SanitizadorTexto.limpiar(origen.getNombreProducto()));
         copia.setCalidad(SanitizadorTexto.limpiar(origen.getCalidad()));
         copia.setCantidad(origen.getCantidad());
@@ -213,98 +191,32 @@ public class CompraService {
         return copia;
     }
 
-    private String construirClaveDetalle(CompraDetalleRegistroRequest detalle) {
-        if (detalle.getProductoId() != null) {
-            return "producto:" + detalle.getProductoId();
-        }
-
-        return String.join("|",
-                "categoria:" + (detalle.getCategoriaId() == null ? "" : detalle.getCategoriaId()),
-                "marca:" + (detalle.getMarcaId() == null ? "" : detalle.getMarcaId()),
-                "sku:" + valorNormalizado(detalle.getSku()),
-                "nombre:" + valorNormalizado(detalle.getNombreProducto()),
-                "calidad:" + valorNormalizado(detalle.getCalidad()));
+    private LoteInventarioRequest construirLoteRequest(
+            Compra compra,
+            ProductoVariante variante,
+            CompraDetalleRegistroRequest detalleSolicitud,
+            double subtotal,
+            int indiceLote) {
+        LoteInventarioRequest request = new LoteInventarioRequest();
+        request.setVarianteId(variante.getId());
+        request.setCodigoLote(generarCodigoLote(compra, variante, indiceLote));
+        request.setCodigoProveedor(SanitizadorTexto.limpiar(compra.getProveedor().getNombreComercial()));
+        request.setFechaIngreso(compra.getFechaCompra());
+        request.setCantidadInicial(detalleSolicitud.getCantidad());
+        request.setCantidadDisponible(detalleSolicitud.getCantidad());
+        request.setCostoUnitario(detalleSolicitud.getPrecioCompraUnitario());
+        request.setSubtotalCompra(subtotal);
+        request.setCompraId(compra.getId());
+        request.setActivo(Boolean.TRUE);
+        request.setVisibleEnVentas(Boolean.TRUE);
+        return request;
     }
 
-    private String valorNormalizado(String valor) {
-        String limpio = SanitizadorTexto.limpiar(valor);
-        return limpio == null ? "" : limpio.toLowerCase();
-    }
-
-    private ProductoInventario resolverProductoParaCompra(CompraDetalleRegistroRequest detalleSolicitud) {
-        if (detalleSolicitud.getProductoId() != null) {
-            ProductoInventario productoExistente = productoService.findById(detalleSolicitud.getProductoId());
-
-            // La compra conserva la ficha maestra del producto existente; solo
-            // permitimos refrescar el precio sugerido de venta si viene informado.
-            if (detalleSolicitud.getPrecioVentaUnitario() != null && detalleSolicitud.getPrecioVentaUnitario() >= 0) {
-                productoExistente.setPrecioVenta(detalleSolicitud.getPrecioVentaUnitario());
-                productoExistente = productoService.save(
-                        productoExistente,
-                        productoExistente.getCategoria().getId(),
-                        productoExistente.getMarca().getId());
-            }
-
-            return productoExistente;
-        }
-
-        ProductoInventario producto = new ProductoInventario();
-
-        Long categoriaId = detalleSolicitud.getProductoId() == null
-                ? detalleSolicitud.getCategoriaId()
-                : (detalleSolicitud.getCategoriaId() != null
-                        ? detalleSolicitud.getCategoriaId()
-                        : producto.getCategoria().getId());
-
-        if (categoriaId == null) {
-            throw new BusinessException("La categoria es obligatoria para registrar la compra");
-        }
-
-        CategoriaInventario categoria = categoriaService.findById(categoriaId);
-        Long marcaId = detalleSolicitud.getProductoId() == null
-                ? detalleSolicitud.getMarcaId()
-                : (detalleSolicitud.getMarcaId() != null
-                        ? detalleSolicitud.getMarcaId()
-                        : (producto.getMarca() != null ? producto.getMarca().getId() : null));
-
-        if (marcaId == null) {
-            throw new BusinessException("La marca es obligatoria para registrar la compra");
-        }
-
-        MarcaInventario marca = marcaService.findById(marcaId);
-
-        producto.setCategoria(categoria);
-        producto.setMarca(marca);
-        producto.setSku(SkuUtils.normalize(detalleSolicitud.getSku()) != null
-                ? SkuUtils.normalize(detalleSolicitud.getSku())
-                : generarSkuCompra(categoria, marca, detalleSolicitud));
-        producto.setNombre(SanitizadorTexto.limpiar(detalleSolicitud.getNombreProducto()));
-        producto.setDescripcion(null);
-        producto.setCalidad(SanitizadorTexto.limpiar(detalleSolicitud.getCalidad()));
-        producto.setCostoUnitario(detalleSolicitud.getPrecioCompraUnitario());
-        producto.setPrecioVenta(detalleSolicitud.getPrecioVentaUnitario());
-        producto.setActivo(Boolean.TRUE);
-
-        if (producto.getCantidadStock() == null) {
-            producto.setCantidadStock(0);
-        }
-        if (producto.getStockMinimo() == null) {
-            producto.setStockMinimo(0);
-        }
-
-        return productoService.save(producto, categoria.getId(), marca.getId());
-    }
-
-    private String generarSkuCompra(CategoriaInventario categoria, MarcaInventario marca, CompraDetalleRegistroRequest detalleSolicitud) {
-        String sugerido = productoService.buildSkuSuggestion(
-                categoria.getId(),
-                marca.getId(),
-                detalleSolicitud.getNombreProducto(),
-                detalleSolicitud.getCalidad(),
-                null,
-                null)
-                .getSkuSugerido();
-        return productoService.ensureUniqueSkuSuggestion(sugerido);
+    private String generarCodigoLote(Compra compra, ProductoVariante variante, int indiceLote) {
+        String referenciaCompra = compra.getNumeroComprobante() != null
+                ? compra.getNumeroComprobante().replaceAll("[^A-Za-z0-9]+", "")
+                : String.valueOf(compra.getId());
+        return ("LOT-" + variante.getCodigoVariante() + "-" + referenciaCompra + "-" + indiceLote).toUpperCase();
     }
 
     private void registrarSalidaContable(Compra compra) {
@@ -326,5 +238,10 @@ public class CompraService {
 
     private String referenciaCompra(Compra compra) {
         return compra.getNumeroComprobante() != null ? compra.getNumeroComprobante() : ("#" + compra.getId());
+    }
+
+    private String obtenerNumeroComprobante(String numeroRecibido) {
+        String numeroNormalizado = SanitizadorTexto.limpiar(numeroRecibido);
+        return numeroNormalizado != null ? numeroNormalizado : comprobanteService.generarNumeroComprobante();
     }
 }

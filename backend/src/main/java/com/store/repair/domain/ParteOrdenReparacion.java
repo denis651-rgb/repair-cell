@@ -27,6 +27,10 @@ public class ParteOrdenReparacion extends EntidadBase {
     @JoinColumn(name = "producto_id")
     private ProductoInventario producto;
 
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "variante_id")
+    private ProductoVariante variante;
+
     @Column(name = "nombre_parte", nullable = false)
     private String nombreParte;
 
