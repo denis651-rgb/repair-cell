@@ -50,10 +50,6 @@ public class CuentaPorCobrarService {
     public CuentaPorCobrar registrarAbono(Long cuentaId, AbonoCuentaPorCobrarRequest request) {
         CuentaPorCobrar cuenta = findById(cuentaId);
 
-        if (cuenta.getEstado() == EstadoCuentaPorCobrar.ANULADA) {
-            throw new BusinessException("La cuenta por cobrar esta anulada");
-        }
-
         if (cuenta.getEstado() == EstadoCuentaPorCobrar.PAGADA) {
             throw new BusinessException("La cuenta por cobrar ya esta pagada");
         }
@@ -92,7 +88,8 @@ public class CuentaPorCobrarService {
         EntradaContable entrada = EntradaContable.builder()
                 .tipoEntrada(TipoEntrada.ENTRADA)
                 .categoria("COBRO_CREDITO")
-                .descripcion("Abono de venta " + referenciaVenta(cuenta.getVenta()) + " de " + cuenta.getCliente().getNombreCompleto())
+                .descripcion("Abono de venta " + referenciaVenta(cuenta.getVenta()) + " de "
+                        + cuenta.getCliente().getNombreCompleto())
                 .monto(abono.getMonto())
                 .fechaEntrada(abono.getFechaAbono())
                 .moduloRelacionado("ABONO_CUENTA_POR_COBRAR")

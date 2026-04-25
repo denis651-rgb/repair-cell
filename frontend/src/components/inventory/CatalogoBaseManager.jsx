@@ -857,7 +857,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                             <th>Calidad</th>
                             <th>Stock total</th>
                             <th>Lotes activos</th>
-                            <th>P. sugerido</th>
+                            <th>P. Venta</th>
                             <th>Accion</th>
                           </tr>
                         </thead>
@@ -953,7 +953,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                         <strong>{detalleOperativo.lotesActivos || 0}</strong>
                       </article>
                       <article className="catalogo-kpi-card">
-                        <span>Precio sugerido</span>
+                        <span>Precio Venta</span>
                         <strong>Bs {currency.format(Number(detalleOperativo.precioVentaSugerido || 0))}</strong>
                       </article>
                     </div>
@@ -972,7 +972,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                                 <th>Lote</th>
                                 <th>Ingreso</th>
                                 <th>Disponible</th>
-                                <th>Costo</th>
+                                <th>P. Compra</th>
                                 <th>Visible</th>
                               </tr>
                             </thead>

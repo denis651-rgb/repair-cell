@@ -95,7 +95,6 @@ export default function CuentasPorCobrarPage() {
             <option value="PENDIENTE">Pendiente</option>
             <option value="PARCIAL">Parcial</option>
             <option value="PAGADA">Pagada</option>
-            <option value="ANULADA">Anulada</option>
           </select>
         </div>
       </PageHeader>
