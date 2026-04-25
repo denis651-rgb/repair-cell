@@ -134,6 +134,22 @@
   color: var(--primary-dark);
 }
 
+.purchase-payment-field span {
+  color: #b91c1c;
+  font-weight: 800;
+}
+
+.purchase-payment-field select {
+  border: 2px solid rgba(220, 38, 38, 0.72);
+  background: linear-gradient(180deg, rgba(254, 242, 242, 0.95), rgba(255, 255, 255, 0.98));
+  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.08);
+}
+
+.purchase-payment-field select:focus {
+  border-color: #b91c1c;
+  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.16);
+}
+
 @media (max-width: 920px) {
   .purchase-builder-grid {
     grid-template-columns: 1fr 1fr;

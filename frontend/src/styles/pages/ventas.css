@@ -124,6 +124,174 @@
   margin-top: 12px;
 }
 
+.sale-payment-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 96px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.sale-payment-pill.is-cash {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.sale-payment-pill.is-credit {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.sale-client-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 48px;
+  gap: 10px;
+  align-items: end;
+}
+
+.sale-client-add-button {
+  min-height: 48px;
+  width: 48px;
+  border: 1px solid rgba(15, 118, 110, 0.22);
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(240, 253, 250, 0.98), rgba(224, 242, 254, 0.98));
+  color: #0f766e;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 24px rgba(15, 118, 110, 0.12);
+}
+
+.sale-payment-field span {
+  color: #b91c1c;
+  font-weight: 800;
+}
+
+.sale-payment-field select {
+  border: 2px solid rgba(220, 38, 38, 0.72);
+  background: linear-gradient(180deg, rgba(254, 242, 242, 0.95), rgba(255, 255, 255, 0.98));
+  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.08);
+}
+
+.sale-payment-field select:focus {
+  border-color: #b91c1c;
+  box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.16);
+}
+
+.sale-eye-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+}
+
+.sale-receipt-shell {
+  display: grid;
+  gap: 16px;
+}
+
+.sale-receipt-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.sale-receipt-card {
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+  border-radius: 24px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96));
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+}
+
+.sale-receipt-header,
+.sale-receipt-total {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.sale-receipt-kicker {
+  display: inline-block;
+  margin-bottom: 8px;
+  color: #0369a1;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.sale-receipt-header h2,
+.sale-receipt-total strong {
+  margin: 0;
+  color: #0f172a;
+}
+
+.sale-receipt-header p,
+.sale-receipt-total p {
+  margin: 8px 0 0;
+  color: #475569;
+}
+
+.sale-receipt-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.sale-receipt-info {
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(248, 250, 252, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.sale-receipt-info span {
+  display: block;
+  margin-bottom: 8px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.sale-receipt-info strong {
+  display: block;
+  color: #0f172a;
+  font-size: 18px;
+}
+
+.sale-receipt-info p {
+  margin: 8px 0 0;
+  color: #475569;
+}
+
+.sale-receipt-table-wrap {
+  overflow-x: auto;
+}
+
+.sale-receipt-table-wrap table {
+  width: 100%;
+}
+
+.sale-receipt-table-wrap td div {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.sale-receipt-total span {
+  font-size: 28px;
+  font-weight: 900;
+  color: #0f172a;
+}
+
 .devolution-detail-list {
   display: grid;
   gap: 12px;
@@ -166,6 +334,19 @@
 
 @media (max-width: 768px) {
   .purchase-builder-grid-sales {
+    grid-template-columns: 1fr;
+  }
+
+  .sale-client-field {
+    grid-template-columns: 1fr;
+  }
+
+  .sale-receipt-header,
+  .sale-receipt-total {
+    flex-direction: column;
+  }
+
+  .sale-receipt-grid {
     grid-template-columns: 1fr;
   }
 
