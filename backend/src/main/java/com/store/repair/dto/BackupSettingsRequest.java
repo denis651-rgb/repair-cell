@@ -25,4 +25,6 @@ public class BackupSettingsRequest {
     private boolean googleDriveEnabled;
     private String googleDriveFolderId;
     private String googleServiceAccountKeyPath;
+    private String googleOauthClientId;
+    private String googleOauthClientSecret;
 }

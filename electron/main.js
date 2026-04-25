@@ -10,6 +10,7 @@ let isQuitting = false;
 let ownsBackendProcess = false;
 let backendLogPath = '';
 let electronLogPath = '';
+let isApplyingPendingRestore = false;
 
 const BACKEND_PORT = 8080;
 const BACKEND_HEALTH_URL = `http://127.0.0.1:${BACKEND_PORT}/actuator/health`;
@@ -55,6 +56,8 @@ function ensureAppDirectories() {
   fs.mkdirSync(path.join(appStoragePath, 'data'), { recursive: true });
   fs.mkdirSync(path.join(appStoragePath, 'backups'), { recursive: true });
   fs.mkdirSync(path.join(appStoragePath, 'logs'), { recursive: true });
+  fs.mkdirSync(path.join(appStoragePath, 'restore'), { recursive: true });
+  fs.mkdirSync(path.join(appStoragePath, 'restore', 'staging'), { recursive: true });
 }
 
 function initializeLogPaths() {
@@ -93,6 +96,110 @@ function buildFailureMessage(title, detail) {
     : '';
 
   return `${detail}${logHint}`;
+}
+
+function getPendingRestorePlanPath() {
+  return path.join(getAppStoragePath(), 'restore', 'pending-restore.json');
+}
+
+function getLastRestoreResultPath() {
+  return path.join(getAppStoragePath(), 'restore', 'last-restore-result.json');
+}
+
+function readJsonFile(filePath) {
+  if (!fs.existsSync(filePath)) {
+    return null;
+  }
+
+  return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+}
+
+function writeJsonFile(filePath, payload) {
+  fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), 'utf8');
+}
+
+function removePathIfExists(filePath) {
+  if (fs.existsSync(filePath)) {
+    fs.rmSync(filePath, { force: true, recursive: true });
+  }
+}
+
+function applyPendingRestoreIfNeeded() {
+  const planPath = getPendingRestorePlanPath();
+  if (!fs.existsSync(planPath)) {
+    return false;
+  }
+
+  isApplyingPendingRestore = true;
+  try {
+    const plan = readJsonFile(planPath);
+    if (!plan || !plan.sourceDatabasePath || !plan.targetDatabasePath) {
+      throw new Error('El plan de restauracion pendiente esta incompleto.');
+    }
+
+    const sourcePath = plan.sourceDatabasePath;
+    const targetPath = plan.targetDatabasePath;
+    const tempTargetPath = `${targetPath}.restore-tmp`;
+    const rollbackPath = `${targetPath}.rollback`;
+    const sourceType = plan.sourceType || 'LOCAL';
+    const displaySource = plan.displaySource || sourcePath;
+
+    if (!fs.existsSync(sourcePath)) {
+      throw new Error(`No existe el archivo de backup preparado en ${sourcePath}.`);
+    }
+
+    removePathIfExists(tempTargetPath);
+    fs.copyFileSync(sourcePath, tempTargetPath);
+
+    if (fs.existsSync(targetPath)) {
+      removePathIfExists(rollbackPath);
+      fs.renameSync(targetPath, rollbackPath);
+    }
+
+    fs.renameSync(tempTargetPath, targetPath);
+    removePathIfExists(rollbackPath);
+    removePathIfExists(planPath);
+
+    writeJsonFile(getLastRestoreResultPath(), {
+      ok: true,
+      message: sourceType === 'DRIVE'
+        ? 'La restauracion desde Drive se aplico correctamente y el backend fue reiniciado.'
+        : 'La restauracion local se aplico correctamente y el backend fue reiniciado.',
+      restoredAt: new Date().toISOString(),
+      restoredFrom: displaySource,
+      backupBeforeRestorePath: plan.backupBeforeRestorePath || ''
+    });
+
+    logElectron(`Restauracion ${sourceType === 'DRIVE' ? 'desde Drive' : 'local'} aplicada correctamente desde ${displaySource}`);
+    return true;
+  } catch (error) {
+    const plan = readJsonFile(planPath);
+    if (plan && plan.targetDatabasePath) {
+      const rollbackPath = `${plan.targetDatabasePath}.rollback`;
+      try {
+        if (fs.existsSync(rollbackPath)) {
+          removePathIfExists(plan.targetDatabasePath);
+          fs.renameSync(rollbackPath, plan.targetDatabasePath);
+        }
+      } catch (rollbackError) {
+        logElectron(`No se pudo revertir la restauracion fallida: ${rollbackError.message}`);
+      }
+    }
+
+    writeJsonFile(getLastRestoreResultPath(), {
+      ok: false,
+      message: `La restauracion local fallo: ${error.message}`,
+      restoredAt: new Date().toISOString(),
+      restoredFrom: plan?.sourceDatabasePath || '',
+      backupBeforeRestorePath: plan?.backupBeforeRestorePath || ''
+    });
+
+    removePathIfExists(planPath);
+    logElectron(`Fallo al aplicar restauracion pendiente: ${error.stack || error.message}`);
+    return false;
+  } finally {
+    isApplyingPendingRestore = false;
+  }
 }
 
 function waitForBackendReady(timeoutMs = BACKEND_START_TIMEOUT_MS) {
@@ -199,6 +306,33 @@ function startBackend() {
 
   backendProcess.on('close', (code) => {
     logElectron(`Backend finalizado con codigo ${code}`);
+    if (!isQuitting && ownsBackendProcess && fs.existsSync(getPendingRestorePlanPath())) {
+      const restoreApplied = applyPendingRestoreIfNeeded();
+      try {
+        startBackend();
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          setTimeout(() => {
+            try {
+              mainWindow.webContents.reloadIgnoringCache();
+            } catch (reloadError) {
+              logElectron(`No se pudo recargar la ventana despues de restaurar: ${reloadError.message}`);
+            }
+          }, 3000);
+        }
+      } catch (error) {
+        dialog.showErrorBox(
+          'No se pudo reiniciar despues de restaurar',
+          buildFailureMessage(
+            'No se pudo reiniciar despues de restaurar',
+            restoreApplied
+              ? `La restauracion se aplico, pero el backend no pudo reiniciarse.\n\nDetalle: ${error.message}`
+              : `La restauracion fallo y el backend no pudo reiniciarse.\n\nDetalle: ${error.message}`
+          )
+        );
+      }
+      return;
+    }
+
     if (!isQuitting && ownsBackendProcess && code !== 0) {
       dialog.showErrorBox(
         'El backend se cerro inesperadamente',
@@ -236,6 +370,8 @@ function createWindow() {
 
 app.whenReady().then(async () => {
   try {
+    ensureAppDirectories();
+    applyPendingRestoreIfNeeded();
     const existingBackend = await probeBackendHealth();
     if (existingBackend) {
       logElectron(`Se reutilizara un backend ya activo en ${BACKEND_HEALTH_URL}`);

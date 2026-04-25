@@ -13,7 +13,12 @@ public class BackupSettingsResponse {
     private final int retentionDays;
     private final boolean googleDriveEnabled;
     private final String googleDriveFolderId;
+    private final String googleDriveFolderName;
     private final String googleServiceAccountKeyPath;
+    private final String googleOauthClientId;
+    private final String googleOauthClientSecret;
+    private final boolean googleOauthConnected;
+    private final String googleOauthConnectedAt;
     private final boolean googleDriveReady;
     private final String lastAutomaticBackupAt;
     private final String nextAutomaticBackupAt;

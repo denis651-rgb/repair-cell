@@ -43,5 +43,19 @@ public class BackupSettings extends EntidadBase {
     @Column(columnDefinition = "TEXT")
     private String googleServiceAccountKeyPath;
 
+    @Column(columnDefinition = "TEXT")
+    private String googleDriveFolderName;
+
+    @Column(columnDefinition = "TEXT")
+    private String googleOauthClientId;
+
+    @Column(columnDefinition = "TEXT")
+    private String googleOauthClientSecret;
+
+    @Column(columnDefinition = "TEXT")
+    private String googleOauthRefreshToken;
+
+    private LocalDateTime googleOauthConnectedAt;
+
     private LocalDateTime lastAutomaticBackupAt;
 }

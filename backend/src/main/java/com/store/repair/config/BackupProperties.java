@@ -31,7 +31,7 @@ public class BackupProperties {
      * Carpeta donde se guardan los backups.
      */
     @NotBlank
-    private String directory = "./backups";
+    private String directory = AppStoragePaths.resolveBackupDirectory();
 
     /**
      * Si true, comprime el backup en zip.
