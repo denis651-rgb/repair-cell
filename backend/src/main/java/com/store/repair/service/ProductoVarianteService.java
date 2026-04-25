@@ -3,16 +3,20 @@ package com.store.repair.service;
 import com.store.repair.config.SanitizadorTexto;
 import com.store.repair.domain.EstadoLoteInventario;
 import com.store.repair.domain.LoteInventario;
+import com.store.repair.domain.ProductoBase;
 import com.store.repair.domain.ProductoVariante;
 import com.store.repair.dto.InventarioOperativoVarianteResponse;
 import com.store.repair.dto.ProductoVarianteRequest;
 import com.store.repair.repository.LoteInventarioRepository;
 import com.store.repair.repository.ProductoVarianteRepository;
+import com.store.repair.repository.ProveedorRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Comparator;
 import java.util.List;
@@ -22,9 +26,12 @@ import java.util.Locale;
 @RequiredArgsConstructor
 public class ProductoVarianteService {
 
+    private static final int MAX_INTENTOS_GENERACION = 8;
+
     private final ProductoVarianteRepository repository;
     private final LoteInventarioRepository loteRepository;
     private final ProductoBaseService productoBaseService;
+    private final ProveedorRepository proveedorRepository;
 
     public List<ProductoVariante> search(
             String busqueda,
@@ -60,30 +67,30 @@ public class ProductoVarianteService {
         return variante;
     }
 
-    public ProductoVariante save(Long id, ProductoVarianteRequest request) {
-        ProductoVariante destino = id == null ? new ProductoVariante() : findById(id);
-        String codigoNormalizado = normalizarCodigo(request.getCodigoVariante(), "El codigo de variante es obligatorio");
+    public String sugerirCodigo(Long productoBaseId, String calidad) {
+        ProductoBase productoBase = productoBaseService.findById(productoBaseId);
+        String calidadNormalizada = validarTextoObligatorio(calidad, "La calidad es obligatoria");
+        return generarSiguienteCodigoVariante(productoBase, calidadNormalizada);
+    }
 
-        boolean codigoDuplicado = id == null
-                ? repository.existsByCodigoVarianteIgnoreCase(codigoNormalizado)
-                : repository.existsByCodigoVarianteIgnoreCaseAndIdNot(codigoNormalizado, id);
-        if (codigoDuplicado) {
-            throw new BusinessException("Ya existe una variante con el codigo " + codigoNormalizado + ".");
-        }
+    @Transactional
+    public ProductoVariante save(Long id, ProductoVarianteRequest request) {
+        ProductoBase productoBase = productoBaseService.findById(request.getProductoBaseId());
+        String calidad = validarTextoObligatorio(request.getCalidad(), "La calidad es obligatoria");
+        String tipoPresentacion = SanitizadorTexto.limpiar(request.getTipoPresentacion());
+
+        validarTipoPresentacion(tipoPresentacion);
+        validarDuplicadoComercial(productoBase.getId(), id, calidad, tipoPresentacion);
 
         if (request.getPrecioVentaSugerido() == null || request.getPrecioVentaSugerido() < 0) {
             throw new BusinessException("El precio sugerido de la variante no puede ser negativo.");
         }
 
-        destino.setProductoBase(productoBaseService.findById(request.getProductoBaseId()));
-        destino.setCodigoVariante(codigoNormalizado);
-        destino.setCalidad(validarTextoObligatorio(request.getCalidad(), "La calidad es obligatoria"));
-        destino.setTipoPresentacion(SanitizadorTexto.limpiar(request.getTipoPresentacion()));
-        destino.setColor(SanitizadorTexto.limpiar(request.getColor()));
-        destino.setPrecioVentaSugerido(request.getPrecioVentaSugerido());
-        destino.setActivo(request.getActivo() == null ? Boolean.TRUE : request.getActivo());
+        if (id == null) {
+            return crearVariante(request, productoBase, calidad, tipoPresentacion);
+        }
 
-        return repository.save(destino);
+        return actualizarVariante(id, request, productoBase, calidad, tipoPresentacion);
     }
 
     public Page<InventarioOperativoVarianteResponse> searchInventarioOperativo(
@@ -127,6 +134,155 @@ public class ProductoVarianteService {
         throw new BusinessException(
                 "No se permite borrar fisicamente la variante " + variante.getCodigoVariante()
                         + ". Usa activo=false para ocultarla sin perder historial.");
+    }
+
+    private ProductoVariante crearVariante(
+            ProductoVarianteRequest request,
+            ProductoBase productoBase,
+            String calidad,
+            String tipoPresentacion) {
+        for (int intento = 0; intento < MAX_INTENTOS_GENERACION; intento++) {
+            ProductoVariante destino = new ProductoVariante();
+            aplicarCamposVariante(destino, request, productoBase, calidad, tipoPresentacion);
+            destino.setCodigoVariante(generarSiguienteCodigoVariante(productoBase, calidad));
+
+            try {
+                ProductoVariante guardada = repository.saveAndFlush(destino);
+                aplicarResumenLotes(guardada);
+                return guardada;
+            } catch (DataIntegrityViolationException exception) {
+                if (esConflictoDeCodigo(exception)) {
+                    continue;
+                }
+                if (esDuplicadoComercial(exception)) {
+                    throw new BusinessException("Ya existe una variante con la misma calidad y presentacion para este producto base.");
+                }
+                throw exception;
+            }
+        }
+
+        throw new BusinessException("No se pudo generar un codigo unico para la variante. Intenta nuevamente.");
+    }
+
+    private ProductoVariante actualizarVariante(
+            Long id,
+            ProductoVarianteRequest request,
+            ProductoBase productoBase,
+            String calidad,
+            String tipoPresentacion) {
+        ProductoVariante destino = findById(id);
+        aplicarCamposVariante(destino, request, productoBase, calidad, tipoPresentacion);
+
+        String codigoExistente = SanitizadorTexto.limpiar(destino.getCodigoVariante());
+        if (codigoExistente == null) {
+            destino.setCodigoVariante(generarSiguienteCodigoVariante(productoBase, calidad));
+        } else {
+            destino.setCodigoVariante(normalizarCodigo(codigoExistente, "El codigo de variante es obligatorio"));
+        }
+
+        boolean codigoDuplicado = repository.existsByCodigoVarianteIgnoreCaseAndIdNot(destino.getCodigoVariante(), id);
+        if (codigoDuplicado) {
+            throw new BusinessException("Ya existe una variante con el codigo " + destino.getCodigoVariante() + ".");
+        }
+
+        try {
+            ProductoVariante guardada = repository.saveAndFlush(destino);
+            aplicarResumenLotes(guardada);
+            return guardada;
+        } catch (DataIntegrityViolationException exception) {
+            if (esConflictoDeCodigo(exception)) {
+                throw new BusinessException("No se pudo actualizar la variante porque el codigo ya existe.");
+            }
+            if (esDuplicadoComercial(exception)) {
+                throw new BusinessException("Ya existe una variante con la misma calidad y presentacion para este producto base.");
+            }
+            throw exception;
+        }
+    }
+
+    private void aplicarCamposVariante(
+            ProductoVariante destino,
+            ProductoVarianteRequest request,
+            ProductoBase productoBase,
+            String calidad,
+            String tipoPresentacion) {
+        destino.setProductoBase(productoBase);
+        destino.setCalidad(calidad);
+        destino.setTipoPresentacion(tipoPresentacion);
+        destino.setColor(SanitizadorTexto.limpiar(request.getColor()));
+        destino.setPrecioVentaSugerido(request.getPrecioVentaSugerido());
+        destino.setActivo(request.getActivo() == null ? Boolean.TRUE : request.getActivo());
+    }
+
+    private String generarSiguienteCodigoVariante(ProductoBase productoBase, String calidad) {
+        String codigoBase = validarTextoObligatorio(
+                productoBase == null ? null : productoBase.getCodigoBase(),
+                "El codigo base es obligatorio para generar la variante.");
+        String calidadCodigo = abreviarSegmentoCodigo(calidad);
+        String prefijo = normalizarCodigo(codigoBase, "El codigo base es obligatorio") + "-" + calidadCodigo;
+        String ultimoCodigo = repository.findTopByCodigoVarianteStartingWithOrderByCodigoVarianteDesc(prefijo + "-")
+                .map(ProductoVariante::getCodigoVariante)
+                .orElse(null);
+        int siguienteCorrelativo = extraerSiguienteCorrelativo(ultimoCodigo, 3);
+        return prefijo + "-" + String.format("%03d", siguienteCorrelativo);
+    }
+
+    private int extraerSiguienteCorrelativo(String ultimoCodigo, int longitudEsperada) {
+        if (ultimoCodigo == null || ultimoCodigo.isBlank()) {
+            return 1;
+        }
+
+        int indice = ultimoCodigo.lastIndexOf('-');
+        if (indice < 0 || indice == ultimoCodigo.length() - 1) {
+            return 1;
+        }
+
+        String sufijo = ultimoCodigo.substring(indice + 1).trim();
+        if (sufijo.length() != longitudEsperada) {
+            return 1;
+        }
+
+        try {
+            return Integer.parseInt(sufijo) + 1;
+        } catch (NumberFormatException exception) {
+            return 1;
+        }
+    }
+
+    private String abreviarSegmentoCodigo(String valor) {
+        String limpio = SanitizadorTexto.limpiar(valor);
+        if (limpio == null) {
+            throw new BusinessException("No se pudo generar el codigo porque falta la calidad.");
+        }
+
+        String normalizado = java.text.Normalizer.normalize(limpio, java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .replaceAll("[^A-Za-z0-9 ]+", " ")
+                .trim()
+                .toUpperCase(Locale.ROOT)
+                .replace(" ", "");
+
+        if (normalizado.isBlank()) {
+            throw new BusinessException("No se pudo generar el codigo porque la calidad es invalida.");
+        }
+
+        return normalizado.length() <= 3 ? normalizado : normalizado.substring(0, 3);
+    }
+
+    private void validarTipoPresentacion(String tipoPresentacion) {
+        if (tipoPresentacion == null) {
+            return;
+        }
+        if (proveedorRepository.existsByNombreComercialIgnoreCase(tipoPresentacion)) {
+            throw new BusinessException(
+                    "El tipo de presentacion no puede ser un proveedor. Usa valores como Pantalla completa, Con marco o Flex V3.");
+        }
+    }
+
+    private void validarDuplicadoComercial(Long productoBaseId, Long varianteId, String calidad, String tipoPresentacion) {
+        if (repository.existsVarianteComercialDuplicada(productoBaseId, varianteId, calidad, tipoPresentacion)) {
+            throw new BusinessException("Ya existe una variante con la misma calidad y presentacion para este producto base.");
+        }
     }
 
     private void aplicarResumenLotes(ProductoVariante variante) {
@@ -196,6 +352,28 @@ public class ProductoVarianteService {
                 lista.size());
     }
 
+    private boolean esConflictoDeCodigo(DataIntegrityViolationException exception) {
+        String mensaje = exception.getMostSpecificCause() == null
+                ? exception.getMessage()
+                : exception.getMostSpecificCause().getMessage();
+        if (mensaje == null) {
+            return false;
+        }
+        String mensajeNormalizado = mensaje.toLowerCase(Locale.ROOT);
+        return mensajeNormalizado.contains("codigo_variante")
+                || mensajeNormalizado.contains("productos_variantes.codigo_variante");
+    }
+
+    private boolean esDuplicadoComercial(DataIntegrityViolationException exception) {
+        String mensaje = exception.getMostSpecificCause() == null
+                ? exception.getMessage()
+                : exception.getMostSpecificCause().getMessage();
+        if (mensaje == null) {
+            return false;
+        }
+        return mensaje.toLowerCase(Locale.ROOT).contains("ux_productos_variantes_base_calidad_presentacion");
+    }
+
     private static final class LoteInventarioServiceStatic {
         private static com.store.repair.dto.LoteInventarioHistorialResponse toHistorialResponse(LoteInventario lote) {
             int cantidadInicial = lote.getCantidadInicial() == null ? 0 : lote.getCantidadInicial();
@@ -229,6 +407,8 @@ public class ProductoVarianteService {
                     .calidad(lote.getVariante() == null ? null : lote.getVariante().getCalidad())
                     .tipoPresentacion(lote.getVariante() == null ? null : lote.getVariante().getTipoPresentacion())
                     .color(lote.getVariante() == null ? null : lote.getVariante().getColor())
+                    .proveedorId(lote.getProveedor() == null ? null : lote.getProveedor().getId())
+                    .proveedorNombre(lote.getProveedor() == null ? null : lote.getProveedor().getNombreComercial())
                     .codigoLote(lote.getCodigoLote())
                     .codigoProveedor(lote.getCodigoProveedor())
                     .fechaIngreso(lote.getFechaIngreso())

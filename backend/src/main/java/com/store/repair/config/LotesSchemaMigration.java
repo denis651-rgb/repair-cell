@@ -37,6 +37,7 @@ public class LotesSchemaMigration implements ApplicationRunner {
                     CREATE TABLE IF NOT EXISTS lotes_inventario (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         variante_id INTEGER NOT NULL,
+                        proveedor_id INTEGER,
                         codigo_lote TEXT NOT NULL UNIQUE,
                         codigo_proveedor TEXT,
                         fecha_ingreso TEXT NOT NULL,
@@ -52,10 +53,12 @@ public class LotesSchemaMigration implements ApplicationRunner {
                         motivo_cierre TEXT,
                         creado_en TEXT NOT NULL,
                         actualizado_en TEXT NOT NULL,
-                        FOREIGN KEY (variante_id) REFERENCES productos_variantes(id)
+                        FOREIGN KEY (variante_id) REFERENCES productos_variantes(id),
+                        FOREIGN KEY (proveedor_id) REFERENCES proveedores(id)
                     )
                     """);
             statement.executeUpdate("CREATE INDEX IF NOT EXISTS idx_lotes_variante ON lotes_inventario(variante_id)");
+            statement.executeUpdate("CREATE INDEX IF NOT EXISTS idx_lotes_proveedor ON lotes_inventario(proveedor_id)");
             statement.executeUpdate("CREATE INDEX IF NOT EXISTS idx_lotes_estado ON lotes_inventario(estado)");
             statement.executeUpdate("CREATE INDEX IF NOT EXISTS idx_lotes_fecha_ingreso ON lotes_inventario(fecha_ingreso)");
         }
@@ -66,6 +69,16 @@ public class LotesSchemaMigration implements ApplicationRunner {
             statement.executeUpdate("ALTER TABLE lotes_inventario ADD COLUMN motivo_cierre TEXT");
         } catch (SQLException ignored) {
             // SQLite throws when the column already exists; we keep the migration idempotent.
+        }
+
+        try (Statement statement = connection.createStatement()) {
+            statement.executeUpdate("ALTER TABLE lotes_inventario ADD COLUMN proveedor_id INTEGER");
+        } catch (SQLException ignored) {
+            // SQLite throws when the column already exists; we keep the migration idempotent.
+        }
+
+        try (Statement statement = connection.createStatement()) {
+            statement.executeUpdate("CREATE INDEX IF NOT EXISTS idx_lotes_proveedor ON lotes_inventario(proveedor_id)");
         }
     }
 }

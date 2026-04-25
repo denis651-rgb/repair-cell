@@ -1028,6 +1028,121 @@
   gap: 20px;
 }
 
+.catalogo-producto-base-info {
+  display: grid;
+  gap: 4px;
+}
+
+.catalogo-compatibilidad-summary {
+  color: #375a74;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.catalogo-modelos-extra {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: #7b6d98;
+  font-size: 12px;
+}
+
+.catalogo-modelos-expandible {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.catalogo-modelos-toggle {
+  min-width: 34px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgba(123, 109, 152, 0.26);
+  border-radius: 999px;
+  background: rgba(245, 241, 255, 0.96);
+  color: #5f4b89;
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.catalogo-modelos-toggle:hover {
+  background: rgba(236, 229, 255, 1);
+}
+
+.catalogo-modelos-toggle:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(123, 109, 152, 0.18);
+}
+
+.catalogo-modelo-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(243, 238, 255, 0.98);
+  color: #5d4f7b;
+  font-weight: 700;
+}
+
+.catalogo-compat-section {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgba(180, 205, 219, 0.7);
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(246, 252, 255, 0.96), rgba(240, 248, 255, 0.96));
+}
+
+.catalogo-compat-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.catalogo-compat-header h4 {
+  margin: 0;
+  color: #224256;
+  font-size: 16px;
+}
+
+.catalogo-compat-header p {
+  margin: 6px 0 0;
+  color: #5e7890;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.catalogo-compat-list {
+  display: grid;
+  gap: 12px;
+}
+
+.catalogo-compat-row {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(192, 218, 232, 0.9);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.catalogo-compat-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.catalogo-compat-empty {
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.82);
+  color: #60778b;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
 .catalogo-row-active {
   background: rgba(15, 118, 110, 0.08);
 }

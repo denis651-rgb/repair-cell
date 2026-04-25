@@ -181,11 +181,88 @@
   box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.16);
 }
 
+.sale-add-item-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 55%, #38bdf8 100%);
+  color: #ffffff;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  box-shadow: 0 16px 30px rgba(37, 99, 235, 0.26);
+}
+
+.sale-add-item-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 32px rgba(37, 99, 235, 0.3);
+}
+
+.sale-add-item-button:focus {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.22), 0 16px 30px rgba(37, 99, 235, 0.26);
+}
+
 .sale-eye-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: 42px;
+}
+
+.sale-compatibility-card {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(220px, 0.9fr) minmax(0, 1.4fr);
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid rgba(59, 130, 246, 0.14);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(239, 246, 255, 0.92), rgba(248, 250, 252, 0.96));
+}
+
+.sale-compatibility-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.sale-compatibility-label {
+  color: #0369a1;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.sale-compatibility-copy strong {
+  color: #0f172a;
+  font-size: 16px;
+}
+
+.sale-compatibility-copy p {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.sale-compatibility-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sale-compatibility-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(219, 234, 254, 0.95);
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .sale-receipt-shell {
@@ -334,6 +411,10 @@
 
 @media (max-width: 768px) {
   .purchase-builder-grid-sales {
+    grid-template-columns: 1fr;
+  }
+
+  .sale-compatibility-card {
     grid-template-columns: 1fr;
   }
 

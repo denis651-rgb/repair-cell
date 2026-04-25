@@ -13,6 +13,8 @@ public interface ProveedorRepository extends JpaRepository<Proveedor, Long> {
 
     List<Proveedor> findAllByOrderByNombreComercialAsc();
 
+    boolean existsByNombreComercialIgnoreCase(String nombreComercial);
+
     @Query("""
             select p from Proveedor p
             where :busqueda is null

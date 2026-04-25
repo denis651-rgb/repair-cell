@@ -5,6 +5,9 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import lombok.*;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Entity
 @Table(name = "productos_base")
 @JsonIgnoreProperties({ "hibernateLazyInitializer", "handler" })
@@ -43,4 +46,25 @@ public class ProductoBase extends EntidadBase {
 
     @Column(name = "activo", nullable = false)
     private Boolean activo;
+
+    @OneToMany(mappedBy = "productoBase", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    @JsonIgnoreProperties("productoBase")
+    @Builder.Default
+    private List<ProductoBaseCompatibilidad> compatibilidades = new ArrayList<>();
+
+    public void addCompatibilidad(ProductoBaseCompatibilidad compatibilidad) {
+        if (compatibilidad == null) {
+            return;
+        }
+        compatibilidades.add(compatibilidad);
+        compatibilidad.setProductoBase(this);
+    }
+
+    public void replaceCompatibilidades(List<ProductoBaseCompatibilidad> nuevasCompatibilidades) {
+        compatibilidades.clear();
+        if (nuevasCompatibilidades == null) {
+            return;
+        }
+        nuevasCompatibilidades.forEach(this::addCompatibilidad);
+    }
 }

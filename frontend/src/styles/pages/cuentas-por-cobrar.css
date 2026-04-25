@@ -20,6 +20,26 @@
   background: rgba(255, 255, 255, 0.9);
 }
 
+.receivable-card.is-pending {
+  border-color: rgba(245, 158, 11, 0.24);
+  background: linear-gradient(180deg, rgba(255, 251, 235, 0.96), rgba(255, 255, 255, 0.92));
+}
+
+.receivable-card.is-partial {
+  border-color: rgba(59, 130, 246, 0.22);
+  background: linear-gradient(180deg, rgba(239, 246, 255, 0.96), rgba(255, 255, 255, 0.92));
+}
+
+.receivable-card.is-paid {
+  border-color: rgba(34, 197, 94, 0.22);
+  background: linear-gradient(180deg, rgba(240, 253, 244, 0.96), rgba(255, 255, 255, 0.92));
+}
+
+.receivable-card.is-cancelled {
+  border-color: rgba(239, 68, 68, 0.22);
+  background: linear-gradient(180deg, rgba(254, 242, 242, 0.96), rgba(255, 255, 255, 0.92));
+}
+
 .receivable-card-header,
 .receivable-card-grid,
 .receivable-payments {
@@ -51,6 +71,37 @@
 
 .receivable-payments {
   margin-top: 12px;
+}
+
+.receivable-state-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 96px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.receivable-state-pill.is-pending {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.receivable-state-pill.is-partial {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.receivable-state-pill.is-paid {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.receivable-state-pill.is-cancelled {
+  background: #fee2e2;
+  color: #b91c1c;
 }
 
 @media (max-width: 768px) {

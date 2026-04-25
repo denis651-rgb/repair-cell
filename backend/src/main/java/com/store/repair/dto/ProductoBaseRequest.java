@@ -5,11 +5,13 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Getter
 @Setter
 public class ProductoBaseRequest {
 
-    @NotBlank(message = "El codigo base es obligatorio")
     private String codigoBase;
 
     @NotBlank(message = "El nombre base es obligatorio")
@@ -24,4 +26,5 @@ public class ProductoBaseRequest {
     private String modelo;
     private String descripcion;
     private Boolean activo;
+    private List<ProductoBaseCompatibilidadRequest> compatibilidades = new ArrayList<>();
 }

@@ -194,6 +194,20 @@ export default function VentasPage() {
     [variantes, detalleForm.productoBaseId],
   );
 
+  const compatibilidadesProductoBaseSeleccionado = useMemo(() => {
+    if (!productoBaseSeleccionado?.compatibilidades?.length) return [];
+
+    const principal = String(productoBaseSeleccionado.modelo || '').trim().toLowerCase();
+
+    return productoBaseSeleccionado.compatibilidades
+      .map((compatibilidad) => String(compatibilidad.modeloCompatible || '').trim())
+      .filter(Boolean)
+      .filter((modeloCompatible, indice, lista) =>
+        lista.findIndex((item) => item.toLowerCase() === modeloCompatible.toLowerCase()) === indice
+        && modeloCompatible.toLowerCase() !== principal,
+      );
+  }, [productoBaseSeleccionado]);
+
   const cantidadReservadaVariante = (varianteId) =>
     detallesVenta
       .filter((detalle) => String(detalle.varianteId) === String(varianteId))
@@ -716,6 +730,28 @@ export default function VentasPage() {
                   ))}
                 </select>
               </label>
+              {productoBaseSeleccionado ? (
+                <div className="sale-compatibility-card">
+                  <div className="sale-compatibility-copy">
+                    <span className="sale-compatibility-label">Modelo principal</span>
+                    <strong>{productoBaseSeleccionado.modelo || 'Sin modelo principal'}</strong>
+                  </div>
+                  <div className="sale-compatibility-copy">
+                    <span className="sale-compatibility-label">Compatibles</span>
+                    {compatibilidadesProductoBaseSeleccionado.length ? (
+                      <div className="sale-compatibility-chips">
+                        {compatibilidadesProductoBaseSeleccionado.map((modeloCompatible) => (
+                          <span key={`${productoBaseSeleccionado.id}-${modeloCompatible}`} className="sale-compatibility-chip">
+                            {modeloCompatible}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p>Sin compatibilidades adicionales registradas.</p>
+                    )}
+                  </div>
+                </div>
+              ) : null}
               <label>
                 <span>Variante</span>
                 <select
@@ -760,7 +796,7 @@ export default function VentasPage() {
             </div>
 
             <div className="purchase-builder-actions">
-              <button type="button" className="secondary" onClick={agregarDetalle}>
+              <button type="button" className="sale-add-item-button" onClick={agregarDetalle}>
                 Agregar item
               </button>
             </div>
