@@ -17,6 +17,7 @@ const detalleInicial = {
   varianteId: '',
   cantidad: 1,
   precioCompraUnitario: '',
+  precioVentaUnitario: '',
 };
 
 const generarPreviewComprobante = () => {
@@ -173,6 +174,9 @@ export default function ComprasPage() {
       productoBaseId: varianteSeleccionada.productoBase?.id
         ? String(varianteSeleccionada.productoBase.id)
         : actual.productoBaseId,
+      precioVentaUnitario: varianteSeleccionada.precioVentaSugerido != null
+        ? String(varianteSeleccionada.precioVentaSugerido)
+        : '',
     }));
   }, [varianteSeleccionada]);
 
@@ -226,7 +230,7 @@ export default function ComprasPage() {
       codigoVariante: varianteSeleccionada.codigoVariante,
       cantidad,
       precioCompraUnitario: costo,
-      precioVentaUnitario: Number(varianteSeleccionada.precioVentaSugerido || 0),
+      precioVentaUnitario: Number(detalleForm.precioVentaUnitario || 0),
     };
 
     setDetallesCompra((actual) => {
@@ -413,7 +417,7 @@ export default function ComprasPage() {
                 onChange={(event) => setCompraForm((actual) => ({ ...actual, numeroComprobante: event.target.value }))}
               />
             </label>
-            <label>
+            <label className="purchase-payment-field">
               <span>Tipo de pago</span>
               <select value={compraForm.tipoPago} onChange={(event) => setCompraForm((actual) => ({ ...actual, tipoPago: event.target.value }))}>
                 <option value="CONTADO">Contado</option>
@@ -493,8 +497,15 @@ export default function ComprasPage() {
                 </select>
               </label>
               <label>
-                <span>Precio sugerido</span>
-                <input value={varianteSeleccionada?.precioVentaSugerido || ''} readOnly placeholder="Se toma de la variante" />
+                <span>Precio de venta sugerido</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={detalleForm.precioVentaUnitario}
+                  onChange={(event) => setDetalleForm((actual) => ({ ...actual, precioVentaUnitario: event.target.value }))}
+                  placeholder="Se carga desde la variante, pero puedes editarlo"
+                />
               </label>
               <label>
                 <span>Cantidad</span>
@@ -523,7 +534,7 @@ export default function ComprasPage() {
                       <th>Marca</th>
                       <th>Cantidad</th>
                       <th>Costo</th>
-                      <th>P. sugerido</th>
+                      <th>P. venta sugerido</th>
                       <th>Subtotal</th>
                       <th>Accion</th>
                     </tr>

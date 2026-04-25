@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, RotateCcw, Search } from 'lucide-react';
+import { Eye, Plus, Printer, RotateCcw, Search, UserPlus } from 'lucide-react';
 import { api } from '../api/api';
 import EmptyState from '../components/common/EmptyState';
 import Modal from '../components/common/Modal';
 import PageHeader from '../components/PageHeader';
 import { useDebouncedValue } from '../hooks/useDebouncedValue';
-import { toDateInputValue } from '../utils/formatters';
+import { formatDate, money, toDateInputValue } from '../utils/formatters';
 import '../styles/pages/ventas.css';
 
 const TAMANO = 8;
@@ -21,6 +21,9 @@ const detalleInicial = {
 const devolucionInicial = {
   fechaDevolucion: toDateInputValue(),
   motivoDevolucion: '',
+};
+const clienteRapidoInicial = {
+  nombreCompleto: '',
 };
 
 const generarPreviewComprobante = () => {
@@ -41,6 +44,7 @@ const crearErrorVisualVenta = (titulo, error) => ({
   titulo,
   detalle: error?.message || 'No se pudo completar la operacion de venta.',
 });
+
 const logFrontendRequestError = ({ endpoint, params, error, contexto }) => {
   console.error(`[Ventas] ${contexto}`, {
     endpoint,
@@ -49,6 +53,10 @@ const logFrontendRequestError = ({ endpoint, params, error, contexto }) => {
     error,
   });
 };
+
+function getPaymentTone(tipoPago) {
+  return tipoPago === 'CREDITO' ? 'is-credit' : 'is-cash';
+}
 
 export default function VentasPage() {
   const [ventasPage, setVentasPage] = useState(paginaVacia);
@@ -61,15 +69,21 @@ export default function VentasPage() {
   const [pagina, setPagina] = useState(0);
   const [modalVentaOpen, setModalVentaOpen] = useState(false);
   const [modalDevolucionOpen, setModalDevolucionOpen] = useState(false);
+  const [modalClienteRapidoOpen, setModalClienteRapidoOpen] = useState(false);
+  const [modalDetalleVentaOpen, setModalDetalleVentaOpen] = useState(false);
   const [ventaForm, setVentaForm] = useState(crearVentaInicial);
   const [detalleForm, setDetalleForm] = useState(detalleInicial);
   const [detallesVenta, setDetallesVenta] = useState([]);
+  const [clienteRapidoForm, setClienteRapidoForm] = useState(clienteRapidoInicial);
   const [busquedaVarianteVenta, setBusquedaVarianteVenta] = useState('');
   const [ventaSeleccionada, setVentaSeleccionada] = useState(null);
+  const [detalleVentaSeleccionada, setDetalleVentaSeleccionada] = useState(null);
   const [devolucionForm, setDevolucionForm] = useState(devolucionInicial);
   const [detallesDevolucion, setDetallesDevolucion] = useState([]);
   const [error, setError] = useState(null);
   const [ventasError, setVentasError] = useState(null);
+  const [guardandoClienteRapido, setGuardandoClienteRapido] = useState(false);
+  const [cargandoDetalleVenta, setCargandoDetalleVenta] = useState(false);
 
   const busquedaDebounced = useDebouncedValue(busqueda, 250);
 
@@ -157,16 +171,18 @@ export default function VentasPage() {
       const coincideTexto =
         !termino ||
         [
-          productoBase.codigoBase,
           productoBase.nombreBase,
           productoBase.modelo,
           productoBase.categoria?.nombre,
           productoBase.marca?.nombre,
+          ...variantes
+            .filter((variante) => String(variante.productoBase?.id) === String(productoBase.id))
+            .flatMap((variante) => [variante.calidad, variante.tipoPresentacion]),
         ].some((valor) => String(valor || '').toLowerCase().includes(termino));
 
       return coincideCategoria && coincideMarca && coincideTexto;
     });
-  }, [productosBase, detalleForm.categoriaId, detalleForm.marcaId, busquedaVarianteVenta]);
+  }, [productosBase, detalleForm.categoriaId, detalleForm.marcaId, busquedaVarianteVenta, variantes]);
 
   const variantesDisponibles = useMemo(
     () =>
@@ -213,7 +229,38 @@ export default function VentasPage() {
     setDetalleForm(detalleInicial);
     setDetallesVenta([]);
     setBusquedaVarianteVenta('');
+    setClienteRapidoForm(clienteRapidoInicial);
     setModalVentaOpen(true);
+  };
+
+  const abrirClienteRapido = () => {
+    setClienteRapidoForm(clienteRapidoInicial);
+    setModalClienteRapidoOpen(true);
+  };
+
+  const guardarClienteRapido = async (event) => {
+    event.preventDefault();
+    setGuardandoClienteRapido(true);
+
+    try {
+      const clienteCreado = await api.post('/clientes', {
+        nombreCompleto: clienteRapidoForm.nombreCompleto,
+        telefono: 'S/N',
+        email: '',
+        direccion: '',
+        notas: 'Creado rapido desde el modal de ventas.',
+      });
+
+      setClientes((actual) => [clienteCreado, ...actual]);
+      setVentaForm((actual) => ({ ...actual, clienteId: String(clienteCreado.id) }));
+      setClienteRapidoForm(clienteRapidoInicial);
+      setModalClienteRapidoOpen(false);
+      setError(null);
+    } catch (err) {
+      setError(crearErrorVisualVenta('No se pudo crear el cliente rapido.', err));
+    } finally {
+      setGuardandoClienteRapido(false);
+    }
   };
 
   const agregarDetalle = () => {
@@ -240,7 +287,7 @@ export default function VentasPage() {
     if (cantidadNueva + cantidadAcumulada > stockDisponible) {
       setError({
         titulo: 'Stock insuficiente.',
-        detalle: `${varianteSeleccionada.codigoVariante} tiene ${stockDisponible} unidades disponibles y ya reservaste ${cantidadAcumulada} en esta venta.`,
+        detalle: `${varianteSeleccionada.calidad || 'La variante'} tiene ${stockDisponible} unidades disponibles y ya reservaste ${cantidadAcumulada} en esta venta.`,
       });
       return;
     }
@@ -260,10 +307,10 @@ export default function VentasPage() {
       varianteId: Number(varianteSeleccionada.id),
       productoBaseId: Number(productoBaseSeleccionado.id),
       productoNombre: productoBaseSeleccionado.nombreBase,
-      productoBaseCodigo: productoBaseSeleccionado.codigoBase,
-      codigoVariante: varianteSeleccionada.codigoVariante,
+      modelo: productoBaseSeleccionado.modelo || '',
       marca: productoBaseSeleccionado.marca?.nombre || '',
       calidad: varianteSeleccionada.calidad || '',
+      tipoPresentacion: varianteSeleccionada.tipoPresentacion || '',
       stockDisponible,
       cantidad: cantidadNueva,
       precioListaUnitario: precioLista,
@@ -386,6 +433,19 @@ export default function VentasPage() {
     }
   };
 
+  const abrirDetalleVenta = async (venta) => {
+    setCargandoDetalleVenta(true);
+    try {
+      const detalleVenta = await api.get(`/ventas/${venta.id}`);
+      setDetalleVentaSeleccionada(detalleVenta);
+      setModalDetalleVentaOpen(true);
+    } catch (err) {
+      setError(crearErrorVisualVenta('No se pudo cargar el detalle de la venta.', err));
+    } finally {
+      setCargandoDetalleVenta(false);
+    }
+  };
+
   const ventas = ventasPage.content || [];
 
   return (
@@ -465,7 +525,7 @@ export default function VentasPage() {
                       <p>{venta.numeroComprobante || `Venta #${venta.id}`}</p>
                     </div>
                     <div className="sale-card-badges">
-                      <span className="chip">{venta.tipoPago}</span>
+                      <span className={`sale-payment-pill ${getPaymentTone(venta.tipoPago)}`}>{venta.tipoPago}</span>
                       <span className={venta.estado === 'DEVUELTA' ? 'badge badge-danger' : 'chip'}>
                         {venta.estado}
                       </span>
@@ -478,6 +538,15 @@ export default function VentasPage() {
                   </div>
                   {venta.estado !== 'DEVUELTA' && (
                     <div className="sale-card-actions">
+                      <button
+                        className="secondary compact sale-eye-button"
+                        onClick={() => abrirDetalleVenta(venta)}
+                        title="Detalle de venta"
+                        aria-label="Detalle de venta"
+                        disabled={cargandoDetalleVenta}
+                      >
+                        <Eye size={14} />
+                      </button>
                       <button className="secondary compact" onClick={() => abrirDevolucion(venta)}>
                         <RotateCcw size={14} />
                         Devolucion
@@ -522,21 +591,32 @@ export default function VentasPage() {
       >
         <form className="entity-form purchases-form" onSubmit={guardarVenta}>
           <div className="form-grid two-columns">
-            <label>
-              <span>Cliente</span>
-              <select
-                value={ventaForm.clienteId}
-                onChange={(event) => setVentaForm((actual) => ({ ...actual, clienteId: event.target.value }))}
-                required
+            <div className="sale-client-field">
+              <label>
+                <span>Cliente</span>
+                <select
+                  value={ventaForm.clienteId}
+                  onChange={(event) => setVentaForm((actual) => ({ ...actual, clienteId: event.target.value }))}
+                  required
+                >
+                  <option value="">Selecciona un cliente</option>
+                  {clientes.map((cliente) => (
+                    <option key={cliente.id} value={cliente.id}>
+                      {cliente.nombreCompleto} - {cliente.telefono}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                className="sale-client-add-button"
+                onClick={abrirClienteRapido}
+                title="Agregar cliente rapido"
+                aria-label="Agregar cliente rapido"
               >
-                <option value="">Selecciona un cliente</option>
-                {clientes.map((cliente) => (
-                  <option key={cliente.id} value={cliente.id}>
-                    {cliente.nombreCompleto} • {cliente.telefono}
-                  </option>
-                ))}
-              </select>
-            </label>
+                <UserPlus size={16} />
+              </button>
+            </div>
             <label>
               <span>Fecha</span>
               <input
@@ -553,7 +633,7 @@ export default function VentasPage() {
                 onChange={(event) => setVentaForm((actual) => ({ ...actual, numeroComprobante: event.target.value }))}
               />
             </label>
-            <label>
+            <label className="sale-payment-field">
               <span>Tipo de pago</span>
               <select
                 value={ventaForm.tipoPago}
@@ -591,7 +671,7 @@ export default function VentasPage() {
                 <input
                   value={busquedaVarianteVenta}
                   onChange={(event) => setBusquedaVarianteVenta(event.target.value)}
-                  placeholder="Filtra por codigo base, variante, modelo o marca"
+                  placeholder="Filtra por nombre, modelo, calidad o marca"
                 />
               </label>
               <label>
@@ -631,7 +711,7 @@ export default function VentasPage() {
                   <option value="">Selecciona un producto base</option>
                   {productosBaseFiltradosVenta.map((productoBase) => (
                     <option key={productoBase.id} value={productoBase.id}>
-                      {productoBase.codigoBase} - {productoBase.nombreBase} - {productoBase.modelo || 'Sin modelo'}
+                      {productoBase.nombreBase} - {productoBase.modelo || 'Sin modelo'}
                     </option>
                   ))}
                 </select>
@@ -645,7 +725,7 @@ export default function VentasPage() {
                   <option value="">Selecciona una variante</option>
                   {variantesDisponibles.map((variante) => (
                     <option key={variante.id} value={variante.id}>
-                      {variante.codigoVariante} • {variante.calidad} • Stock {variante.stockDisponibleTotal}
+                      {variante.calidad || 'Sin calidad'} - {variante.tipoPresentacion || 'Sin presentacion'}
                     </option>
                   ))}
                 </select>
@@ -706,7 +786,7 @@ export default function VentasPage() {
                   <tbody>
                     {detallesVenta.map((detalle, index) => (
                       <tr key={`${detalle.varianteId}-${index}`}>
-                        <td>{detalle.productoBaseCodigo} · {detalle.productoNombre} · {detalle.codigoVariante}</td>
+                        <td>{detalle.productoNombre} - {detalle.modelo || 'Sin modelo'} - {detalle.calidad || 'Sin calidad'} - {detalle.tipoPresentacion || 'Sin presentacion'}</td>
                         <td>{detalle.cantidad}</td>
                         <td>Bs {currency.format(detalle.precioListaUnitario)}</td>
                         <td>Bs {currency.format(detalle.precioVentaUnitario)}</td>
@@ -739,6 +819,124 @@ export default function VentasPage() {
             <button type="submit">Guardar venta</button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={modalClienteRapidoOpen}
+        onClose={() => setModalClienteRapidoOpen(false)}
+        title="Nuevo cliente rapido"
+        subtitle="Registra solo el nombre para continuar la venta sin salir del modal."
+        size="md"
+      >
+        <form className="entity-form" onSubmit={guardarClienteRapido}>
+          <label>
+            <span>Nombre del cliente</span>
+            <input
+              value={clienteRapidoForm.nombreCompleto}
+              onChange={(event) => setClienteRapidoForm({ nombreCompleto: event.target.value })}
+              placeholder="Ejemplo: Juan Perez"
+              required
+              autoFocus
+            />
+          </label>
+
+          <div className="modal-actions-row">
+            <button type="button" className="secondary" onClick={() => setModalClienteRapidoOpen(false)}>
+              Cancelar
+            </button>
+            <button type="submit" disabled={guardandoClienteRapido}>
+              {guardandoClienteRapido ? 'Guardando...' : 'Crear cliente'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        open={modalDetalleVentaOpen}
+        onClose={() => setModalDetalleVentaOpen(false)}
+        title="Comprobante de venta"
+        subtitle="Detalle completo de la venta registrada."
+        size="xl"
+      >
+        {detalleVentaSeleccionada ? (
+          <div className="sale-receipt-shell">
+            <div className="sale-receipt-actions">
+              <button type="button" className="secondary" onClick={() => window.print()}>
+                <Printer size={16} />
+                Imprimir / PDF
+              </button>
+            </div>
+
+            <section className="sale-receipt-card">
+              <div className="sale-receipt-header">
+                <div>
+                  <span className="sale-receipt-kicker">Comprobante de venta</span>
+                  <h2>{detalleVentaSeleccionada.numeroComprobante || `Venta #${detalleVentaSeleccionada.id}`}</h2>
+                  <p>{detalleVentaSeleccionada.cliente?.nombreCompleto || 'Cliente no disponible'}</p>
+                </div>
+                <div className={`sale-payment-pill ${getPaymentTone(detalleVentaSeleccionada.tipoPago)}`}>
+                  {detalleVentaSeleccionada.tipoPago}
+                </div>
+              </div>
+
+              <div className="sale-receipt-grid">
+                <article className="sale-receipt-info">
+                  <span>Cliente</span>
+                  <strong>{detalleVentaSeleccionada.cliente?.nombreCompleto || 'Sin cliente'}</strong>
+                  <p>{detalleVentaSeleccionada.cliente?.telefono || 'Sin telefono registrado'}</p>
+                </article>
+                <article className="sale-receipt-info">
+                  <span>Fecha</span>
+                  <strong>{formatDate(detalleVentaSeleccionada.fechaVenta)}</strong>
+                  <p>Estado: {detalleVentaSeleccionada.estado || 'REGISTRADA'}</p>
+                </article>
+                <article className="sale-receipt-info">
+                  <span>Total</span>
+                  <strong>{money.format(Number(detalleVentaSeleccionada.total || 0))}</strong>
+                  <p>{detalleVentaSeleccionada.detalles?.length || 0} items</p>
+                </article>
+              </div>
+
+              <div className="sale-receipt-table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Producto</th>
+                      <th>Cantidad</th>
+                      <th>P. lista</th>
+                      <th>P. venta</th>
+                      <th>Subtotal</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(detalleVentaSeleccionada.detalles || []).map((detalle) => (
+                      <tr key={detalle.id}>
+                        <td>
+                          <strong>{detalle.nombreProducto}</strong>
+                          <div>{detalle.calidad || 'Sin calidad'} - {detalle.tipoPresentacion || 'Sin presentacion'}</div>
+                        </td>
+                        <td>{detalle.cantidad}</td>
+                        <td>{money.format(Number(detalle.precioListaUnitario || 0))}</td>
+                        <td>{money.format(Number(detalle.precioVentaUnitario || 0))}</td>
+                        <td>{money.format(Number(detalle.subtotal || 0))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="sale-receipt-total">
+                <div>
+                  <strong>Observaciones</strong>
+                  <p>{detalleVentaSeleccionada.observaciones || 'Sin observaciones registradas.'}</p>
+                </div>
+                <span>{money.format(Number(detalleVentaSeleccionada.total || 0))}</span>
+              </div>
+            </section>
+          </div>
+        ) : (
+          <div className="empty-state">No hay detalle de venta para mostrar.</div>
+        )}
       </Modal>
 
       <Modal

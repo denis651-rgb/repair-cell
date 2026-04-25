@@ -32,6 +32,7 @@ import {
   Legend,
 } from 'recharts';
 import { api } from '../api/api';
+import CashOpeningModal from '../components/modals/CashOpeningModal';
 import { money, resolveVisibleOrderAmount } from '../utils/formatters';
 import '../styles/pages/dashboard.css';
 
@@ -72,6 +73,17 @@ export default function DashboardPage() {
   const [caja, setCaja] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [cashModalOpen, setCashModalOpen] = useState(false);
+  const [montoApertura, setMontoApertura] = useState('');
+  const [openingCash, setOpeningCash] = useState(false);
+  const [cashOpeningError, setCashOpeningError] = useState('');
+
+  let user = {};
+  try {
+    user = JSON.parse(localStorage.getItem('user') || '{}');
+  } catch {
+    user = {};
+  }
 
   const loadDashboard = async () => {
     setLoading(true);
@@ -89,10 +101,31 @@ export default function DashboardPage() {
       setPanel(panelData);
       setOrdenes(ordenesOrdenadas.slice(0, 6));
       setCaja(cajaData);
+      setCashModalOpen(!cajaData);
     } catch (e) {
       setError(e.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const abrirCaja = async (event) => {
+    event.preventDefault();
+    setOpeningCash(true);
+    setCashOpeningError('');
+
+    try {
+      await api.post('/contabilidad/caja/abrir', {
+        montoApertura: Number(montoApertura),
+        usuario: user.nombre || 'Administrador',
+      });
+      setMontoApertura('');
+      setCashModalOpen(false);
+      await loadDashboard();
+    } catch (e) {
+      setCashOpeningError(e.message);
+    } finally {
+      setOpeningCash(false);
     }
   };
 
@@ -115,6 +148,15 @@ export default function DashboardPage() {
 
   return (
     <div className="page-stack dashboard-page">
+      <CashOpeningModal
+        open={cashModalOpen}
+        montoApertura={montoApertura}
+        onMontoAperturaChange={setMontoApertura}
+        onSubmit={abrirCaja}
+        loading={openingCash}
+        error={cashOpeningError}
+      />
+
       <section className="dashboard-hero">
         <div>
           <span className="dashboard-kicker">Panel del negocio</span>
