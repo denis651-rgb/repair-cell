@@ -16,7 +16,16 @@ const productoBaseInicial = {
   marcaId: '',
   modelo: '',
   descripcion: '',
+  compatibilidades: [],
   activo: true,
+};
+
+const compatibilidadInicial = {
+  marcaCompatible: '',
+  modeloCompatible: '',
+  codigoReferencia: '',
+  nota: '',
+  activa: true,
 };
 
 const varianteInicial = {
@@ -60,26 +69,6 @@ const crearErrorVisual = (titulo, error) => ({
   titulo,
   detalle: error?.message || 'No se pudo completar la operacion del catalogo.',
 });
-
-const normalizarCodigoBase = (valor) =>
-  String(valor || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^A-Za-z0-9 ]+/g, ' ')
-    .trim()
-    .toUpperCase();
-
-const abreviarSegmentoCodigo = (valor) => {
-  const limpio = normalizarCodigoBase(valor);
-  if (!limpio) return '';
-
-  const compacto = limpio.replace(/\s+/g, '');
-  if (compacto.length <= 3) {
-    return compacto;
-  }
-
-  return compacto.slice(0, 3);
-};
 
 function normalizarPagina(respuesta, size) {
   if (Array.isArray(respuesta)) {
@@ -141,6 +130,21 @@ function formatFecha(valor) {
   return valor;
 }
 
+function normalizarCompatibilidades(compatibilidades = []) {
+  return compatibilidades
+    .filter((compatibilidad) =>
+      [compatibilidad?.marcaCompatible, compatibilidad?.modeloCompatible, compatibilidad?.codigoReferencia, compatibilidad?.nota]
+        .some((valor) => String(valor || '').trim() !== ''),
+    )
+    .map((compatibilidad) => ({
+      marcaCompatible: String(compatibilidad.marcaCompatible || '').trim(),
+      modeloCompatible: String(compatibilidad.modeloCompatible || '').trim(),
+      codigoReferencia: String(compatibilidad.codigoReferencia || '').trim(),
+      nota: String(compatibilidad.nota || '').trim(),
+      activa: compatibilidad.activa ?? true,
+    }));
+}
+
 function PaginationRow({ pagina, onChange }) {
   if (!pagina || pagina.totalElements <= pagina.size) return null;
 
@@ -197,6 +201,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
   const [paginaVariantes, setPaginaVariantes] = useState(0);
   const [paginaLotesCatalogo, setPaginaLotesCatalogo] = useState(0);
   const [paginaDetalleLotes, setPaginaDetalleLotes] = useState(0);
+  const [productoBaseCompatibilidadExpandidaId, setProductoBaseCompatibilidadExpandidaId] = useState(null);
   const [modalBaseOpen, setModalBaseOpen] = useState(false);
   const [modalVarianteOpen, setModalVarianteOpen] = useState(false);
   const [modalLoteOpen, setModalLoteOpen] = useState(false);
@@ -204,9 +209,9 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
   const [varianteEditando, setVarianteEditando] = useState(null);
   const [loteEditando, setLoteEditando] = useState(null);
   const [productoBaseForm, setProductoBaseForm] = useState(productoBaseInicial);
-  const [codigoBaseManual, setCodigoBaseManual] = useState(false);
+  const [codigoBaseSugerido, setCodigoBaseSugerido] = useState('');
   const [varianteForm, setVarianteForm] = useState(varianteInicial);
-  const [codigoVarianteManual, setCodigoVarianteManual] = useState(false);
+  const [codigoVarianteSugerido, setCodigoVarianteSugerido] = useState('');
   const [loteForm, setLoteForm] = useState(loteInicial);
   const [error, setError] = useState(null);
 
@@ -225,43 +230,10 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
     [categoriaFiltro, marcaFiltro, modeloFiltro, calidadFiltro],
   );
 
-  const categoriaSeleccionadaFormulario = useMemo(
-    () => categorias.find((categoria) => String(categoria.id) === String(productoBaseForm.categoriaId)),
-    [categorias, productoBaseForm.categoriaId],
-  );
-
-  const marcaSeleccionadaFormulario = useMemo(
-    () => marcas.find((marca) => String(marca.id) === String(productoBaseForm.marcaId)),
-    [marcas, productoBaseForm.marcaId],
-  );
-
   const productoBaseSeleccionadoFormularioVariante = useMemo(
     () => productosBase.find((productoBase) => String(productoBase.id) === String(varianteForm.productoBaseId)),
     [productosBase, varianteForm.productoBaseId],
   );
-
-  const codigoBaseSugerido = useMemo(() => {
-    const categoriaCodigo = abreviarSegmentoCodigo(categoriaSeleccionadaFormulario?.nombre);
-    const marcaCodigo = abreviarSegmentoCodigo(marcaSeleccionadaFormulario?.nombre);
-
-    if (!categoriaCodigo || !marcaCodigo) {
-      return '';
-    }
-
-    return `${categoriaCodigo}-${marcaCodigo}`;
-  }, [categoriaSeleccionadaFormulario, marcaSeleccionadaFormulario]);
-
-  const codigoVarianteSugerido = useMemo(() => {
-    const codigoBase = normalizarCodigoBase(productoBaseSeleccionadoFormularioVariante?.codigoBase)
-      .replace(/\s+/g, '-');
-    const calidadCodigo = abreviarSegmentoCodigo(varianteForm.calidad);
-
-    if (!codigoBase || !calidadCodigo) {
-      return codigoBase || '';
-    }
-
-    return `${codigoBase}-${calidadCodigo}`;
-  }, [productoBaseSeleccionadoFormularioVariante, varianteForm.calidad]);
 
   const cargarProductosBase = async () => {
     try {
@@ -478,37 +450,89 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
   }, [detalleOperativo?.varianteId]);
 
   useEffect(() => {
-    if (!modalBaseOpen || productoBaseEditando || codigoBaseManual) {
+    if (!modalBaseOpen || productoBaseEditando) {
       return;
     }
 
-    setProductoBaseForm((actual) => ({
-      ...actual,
-      codigoBase: codigoBaseSugerido,
-    }));
-  }, [codigoBaseSugerido, codigoBaseManual, modalBaseOpen, productoBaseEditando]);
+    if (!productoBaseForm.categoriaId || !productoBaseForm.marcaId) {
+      setCodigoBaseSugerido('');
+      setProductoBaseForm((actual) => ({ ...actual, codigoBase: '' }));
+      return;
+    }
+
+    let cancelado = false;
+
+    const cargarCodigo = async () => {
+      try {
+        const respuesta = await api.get('/catalogo/productos-base/sugerir-codigo', {
+          categoriaId: Number(productoBaseForm.categoriaId),
+          marcaId: Number(productoBaseForm.marcaId),
+        });
+        if (cancelado) return;
+        const codigo = respuesta?.codigo || '';
+        setCodigoBaseSugerido(codigo);
+        setProductoBaseForm((actual) => ({ ...actual, codigoBase: codigo }));
+      } catch (err) {
+        if (!cancelado) {
+          setCodigoBaseSugerido('');
+        }
+      }
+    };
+
+    cargarCodigo();
+
+    return () => {
+      cancelado = true;
+    };
+  }, [modalBaseOpen, productoBaseEditando, productoBaseForm.categoriaId, productoBaseForm.marcaId]);
 
   useEffect(() => {
-    if (!modalVarianteOpen || varianteEditando || codigoVarianteManual) {
+    if (!modalVarianteOpen || varianteEditando) {
       return;
     }
 
-    setVarianteForm((actual) => ({
-      ...actual,
-      codigoVariante: codigoVarianteSugerido,
-    }));
-  }, [codigoVarianteSugerido, codigoVarianteManual, modalVarianteOpen, varianteEditando]);
+    if (!varianteForm.productoBaseId || !String(varianteForm.calidad || '').trim()) {
+      setCodigoVarianteSugerido('');
+      setVarianteForm((actual) => ({ ...actual, codigoVariante: '' }));
+      return;
+    }
+
+    let cancelado = false;
+
+    const cargarCodigo = async () => {
+      try {
+        const respuesta = await api.get('/catalogo/productos-variantes/sugerir-codigo', {
+          productoBaseId: Number(varianteForm.productoBaseId),
+          calidad: varianteForm.calidad,
+        });
+        if (cancelado) return;
+        const codigo = respuesta?.codigo || '';
+        setCodigoVarianteSugerido(codigo);
+        setVarianteForm((actual) => ({ ...actual, codigoVariante: codigo }));
+      } catch (err) {
+        if (!cancelado) {
+          setCodigoVarianteSugerido('');
+        }
+      }
+    };
+
+    cargarCodigo();
+
+    return () => {
+      cancelado = true;
+    };
+  }, [modalVarianteOpen, varianteEditando, varianteForm.productoBaseId, varianteForm.calidad]);
 
   const abrirProductoBaseNuevo = () => {
     setProductoBaseEditando(null);
     setProductoBaseForm(productoBaseInicial);
-    setCodigoBaseManual(false);
+    setCodigoBaseSugerido('');
     setModalBaseOpen(true);
   };
 
   const abrirVarianteNueva = () => {
     setVarianteEditando(null);
-    setCodigoVarianteManual(false);
+    setCodigoVarianteSugerido('');
     setVarianteForm({
       ...varianteInicial,
       productoBaseId: productoBaseSeleccionado?.id ? String(productoBaseSeleccionado.id) : '',
@@ -527,7 +551,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
 
   const editarProductoBase = (productoBase) => {
     setProductoBaseEditando(productoBase);
-    setCodigoBaseManual(true);
+    setCodigoBaseSugerido(productoBase.codigoBase || '');
     setProductoBaseForm({
       codigoBase: productoBase.codigoBase || '',
       nombreBase: productoBase.nombreBase || '',
@@ -535,23 +559,54 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
       marcaId: productoBase.marca?.id ? String(productoBase.marca.id) : '',
       modelo: productoBase.modelo || '',
       descripcion: productoBase.descripcion || '',
+      compatibilidades:
+        productoBase.compatibilidades?.map((compatibilidad) => ({
+          marcaCompatible: compatibilidad.marcaCompatible || '',
+          modeloCompatible: compatibilidad.modeloCompatible || '',
+          codigoReferencia: compatibilidad.codigoReferencia || '',
+          nota: compatibilidad.nota || '',
+          activa: compatibilidad.activa ?? true,
+        })) || [],
       activo: productoBase.activo ?? true,
     });
     setModalBaseOpen(true);
   };
 
+  const agregarCompatibilidadProductoBase = () => {
+    setProductoBaseForm((actual) => ({
+      ...actual,
+      compatibilidades: [...(actual.compatibilidades || []), { ...compatibilidadInicial }],
+    }));
+  };
+
+  const actualizarCompatibilidadProductoBase = (index, campo, valor) => {
+    setProductoBaseForm((actual) => ({
+      ...actual,
+      compatibilidades: (actual.compatibilidades || []).map((compatibilidad, compatibilidadIndex) =>
+        compatibilidadIndex === index ? { ...compatibilidad, [campo]: valor } : compatibilidad,
+      ),
+    }));
+  };
+
+  const eliminarCompatibilidadProductoBase = (index) => {
+    setProductoBaseForm((actual) => ({
+      ...actual,
+      compatibilidades: (actual.compatibilidades || []).filter((_, compatibilidadIndex) => compatibilidadIndex !== index),
+    }));
+  };
+
   const editarVariante = (variante) => {
     setVarianteEditando(variante);
-    setCodigoVarianteManual(true);
-    setVarianteForm({
-      productoBaseId: variante.productoBase?.id ? String(variante.productoBase.id) : '',
-      codigoVariante: variante.codigoVariante || '',
-      calidad: variante.calidad || '',
-      tipoPresentacion: variante.tipoPresentacion || '',
-      color: variante.color || '',
-      precioVentaSugerido: variante.precioVentaSugerido ?? 0,
-      activo: variante.activo ?? true,
-    });
+    setCodigoVarianteSugerido(variante.codigoVariante || '');
+      setVarianteForm({
+        productoBaseId: variante.productoBase?.id ? String(variante.productoBase.id) : '',
+        codigoVariante: variante.codigoVariante || '',
+        calidad: variante.calidad || '',
+        tipoPresentacion: variante.tipoPresentacion || '',
+        color: '',
+        precioVentaSugerido: variante.precioVentaSugerido ?? 0,
+        activo: variante.activo ?? true,
+      });
     setModalVarianteOpen(true);
   };
 
@@ -589,6 +644,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
         ...productoBaseForm,
         categoriaId: Number(productoBaseForm.categoriaId),
         marcaId: Number(productoBaseForm.marcaId),
+        compatibilidades: normalizarCompatibilidades(productoBaseForm.compatibilidades),
       };
 
       if (productoBaseEditando) {
@@ -600,7 +656,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
       setModalBaseOpen(false);
       setProductoBaseEditando(null);
       setProductoBaseForm(productoBaseInicial);
-      setCodigoBaseManual(false);
+      setCodigoBaseSugerido('');
       await recargarCatalogo();
     } catch (err) {
       setError(crearErrorVisual(
@@ -615,6 +671,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
     try {
       const payload = {
         ...varianteForm,
+        color: '',
         productoBaseId: Number(varianteForm.productoBaseId),
         precioVentaSugerido: Number(varianteForm.precioVentaSugerido || 0),
       };
@@ -628,7 +685,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
       setModalVarianteOpen(false);
       setVarianteEditando(null);
       setVarianteForm(varianteInicial);
-      setCodigoVarianteManual(false);
+      setCodigoVarianteSugerido('');
       await Promise.all([recargarCatalogo(), recargarOperacion()]);
     } catch (err) {
       setError(crearErrorVisual(
@@ -857,7 +914,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                             <th>Calidad</th>
                             <th>Stock total</th>
                             <th>Lotes activos</th>
-                            <th>P. sugerido</th>
+                            <th>Precio venta</th>
                             <th>Accion</th>
                           </tr>
                         </thead>
@@ -919,7 +976,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                     <h4>Detalle de variante</h4>
                     <p>
                       {detalleOperativo
-                        ? `${detalleOperativo.codigoVariante} muestra solo lotes activos y visibles para venta.`
+                        ? `${detalleOperativo.codigoVariante} muestra una sola variante con stock total consolidado y detalle por lote/proveedor.`
                         : 'Selecciona una variante en la tabla principal para ver su stock real por lote.'}
                     </p>
                   </div>
@@ -939,7 +996,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                         {detalleOperativo.codigoVariante} · {detalleOperativo.calidad || 'Sin calidad'}
                       </span>
                       <span>
-                        {detalleOperativo.marcaNombre || 'Sin marca'} · {detalleOperativo.modelo || 'Sin modelo'} · Precio sugerido Bs {currency.format(Number(detalleOperativo.precioVentaSugerido || 0))}
+                        {detalleOperativo.marcaNombre || 'Sin marca'} · {detalleOperativo.modelo || 'Sin modelo'} · Precio venta Bs {currency.format(Number(detalleOperativo.precioVentaSugerido || 0))}
                       </span>
                     </div>
 
@@ -953,7 +1010,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                         <strong>{detalleOperativo.lotesActivos || 0}</strong>
                       </article>
                       <article className="catalogo-kpi-card">
-                        <span>Precio sugerido</span>
+                          <span>Precio venta</span>
                         <strong>Bs {currency.format(Number(detalleOperativo.precioVentaSugerido || 0))}</strong>
                       </article>
                     </div>
@@ -969,7 +1026,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                           <table className="table">
                             <thead>
                               <tr>
-                                <th>Lote</th>
+                                <th>Lote / proveedor</th>
                                 <th>Ingreso</th>
                                 <th>Disponible</th>
                                 <th>Costo</th>
@@ -981,6 +1038,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                                 <tr key={lote.id}>
                                   <td>
                                     <strong>{lote.codigoLote}</strong>
+                                    <div>{lote.proveedorNombre || 'Proveedor no registrado'}</div>
                                     <div>{lote.codigoProveedor || 'Sin cod. proveedor'}</div>
                                   </td>
                                   <td>{lote.fechaIngreso}</td>
@@ -1044,7 +1102,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                       <table className="table">
                         <thead>
                           <tr>
-                            <th>Lote</th>
+                            <th>Lote / proveedor</th>
                             <th>Variante</th>
                             <th>Ingreso</th>
                             <th>Cierre</th>
@@ -1060,6 +1118,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                             <tr key={lote.id}>
                               <td>
                                 <strong>{lote.codigoLote}</strong>
+                                <div>{lote.proveedorNombre || 'Proveedor no registrado'}</div>
                                 <div>{lote.codigoProveedor || 'Sin cod. proveedor'}</div>
                               </td>
                               <td>
@@ -1141,11 +1200,53 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                                 >
                                   <td>{productoBase.codigoBase}</td>
                                   <td>
-                                    <strong>{productoBase.nombreBase}</strong>
-                                    <div>{productoBase.categoria?.nombre || 'Sin categoria'}</div>
+                                    <div className="catalogo-producto-base-info">
+                                      <strong>{productoBase.nombreBase}</strong>
+                                      <div>{productoBase.categoria?.nombre || 'Sin categoria'}</div>
+                                      <span className="catalogo-compatibilidad-summary">
+                                        {productoBase.compatibilidades?.length
+                                          ? `Compatible con ${productoBase.compatibilidades.length} modelos`
+                                          : 'Sin compatibilidades adicionales'}
+                                      </span>
+                                    </div>
                                   </td>
                                   <td>{productoBase.marca?.nombre || 'Sin marca'}</td>
-                                  <td>{productoBase.modelo || 'Sin modelo'}</td>
+                                  <td>
+                                    <div className="catalogo-producto-base-info">
+                                      <span>{productoBase.modelo || 'Sin modelo'}</span>
+                                      {productoBase.compatibilidades?.length ? (
+                                        <div className="catalogo-modelos-expandible">
+                                          <button
+                                            type="button"
+                                            className="catalogo-modelos-toggle"
+                                            onClick={() => setProductoBaseCompatibilidadExpandidaId((actual) =>
+                                              actual === productoBase.id ? null : productoBase.id
+                                            )}
+                                            aria-expanded={productoBaseCompatibilidadExpandidaId === productoBase.id}
+                                            title={
+                                              productoBaseCompatibilidadExpandidaId === productoBase.id
+                                                ? 'Ocultar modelos compatibles'
+                                                : 'Mostrar modelos compatibles'
+                                            }
+                                          >
+                                            ...
+                                          </button>
+                                          {productoBaseCompatibilidadExpandidaId === productoBase.id ? (
+                                            <div className="catalogo-modelos-extra">
+                                              {productoBase.compatibilidades
+                                                .map((compatibilidad) => compatibilidad.modeloCompatible)
+                                                .filter(Boolean)
+                                                .map((modeloCompatible) => (
+                                                  <span key={`${productoBase.id}-${modeloCompatible}`} className="catalogo-modelo-chip">
+                                                    {modeloCompatible}
+                                                  </span>
+                                                ))}
+                                            </div>
+                                          ) : null}
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  </td>
                                   <td>{productoBase.activo ? 'Activo' : 'Inactivo'}</td>
                                   <td>
                                     <div className="inventory-inline-actions">
@@ -1199,14 +1300,13 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                         <div className="responsive-table-wrap">
                           <table className="table">
                             <thead>
-                              <tr>
-                                <th>Codigo</th>
-                                <th>Calidad</th>
-                                <th>Color</th>
-                                <th>P. sugerido</th>
-                                <th>Stock lote</th>
-                                <th>Accion</th>
-                              </tr>
+                                <tr>
+                                  <th>Codigo</th>
+                                  <th>Calidad</th>
+                                  <th>Precio venta</th>
+                                  <th>Stock lote</th>
+                                  <th>Accion</th>
+                                </tr>
                             </thead>
                             <tbody>
                               {variantesPaginadas.content.map((variante) => (
@@ -1214,15 +1314,14 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                                   key={variante.id}
                                   className={varianteSeleccionada?.id === variante.id ? 'catalogo-row-active' : ''}
                                 >
-                                  <td>
-                                    <strong>{variante.codigoVariante}</strong>
-                                    <div>{variante.tipoPresentacion || 'Sin presentacion'}</div>
-                                  </td>
-                                  <td>{variante.calidad || 'Sin calidad'}</td>
-                                  <td>{variante.color || 'Sin color'}</td>
-                                  <td>Bs {currency.format(Number(variante.precioVentaSugerido || 0))}</td>
-                                  <td>{variante.stockDisponibleTotal || 0}</td>
-                                  <td>
+                                    <td>
+                                      <strong>{variante.codigoVariante}</strong>
+                                      <div>{variante.tipoPresentacion || 'Sin presentacion'}</div>
+                                    </td>
+                                    <td>{variante.calidad || 'Sin calidad'}</td>
+                                    <td>Bs {currency.format(Number(variante.precioVentaSugerido || 0))}</td>
+                                    <td>{variante.stockDisponibleTotal || 0}</td>
+                                    <td>
                                     <div className="inventory-inline-actions">
                                       <button
                                         type="button"
@@ -1356,9 +1455,9 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
               <input
                 value={productoBaseForm.codigoBase}
                 onChange={(event) => {
-                  setCodigoBaseManual(true);
                   setProductoBaseForm((actual) => ({ ...actual, codigoBase: event.target.value }));
                 }}
+                readOnly
                 required
               />
             </label>
@@ -1442,11 +1541,85 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
               />
             </label>
           </div>
-          {!productoBaseEditando && codigoBaseSugerido && (
+          {codigoBaseSugerido && (
             <div className="catalogo-context-note">
-              Codigo sugerido automatico: <strong>{codigoBaseSugerido}</strong>. Puedes editarlo si necesitas otro formato.
+              Codigo sugerido automatico: <strong>{codigoBaseSugerido}</strong>. El backend asigna y protege este correlativo.
             </div>
           )}
+          <section className="catalogo-compat-section">
+            <div className="catalogo-compat-header">
+              <div>
+                <h4>Modelos compatibles opcionales</h4>
+                <p>Usa esta seccion solo cuando una misma pantalla o repuesto le hace a varios modelos.</p>
+              </div>
+              <button type="button" className="secondary compact" onClick={agregarCompatibilidadProductoBase}>
+                <Plus size={16} />
+                Agregar modelo compatible
+              </button>
+            </div>
+
+            {productoBaseForm.compatibilidades?.length ? (
+              <div className="catalogo-compat-list">
+                {productoBaseForm.compatibilidades.map((compatibilidad, index) => (
+                  <div key={`compatibilidad-${index}`} className="catalogo-compat-row">
+                    <div className="form-grid two-columns">
+                      <label>
+                        <span>Marca compatible</span>
+                        <input
+                          value={compatibilidad.marcaCompatible}
+                          onChange={(event) =>
+                            actualizarCompatibilidadProductoBase(index, 'marcaCompatible', event.target.value)
+                          }
+                          placeholder="Ej. Samsung"
+                        />
+                      </label>
+                      <label>
+                        <span>Modelo compatible</span>
+                        <input
+                          value={compatibilidad.modeloCompatible}
+                          onChange={(event) =>
+                            actualizarCompatibilidadProductoBase(index, 'modeloCompatible', event.target.value)
+                          }
+                          placeholder="Ej. A03"
+                        />
+                      </label>
+                      <label>
+                        <span>Codigo modelo / referencia</span>
+                        <input
+                          value={compatibilidad.codigoReferencia}
+                          onChange={(event) =>
+                            actualizarCompatibilidadProductoBase(index, 'codigoReferencia', event.target.value)
+                          }
+                          placeholder="Ej. A035F"
+                        />
+                      </label>
+                      <label>
+                        <span>Nota</span>
+                        <input
+                          value={compatibilidad.nota}
+                          onChange={(event) => actualizarCompatibilidadProductoBase(index, 'nota', event.target.value)}
+                          placeholder="Ej. Compatible"
+                        />
+                      </label>
+                    </div>
+                    <div className="catalogo-compat-actions">
+                      <button
+                        type="button"
+                        className="secondary compact"
+                        onClick={() => eliminarCompatibilidadProductoBase(index)}
+                      >
+                        Quitar
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="catalogo-compat-empty">
+                Si este producto solo sirve para un modelo, puedes dejar esta seccion vacia y guardar normal.
+              </div>
+            )}
+          </section>
           <label>
             <span>Descripcion</span>
             <textarea
@@ -1491,9 +1664,9 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
               <input
                 value={varianteForm.codigoVariante}
                 onChange={(event) => {
-                  setCodigoVarianteManual(true);
                   setVarianteForm((actual) => ({ ...actual, codigoVariante: event.target.value }));
                 }}
+                readOnly
                 required
               />
             </label>
@@ -1505,24 +1678,18 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                 required
               />
             </label>
-            <label>
-              <span>Tipo presentacion</span>
-              <input
-                value={varianteForm.tipoPresentacion}
-                onChange={(event) => setVarianteForm((actual) => ({ ...actual, tipoPresentacion: event.target.value }))}
-              />
-            </label>
-            <label>
-              <span>Color</span>
-              <input
-                value={varianteForm.color}
-                onChange={(event) => setVarianteForm((actual) => ({ ...actual, color: event.target.value }))}
-              />
-            </label>
-            <label>
-              <span>Precio venta sugerido</span>
-              <input
-                type="number"
+              <label>
+                <span>Tipo presentacion</span>
+                <input
+                  value={varianteForm.tipoPresentacion}
+                  onChange={(event) => setVarianteForm((actual) => ({ ...actual, tipoPresentacion: event.target.value }))}
+                  placeholder="Ej. Pantalla completa, Con marco, Flex V3"
+                />
+              </label>
+              <label>
+                <span>Precio venta sugerido</span>
+                <input
+                  type="number"
                 min="0"
                 step="0.01"
                 value={varianteForm.precioVentaSugerido}
@@ -1543,11 +1710,11 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
               />
             </label>
           </div>
-          {!varianteEditando && codigoVarianteSugerido && (
-            <div className="catalogo-context-note">
-              Codigo sugerido automatico: <strong>{codigoVarianteSugerido}</strong>. Puedes editarlo si necesitas otro formato.
-            </div>
-          )}
+            {codigoVarianteSugerido && (
+              <div className="catalogo-context-note">
+                Codigo sugerido automatico: <strong>{codigoVarianteSugerido}</strong>. El backend asigna y protege este correlativo.
+              </div>
+            )}
           <div className="modal-actions-row">
             <button type="button" className="secondary" onClick={() => setModalVarianteOpen(false)}>
               Cancelar

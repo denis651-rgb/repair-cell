@@ -92,9 +92,26 @@ CREATE TABLE IF NOT EXISTS productos_variantes (
     FOREIGN KEY (producto_base_id) REFERENCES productos_base(id)
 );
 
+CREATE TABLE IF NOT EXISTS productos_base_compatibilidades (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    producto_base_id INTEGER NOT NULL,
+    marca_compatible TEXT NOT NULL,
+    modelo_compatible TEXT NOT NULL,
+    codigo_referencia TEXT,
+    nota TEXT,
+    activa INTEGER NOT NULL DEFAULT 1,
+    creado_en TEXT NOT NULL,
+    actualizado_en TEXT NOT NULL,
+    FOREIGN KEY (producto_base_id) REFERENCES productos_base(id)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_productos_variantes_base_calidad_presentacion
+ON productos_variantes(producto_base_id, lower(calidad), lower(coalesce(tipo_presentacion, '')));
+
 CREATE TABLE IF NOT EXISTS lotes_inventario (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     variante_id INTEGER NOT NULL,
+    proveedor_id INTEGER,
     codigo_lote TEXT NOT NULL UNIQUE,
     codigo_proveedor TEXT,
     fecha_ingreso TEXT NOT NULL,
@@ -110,7 +127,8 @@ CREATE TABLE IF NOT EXISTS lotes_inventario (
     motivo_cierre TEXT,
     creado_en TEXT NOT NULL,
     actualizado_en TEXT NOT NULL,
-    FOREIGN KEY (variante_id) REFERENCES productos_variantes(id)
+    FOREIGN KEY (variante_id) REFERENCES productos_variantes(id),
+    FOREIGN KEY (proveedor_id) REFERENCES proveedores(id)
 );
 
 CREATE TABLE IF NOT EXISTS ordenes_reparacion (
@@ -290,6 +308,7 @@ CREATE TABLE IF NOT EXISTS compras_detalle (
     calidad TEXT,
     tipo_presentacion TEXT,
     color TEXT,
+    codigo_proveedor TEXT,
     codigo_lote TEXT,
     cantidad INTEGER NOT NULL,
     precio_compra_unitario REAL NOT NULL,
@@ -395,9 +414,13 @@ CREATE INDEX IF NOT EXISTS idx_productos_stock_bajo ON productos_inventario(cant
 CREATE INDEX IF NOT EXISTS idx_productos_base_categoria ON productos_base(categoria_id);
 CREATE INDEX IF NOT EXISTS idx_productos_base_marca ON productos_base(marca_id);
 CREATE INDEX IF NOT EXISTS idx_productos_base_modelo ON productos_base(modelo);
+CREATE INDEX IF NOT EXISTS idx_productos_base_compat_producto ON productos_base_compatibilidades(producto_base_id);
+CREATE INDEX IF NOT EXISTS idx_productos_base_compat_modelo ON productos_base_compatibilidades(modelo_compatible);
+CREATE INDEX IF NOT EXISTS idx_productos_base_compat_marca ON productos_base_compatibilidades(marca_compatible);
 CREATE INDEX IF NOT EXISTS idx_productos_variantes_producto_base ON productos_variantes(producto_base_id);
 CREATE INDEX IF NOT EXISTS idx_productos_variantes_calidad ON productos_variantes(calidad);
 CREATE INDEX IF NOT EXISTS idx_lotes_variante ON lotes_inventario(variante_id);
+CREATE INDEX IF NOT EXISTS idx_lotes_proveedor ON lotes_inventario(proveedor_id);
 CREATE INDEX IF NOT EXISTS idx_lotes_estado ON lotes_inventario(estado);
 CREATE INDEX IF NOT EXISTS idx_lotes_fecha_ingreso ON lotes_inventario(fecha_ingreso);
 CREATE INDEX IF NOT EXISTS idx_ordenes_reparacion_cliente ON ordenes_reparacion(cliente_id);

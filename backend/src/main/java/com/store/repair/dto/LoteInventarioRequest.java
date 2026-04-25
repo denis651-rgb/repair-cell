@@ -15,6 +15,8 @@ public class LoteInventarioRequest {
     @NotNull(message = "La variante es obligatoria")
     private Long varianteId;
 
+    private Long proveedorId;
+
     @NotBlank(message = "El codigo de lote es obligatorio")
     private String codigoLote;
 

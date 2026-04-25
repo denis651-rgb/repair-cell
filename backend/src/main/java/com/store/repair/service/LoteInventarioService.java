@@ -4,9 +4,11 @@ import com.store.repair.config.SanitizadorTexto;
 import com.store.repair.domain.EstadoLoteInventario;
 import com.store.repair.domain.LoteInventario;
 import com.store.repair.domain.ProductoVariante;
+import com.store.repair.domain.Proveedor;
 import com.store.repair.dto.CerrarLoteManualRequest;
 import com.store.repair.dto.LoteInventarioHistorialResponse;
 import com.store.repair.dto.LoteInventarioRequest;
+import com.store.repair.repository.CompraRepository;
 import com.store.repair.repository.LoteInventarioRepository;
 import com.store.repair.repository.VentaDetalleLoteRepository;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +29,8 @@ public class LoteInventarioService {
     private final LoteInventarioRepository repository;
     private final ProductoVarianteService productoVarianteService;
     private final VentaDetalleLoteRepository ventaDetalleLoteRepository;
+    private final ProveedorService proveedorService;
+    private final CompraRepository compraRepository;
 
     public List<LoteInventario> search(
             String busqueda,
@@ -53,6 +57,15 @@ public class LoteInventarioService {
 
     public LoteInventarioHistorialResponse findDetalleHistorialById(Long id) {
         return toHistorialResponse(findById(id));
+    }
+
+    public String sugerirCodigoProveedor(Long proveedorId) {
+        String prefijo = proveedorService.construirPrefijoCodigoProveedor(proveedorId);
+        String ultimoCodigo = repository.findTopByCodigoProveedorStartingWithOrderByCodigoProveedorDesc(prefijo)
+                .map(LoteInventario::getCodigoProveedor)
+                .orElse(null);
+        int siguiente = extraerSiguienteCorrelativoProveedor(ultimoCodigo);
+        return prefijo + String.format("%03d", siguiente);
     }
 
     public Page<LoteInventarioHistorialResponse> searchHistorial(
@@ -87,6 +100,7 @@ public class LoteInventarioService {
     public LoteInventario save(Long id, LoteInventarioRequest request) {
         LoteInventario destino = id == null ? new LoteInventario() : findById(id);
         ProductoVariante varianteDestino = productoVarianteService.findById(request.getVarianteId());
+        Proveedor proveedorDestino = resolverProveedor(request, destino);
         String codigoLoteNormalizado = normalizarCodigo(request.getCodigoLote(), "El codigo de lote es obligatorio");
 
         boolean codigoDuplicado = id == null
@@ -124,6 +138,7 @@ public class LoteInventarioService {
         }
 
         destino.setVariante(varianteDestino);
+        destino.setProveedor(proveedorDestino);
         destino.setCodigoLote(codigoLoteNormalizado);
         destino.setCodigoProveedor(SanitizadorTexto.limpiar(request.getCodigoProveedor()));
         destino.setFechaIngreso(request.getFechaIngreso());
@@ -184,6 +199,11 @@ public class LoteInventarioService {
         return total == null ? 0 : total.intValue();
     }
 
+    public int obtenerStockDisponiblePorVarianteYProveedor(Long varianteId, Long proveedorId) {
+        Integer total = repository.sumStockDisponibleActivoByVarianteIdAndProveedorId(varianteId, proveedorId);
+        return total == null ? 0 : total;
+    }
+
     public LoteInventarioHistorialResponse toHistorialResponse(LoteInventario lote) {
         if (lote == null) {
             return null;
@@ -222,6 +242,8 @@ public class LoteInventarioService {
                 .calidad(lote.getVariante() == null ? null : lote.getVariante().getCalidad())
                 .tipoPresentacion(lote.getVariante() == null ? null : lote.getVariante().getTipoPresentacion())
                 .color(lote.getVariante() == null ? null : lote.getVariante().getColor())
+                .proveedorId(lote.getProveedor() == null ? null : lote.getProveedor().getId())
+                .proveedorNombre(lote.getProveedor() == null ? null : lote.getProveedor().getNombreComercial())
                 .codigoLote(lote.getCodigoLote())
                 .codigoProveedor(lote.getCodigoProveedor())
                 .fechaIngreso(lote.getFechaIngreso())
@@ -270,12 +292,47 @@ public class LoteInventarioService {
         lote.setMotivoCierre(null);
     }
 
+    private Proveedor resolverProveedor(LoteInventarioRequest request, LoteInventario destino) {
+        if (request.getProveedorId() != null) {
+            return proveedorService.findById(request.getProveedorId());
+        }
+
+        if (request.getCompraId() != null) {
+            return compraRepository.findById(request.getCompraId())
+                    .map(compra -> compra.getProveedor())
+                    .orElseThrow(() -> new BusinessException("No se encontro la compra relacionada para resolver el proveedor del lote."));
+        }
+
+        if (destino.getProveedor() != null) {
+            return destino.getProveedor();
+        }
+
+        return null;
+    }
+
     private String normalizarCodigo(String valor, String mensaje) {
         String limpio = SanitizadorTexto.limpiar(valor);
         if (limpio == null) {
             throw new BusinessException(mensaje);
         }
         return limpio.replace(' ', '-').toUpperCase(Locale.ROOT);
+    }
+
+    private int extraerSiguienteCorrelativoProveedor(String ultimoCodigo) {
+        if (ultimoCodigo == null || ultimoCodigo.isBlank()) {
+            return 1;
+        }
+
+        String sufijo = ultimoCodigo.replaceAll("^.*?(\\d+)$", "$1");
+        if (sufijo.equals(ultimoCodigo) && !ultimoCodigo.matches(".*\\d+$")) {
+            return 1;
+        }
+
+        try {
+            return Integer.parseInt(sufijo) + 1;
+        } catch (NumberFormatException exception) {
+            return 1;
+        }
     }
 
     private double redondearDosDecimales(double valor) {

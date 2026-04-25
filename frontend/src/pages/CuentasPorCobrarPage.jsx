@@ -16,6 +16,21 @@ const abonoInicial = {
   observaciones: '',
 };
 
+const getReceivableStateTone = (estado) => {
+  switch (estado) {
+    case 'PENDIENTE':
+      return 'is-pending';
+    case 'PARCIAL':
+      return 'is-partial';
+    case 'PAGADA':
+      return 'is-paid';
+    case 'ANULADA':
+      return 'is-cancelled';
+    default:
+      return '';
+  }
+};
+
 export default function CuentasPorCobrarPage() {
   const [cuentasPage, setCuentasPage] = useState(paginaVacia);
   const [busqueda, setBusqueda] = useState('');
@@ -95,7 +110,6 @@ export default function CuentasPorCobrarPage() {
             <option value="PENDIENTE">Pendiente</option>
             <option value="PARCIAL">Parcial</option>
             <option value="PAGADA">Pagada</option>
-            <option value="ANULADA">Anulada</option>
           </select>
         </div>
       </PageHeader>
@@ -126,13 +140,13 @@ export default function CuentasPorCobrarPage() {
           <>
             <div className="receivables-list">
               {cuentas.map((cuenta) => (
-                <article key={cuenta.id} className="receivable-card">
+                <article key={cuenta.id} className={`receivable-card ${getReceivableStateTone(cuenta.estado)}`}>
                   <div className="receivable-card-header">
                     <div>
                       <strong>{cuenta.cliente?.nombreCompleto || 'Cliente'}</strong>
                       <p>{cuenta.venta?.numeroComprobante || `Venta #${cuenta.venta?.id || cuenta.id}`}</p>
                     </div>
-                    <span className={cuenta.estado === 'ANULADA' ? 'badge badge-danger' : 'chip'}>{cuenta.estado}</span>
+                    <span className={`receivable-state-pill ${getReceivableStateTone(cuenta.estado)}`}>{cuenta.estado}</span>
                   </div>
 
                   <div className="receivable-card-grid">

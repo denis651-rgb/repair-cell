@@ -40,6 +40,7 @@ public class ComprasCatalogoMigration implements ApplicationRunner {
         asegurarColumna(connection, "compras_detalle", "producto_base_codigo", "TEXT");
         asegurarColumna(connection, "compras_detalle", "tipo_presentacion", "TEXT");
         asegurarColumna(connection, "compras_detalle", "color", "TEXT");
+        asegurarColumna(connection, "compras_detalle", "codigo_proveedor", "TEXT");
         asegurarColumna(connection, "compras_detalle", "codigo_lote", "TEXT");
     }
 

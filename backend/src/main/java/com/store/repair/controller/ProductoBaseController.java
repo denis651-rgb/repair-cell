@@ -1,6 +1,7 @@
 package com.store.repair.controller;
 
 import com.store.repair.domain.ProductoBase;
+import com.store.repair.dto.CodigoSugeridoResponse;
 import com.store.repair.dto.ProductoBaseRequest;
 import com.store.repair.service.ProductoBaseService;
 import jakarta.validation.Valid;
@@ -29,6 +30,13 @@ public class ProductoBaseController {
     @GetMapping("/{id}")
     public ProductoBase findById(@PathVariable Long id) {
         return service.findById(id);
+    }
+
+    @GetMapping("/sugerir-codigo")
+    public CodigoSugeridoResponse sugerirCodigo(
+            @RequestParam Long categoriaId,
+            @RequestParam Long marcaId) {
+        return new CodigoSugeridoResponse(service.sugerirCodigo(categoriaId, marcaId));
     }
 
     @PostMapping

@@ -38,6 +38,7 @@ import '../styles/pages/reportes.css';
 const hoy = toDateInputValue();
 const hace7 = toDateInputValue(new Date(Date.now() - 6 * 24 * 60 * 60 * 1000));
 const ESTADO_COLORS = ['#0f766e', '#dc2626', '#f59e0b', '#2563eb', '#7c3aed', '#475569'];
+const REPORTS_TABLE_PAGE_SIZE = 8;
 const BLOQUES_INICIALES = {
   financiero: null,
   clientes: null,
@@ -74,6 +75,50 @@ function construirErrorBloque(titulo, endpoint, params, error) {
   };
 }
 
+function paginarFilas(lista = [], pagina = 0, tamano = REPORTS_TABLE_PAGE_SIZE) {
+  const total = lista.length;
+  const totalPages = Math.max(1, Math.ceil(total / tamano));
+  const paginaSegura = Math.min(Math.max(pagina, 0), totalPages - 1);
+  const inicio = paginaSegura * tamano;
+
+  return {
+    filas: lista.slice(inicio, inicio + tamano),
+    pagina: paginaSegura,
+    total,
+    totalPages,
+  };
+}
+
+function ReportsTablePagination({ datos, pagina, onChange, etiqueta = 'registros' }) {
+  if (!datos.total || datos.total <= REPORTS_TABLE_PAGE_SIZE) return null;
+
+  return (
+    <div className="reports-table-pagination">
+      <span>
+        Pagina {datos.pagina + 1} de {datos.totalPages} · {datos.total} {etiqueta}
+      </span>
+      <div className="reports-table-pagination-actions">
+        <button
+          type="button"
+          className="secondary compact"
+          onClick={() => onChange(Math.max(pagina - 1, 0))}
+          disabled={datos.pagina <= 0}
+        >
+          Anterior
+        </button>
+        <button
+          type="button"
+          className="secondary compact"
+          onClick={() => onChange(Math.min(pagina + 1, datos.totalPages - 1))}
+          disabled={datos.pagina + 1 >= datos.totalPages}
+        >
+          Siguiente
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function ReportesPage() {
   const [rango, setRango] = useState({ inicio: hace7, fin: hoy });
   const [serieFinanciera, setSerieFinanciera] = useState([]);
@@ -92,6 +137,11 @@ export default function ReportesPage() {
   const [bloquesError, setBloquesError] = useState(BLOQUES_INICIALES);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [paginaRentabilidadLote, setPaginaRentabilidadLote] = useState(0);
+  const [paginaRentabilidadVariante, setPaginaRentabilidadVariante] = useState(0);
+  const [paginaRentabilidadBase, setPaginaRentabilidadBase] = useState(0);
+  const [paginaClientesGlobales, setPaginaClientesGlobales] = useState(0);
+  const [paginaStockCritico, setPaginaStockCritico] = useState(0);
 
   const cargarTodo = async (inicio = rango.inicio, fin = rango.fin) => {
     setLoading(true);
@@ -276,6 +326,31 @@ export default function ReportesPage() {
     gananciaBruta: 0,
     margenPorcentaje: 0,
   };
+
+  const rentabilidadPorLotePaginada = useMemo(
+    () => paginarFilas(rentabilidad?.porLote || [], paginaRentabilidadLote),
+    [rentabilidad?.porLote, paginaRentabilidadLote],
+  );
+
+  const rentabilidadPorVariantePaginada = useMemo(
+    () => paginarFilas(rentabilidad?.porVariante || [], paginaRentabilidadVariante),
+    [rentabilidad?.porVariante, paginaRentabilidadVariante],
+  );
+
+  const rentabilidadPorBasePaginada = useMemo(
+    () => paginarFilas(rentabilidad?.porProductoBase || [], paginaRentabilidadBase),
+    [rentabilidad?.porProductoBase, paginaRentabilidadBase],
+  );
+
+  const clientesGlobalesPaginados = useMemo(
+    () => paginarFilas(clientesGlobales, paginaClientesGlobales),
+    [clientesGlobales, paginaClientesGlobales],
+  );
+
+  const stockCriticoPaginado = useMemo(
+    () => paginarFilas(panelGlobal?.productosStockBajo || [], paginaStockCritico),
+    [panelGlobal?.productosStockBajo, paginaStockCritico],
+  );
 
   const exportarExcel = () => {
     const workbook = XLSX.utils.book_new();
@@ -481,7 +556,7 @@ export default function ReportesPage() {
           </article>
         </section>
 
-        <section className="reports-grid-2">
+        <section className="reports-grid-1">
           <article className="card reports-table-card">
             <div className="reports-table-header">
               <div>
@@ -502,7 +577,7 @@ export default function ReportesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(rentabilidad?.porLote || []).map((fila) => (
+                  {rentabilidadPorLotePaginada.filas.map((fila) => (
                     <tr key={fila.loteId}>
                       <td>
                         <strong>{fila.codigoVariante}</strong>
@@ -514,7 +589,7 @@ export default function ReportesPage() {
                       <td>{money.format(fila.ganancia || 0)}</td>
                     </tr>
                   ))}
-                  {(rentabilidad?.porLote || []).length === 0 && (
+                  {rentabilidadPorLotePaginada.total === 0 && (
                     <tr>
                       <td colSpan="5" className="table-empty-cell">No hay lotes con rentabilidad para este filtro.</td>
                     </tr>
@@ -522,6 +597,12 @@ export default function ReportesPage() {
                 </tbody>
               </table>
             </div>
+            <ReportsTablePagination
+              datos={rentabilidadPorLotePaginada}
+              pagina={paginaRentabilidadLote}
+              onChange={setPaginaRentabilidadLote}
+              etiqueta="lotes"
+            />
           </article>
 
           <article className="card reports-table-card">
@@ -544,7 +625,7 @@ export default function ReportesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(rentabilidad?.porVariante || []).map((fila) => (
+                  {rentabilidadPorVariantePaginada.filas.map((fila) => (
                     <tr key={fila.varianteId}>
                       <td>
                         <strong>{fila.codigoVariante}</strong>
@@ -556,7 +637,7 @@ export default function ReportesPage() {
                       <td>{money.format(fila.ganancia || 0)}</td>
                     </tr>
                   ))}
-                  {(rentabilidad?.porVariante || []).length === 0 && (
+                  {rentabilidadPorVariantePaginada.total === 0 && (
                     <tr>
                       <td colSpan="5" className="table-empty-cell">No hay variantes con rentabilidad para este filtro.</td>
                     </tr>
@@ -564,10 +645,13 @@ export default function ReportesPage() {
                 </tbody>
               </table>
             </div>
+            <ReportsTablePagination
+              datos={rentabilidadPorVariantePaginada}
+              pagina={paginaRentabilidadVariante}
+              onChange={setPaginaRentabilidadVariante}
+              etiqueta="variantes"
+            />
           </article>
-        </section>
-
-        <section className="reports-grid-1">
           <article className="card reports-table-card">
             <div className="reports-table-header">
               <div>
@@ -588,7 +672,7 @@ export default function ReportesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(rentabilidad?.porProductoBase || []).map((fila) => (
+                  {rentabilidadPorBasePaginada.filas.map((fila) => (
                     <tr key={fila.productoBaseId}>
                       <td>
                         <strong>{fila.codigoBase}</strong>
@@ -600,7 +684,7 @@ export default function ReportesPage() {
                       <td>{money.format(fila.ganancia || 0)}</td>
                     </tr>
                   ))}
-                  {(rentabilidad?.porProductoBase || []).length === 0 && (
+                  {rentabilidadPorBasePaginada.total === 0 && (
                     <tr>
                       <td colSpan="5" className="table-empty-cell">No hay productos base con rentabilidad para este filtro.</td>
                     </tr>
@@ -608,6 +692,12 @@ export default function ReportesPage() {
                 </tbody>
               </table>
             </div>
+            <ReportsTablePagination
+              datos={rentabilidadPorBasePaginada}
+              pagina={paginaRentabilidadBase}
+              onChange={setPaginaRentabilidadBase}
+              etiqueta="bases"
+            />
           </article>
         </section>
       </section>
@@ -755,7 +845,7 @@ export default function ReportesPage() {
           </article>
         </section>
 
-        <section className="reports-grid-2">
+        <section className="reports-grid-1">
           <article className="card reports-table-card">
             <div className="reports-table-header">
               <div>
@@ -776,7 +866,7 @@ export default function ReportesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {clientesGlobales.map((fila) => (
+                  {clientesGlobalesPaginados.filas.map((fila) => (
                     <tr key={fila.clienteId}>
                       <td>{fila.cliente}</td>
                       <td>{money.format(fila.totalReparaciones || 0)}</td>
@@ -785,7 +875,7 @@ export default function ReportesPage() {
                       <td>{money.format(fila.saldoPendiente || 0)}</td>
                     </tr>
                   ))}
-                  {clientesGlobales.length === 0 && (
+                  {clientesGlobalesPaginados.total === 0 && (
                     <tr>
                       <td colSpan="5" className="table-empty-cell">No hay clientes para mostrar.</td>
                     </tr>
@@ -793,6 +883,12 @@ export default function ReportesPage() {
                 </tbody>
               </table>
             </div>
+            <ReportsTablePagination
+              datos={clientesGlobalesPaginados}
+              pagina={paginaClientesGlobales}
+              onChange={setPaginaClientesGlobales}
+              etiqueta="clientes"
+            />
           </article>
 
           <article className="card reports-table-card">
@@ -813,14 +909,14 @@ export default function ReportesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {(panelGlobal?.productosStockBajo || []).map((producto) => (
+                  {stockCriticoPaginado.filas.map((producto) => (
                     <tr key={producto.id}>
                       <td>{producto.nombre}</td>
                       <td>{producto.cantidadStock}</td>
                       <td>{producto.stockMinimo}</td>
                     </tr>
                   ))}
-                  {(panelGlobal?.productosStockBajo || []).length === 0 && (
+                  {stockCriticoPaginado.total === 0 && (
                     <tr>
                       <td colSpan="3" className="table-empty-cell">No hay productos criticos.</td>
                     </tr>
@@ -828,6 +924,12 @@ export default function ReportesPage() {
                 </tbody>
               </table>
             </div>
+            <ReportsTablePagination
+              datos={stockCriticoPaginado}
+              pagina={paginaStockCritico}
+              onChange={setPaginaStockCritico}
+              etiqueta="productos"
+            />
           </article>
         </section>
       </section>

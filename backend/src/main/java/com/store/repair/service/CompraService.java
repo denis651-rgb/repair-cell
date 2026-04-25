@@ -13,6 +13,7 @@ import com.store.repair.dto.CompraRegistroRequest;
 import com.store.repair.dto.LoteInventarioRequest;
 import com.store.repair.repository.CompraRepository;
 import com.store.repair.repository.EntradaContableRepository;
+import com.store.repair.repository.ProductoVarianteRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.Page;
@@ -37,6 +38,7 @@ public class CompraService {
     private final AccountingService accountingService;
     private final EntradaContableRepository entradaContableRepository;
     private final ComprobanteService comprobanteService;
+    private final ProductoVarianteRepository productoVarianteRepository;
 
     public Page<Compra> findPage(String busqueda, int pagina, int tamano) {
         return repositorio.search(
@@ -85,6 +87,8 @@ public class CompraService {
             double precioVentaSugerido = detalleSolicitud.getPrecioVentaUnitario() != null
                     ? detalleSolicitud.getPrecioVentaUnitario()
                     : (variante.getPrecioVentaSugerido() == null ? 0D : variante.getPrecioVentaSugerido());
+            variante.setPrecioVentaSugerido(precioVentaSugerido);
+            productoVarianteRepository.save(variante);
             double subtotal = detalleSolicitud.getCantidad() * detalleSolicitud.getPrecioCompraUnitario();
 
             LoteInventario lote = loteInventarioService.save(null, construirLoteRequest(
@@ -106,6 +110,7 @@ public class CompraService {
                     .calidad(variante.getCalidad())
                     .tipoPresentacion(variante.getTipoPresentacion())
                     .color(variante.getColor())
+                    .codigoProveedor(SanitizadorTexto.limpiar(detalleSolicitud.getCodigoProveedor()))
                     .codigoLote(lote.getCodigoLote())
                     .cantidad(detalleSolicitud.getCantidad())
                     .precioCompraUnitario(detalleSolicitud.getPrecioCompraUnitario())
@@ -134,14 +139,15 @@ public class CompraService {
             return List.of();
         }
 
-        Map<Long, CompraDetalleRegistroRequest> detallesConsolidados = new LinkedHashMap<>();
+        Map<String, CompraDetalleRegistroRequest> detallesConsolidados = new LinkedHashMap<>();
 
         for (CompraDetalleRegistroRequest detalle : detallesOriginales) {
             validarDetalleCompra(detalle);
-            CompraDetalleRegistroRequest existente = detallesConsolidados.get(detalle.getVarianteId());
+            String llave = construirLlaveDetalle(detalle);
+            CompraDetalleRegistroRequest existente = detallesConsolidados.get(llave);
 
             if (existente == null) {
-                detallesConsolidados.put(detalle.getVarianteId(), clonarDetalle(detalle));
+                detallesConsolidados.put(llave, clonarDetalle(detalle));
                 continue;
             }
 
@@ -185,10 +191,18 @@ public class CompraService {
         copia.setSku(SanitizadorTexto.limpiar(origen.getSku()));
         copia.setNombreProducto(SanitizadorTexto.limpiar(origen.getNombreProducto()));
         copia.setCalidad(SanitizadorTexto.limpiar(origen.getCalidad()));
+        copia.setCodigoProveedor(SanitizadorTexto.limpiar(origen.getCodigoProveedor()));
         copia.setCantidad(origen.getCantidad());
         copia.setPrecioCompraUnitario(origen.getPrecioCompraUnitario());
         copia.setPrecioVentaUnitario(origen.getPrecioVentaUnitario());
         return copia;
+    }
+
+    private String construirLlaveDetalle(CompraDetalleRegistroRequest detalle) {
+        return detalle.getVarianteId()
+                + "|" + SanitizadorTexto.limpiar(detalle.getCodigoProveedor())
+                + "|" + detalle.getPrecioCompraUnitario()
+                + "|" + detalle.getPrecioVentaUnitario();
     }
 
     private LoteInventarioRequest construirLoteRequest(
@@ -199,8 +213,9 @@ public class CompraService {
             int indiceLote) {
         LoteInventarioRequest request = new LoteInventarioRequest();
         request.setVarianteId(variante.getId());
+        request.setProveedorId(compra.getProveedor().getId());
         request.setCodigoLote(generarCodigoLote(compra, variante, indiceLote));
-        request.setCodigoProveedor(SanitizadorTexto.limpiar(compra.getProveedor().getNombreComercial()));
+        request.setCodigoProveedor(SanitizadorTexto.limpiar(detalleSolicitud.getCodigoProveedor()));
         request.setFechaIngreso(compra.getFechaCompra());
         request.setCantidadInicial(detalleSolicitud.getCantidad());
         request.setCantidadDisponible(detalleSolicitud.getCantidad());

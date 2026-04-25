@@ -9,6 +9,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -54,5 +55,26 @@ public class ProveedorService {
     public void delete(Long id) {
         findById(id);
         repository.deleteById(id);
+    }
+
+    public String construirPrefijoCodigoProveedor(Long proveedorId) {
+        Proveedor proveedor = findById(proveedorId);
+        String nombre = SanitizadorTexto.limpiar(proveedor.getNombreComercial());
+        if (nombre == null) {
+            throw new BusinessException("No se pudo generar el codigo del proveedor porque el nombre comercial es invalido.");
+        }
+
+        String normalizado = java.text.Normalizer.normalize(nombre, java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .replaceAll("[^A-Za-z0-9 ]+", " ")
+                .trim()
+                .toUpperCase(Locale.ROOT)
+                .replace(" ", "");
+
+        if (normalizado.isBlank()) {
+            throw new BusinessException("No se pudo generar el codigo del proveedor porque el nombre comercial es invalido.");
+        }
+
+        return normalizado.length() <= 4 ? normalizado : normalizado.substring(0, 4);
     }
 }

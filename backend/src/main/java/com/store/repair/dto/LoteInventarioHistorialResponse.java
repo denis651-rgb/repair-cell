@@ -23,6 +23,8 @@ public class LoteInventarioHistorialResponse {
     private String calidad;
     private String tipoPresentacion;
     private String color;
+    private Long proveedorId;
+    private String proveedorNombre;
     private String codigoLote;
     private String codigoProveedor;
     private LocalDate fechaIngreso;

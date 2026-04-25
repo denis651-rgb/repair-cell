@@ -54,6 +54,9 @@ public class CompraDetalle extends EntidadBase {
     @Column(name = "color")
     private String color;
 
+    @Column(name = "codigo_proveedor")
+    private String codigoProveedor;
+
     @Column(name = "codigo_lote")
     private String codigoLote;
 

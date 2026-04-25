@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Search } from 'lucide-react';
+import { Eye, Plus, Printer, Search } from 'lucide-react';
 import { api } from '../api/api';
 import EmptyState from '../components/common/EmptyState';
 import Modal from '../components/common/Modal';
@@ -15,6 +15,7 @@ const detalleInicial = {
   marcaId: '',
   productoBaseId: '',
   varianteId: '',
+  codigoProveedor: '',
   cantidad: 1,
   precioCompraUnitario: '',
   precioVentaUnitario: '',
@@ -39,6 +40,19 @@ const crearErrorVisualCompra = (titulo, error) => ({
   detalle: error?.message || 'No se pudo completar la operacion de compra.',
 });
 
+const getPurchasePaymentTone = (tipoPago) => (tipoPago === 'CREDITO' ? 'is-credit' : 'is-cash');
+
+const incrementarCodigoProveedor = (codigo) => {
+  const valor = String(codigo || '').trim();
+  if (!valor) return '';
+
+  const match = valor.match(/^(.*?)(\d+)$/);
+  if (!match) return valor;
+
+  const [, prefijo, correlativo] = match;
+  return `${prefijo}${String(Number(correlativo) + 1).padStart(correlativo.length, '0')}`;
+};
+
 export default function ComprasPage() {
   const [comprasPage, setComprasPage] = useState(paginaVacia);
   const [proveedores, setProveedores] = useState([]);
@@ -49,10 +63,12 @@ export default function ComprasPage() {
   const [busqueda, setBusqueda] = useState('');
   const [pagina, setPagina] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
+  const [modalDetalleCompraOpen, setModalDetalleCompraOpen] = useState(false);
   const [compraForm, setCompraForm] = useState(crearCompraInicial);
   const [detalleForm, setDetalleForm] = useState(detalleInicial);
   const [busquedaDetalle, setBusquedaDetalle] = useState('');
   const [detallesCompra, setDetallesCompra] = useState([]);
+  const [detalleCompraSeleccionada, setDetalleCompraSeleccionada] = useState(null);
   const [error, setError] = useState(null);
 
   const busquedaDebounced = useDebouncedValue(busqueda, 250);
@@ -180,6 +196,38 @@ export default function ComprasPage() {
     }));
   }, [varianteSeleccionada]);
 
+  useEffect(() => {
+    if (!compraForm.proveedorId) {
+      setDetalleForm((actual) => ({ ...actual, codigoProveedor: '' }));
+      return;
+    }
+
+    let cancelado = false;
+
+    const cargarCodigoProveedor = async () => {
+      try {
+        const respuesta = await api.get('/catalogo/lotes/sugerir-codigo-proveedor', {
+          proveedorId: Number(compraForm.proveedorId),
+        });
+        if (cancelado) return;
+        setDetalleForm((actual) => ({
+          ...actual,
+          codigoProveedor: respuesta?.codigo || '',
+        }));
+      } catch (err) {
+        if (!cancelado) {
+          setDetalleForm((actual) => ({ ...actual, codigoProveedor: '' }));
+        }
+      }
+    };
+
+    cargarCodigoProveedor();
+
+    return () => {
+      cancelado = true;
+    };
+  }, [compraForm.proveedorId]);
+
   const agregarDetalle = () => {
     if (!detalleForm.productoBaseId || !detalleForm.varianteId) {
       setError({
@@ -228,14 +276,18 @@ export default function ComprasPage() {
       calidad: varianteSeleccionada.calidad || '',
       tipoPresentacion: varianteSeleccionada.tipoPresentacion || '',
       codigoVariante: varianteSeleccionada.codigoVariante,
+      codigoProveedor: String(detalleForm.codigoProveedor || '').trim(),
       cantidad,
       precioCompraUnitario: costo,
       precioVentaUnitario: Number(detalleForm.precioVentaUnitario || 0),
     };
 
     setDetallesCompra((actual) => {
-      const indiceExistente = actual.findIndex(
-        (item) => String(item.varianteId) === String(detalle.varianteId),
+      const indiceExistente = actual.findIndex((item) =>
+        String(item.varianteId) === String(detalle.varianteId)
+        && String(item.codigoProveedor || '').trim() === String(detalle.codigoProveedor || '').trim()
+        && Number(item.precioCompraUnitario || 0) === Number(detalle.precioCompraUnitario || 0)
+        && Number(item.precioVentaUnitario || 0) === Number(detalle.precioVentaUnitario || 0),
       );
 
       if (indiceExistente === -1) {
@@ -257,6 +309,7 @@ export default function ComprasPage() {
       ...detalleInicial,
       categoriaId: actual.categoriaId,
       marcaId: actual.marcaId,
+      codigoProveedor: incrementarCodigoProveedor(detalle.codigoProveedor),
     }));
     setBusquedaDetalle('');
     setError(null);
@@ -284,6 +337,7 @@ export default function ComprasPage() {
         detalles: detallesCompra.map((detalle) => ({
           productoBaseId: detalle.productoBaseId,
           varianteId: detalle.varianteId,
+          codigoProveedor: detalle.codigoProveedor,
           cantidad: detalle.cantidad,
           precioCompraUnitario: detalle.precioCompraUnitario,
           precioVentaUnitario: detalle.precioVentaUnitario,
@@ -299,6 +353,16 @@ export default function ComprasPage() {
       setPagina(0);
     } catch (err) {
       setError(crearErrorVisualCompra('No se pudo guardar la compra.', err));
+    }
+  };
+
+  const abrirDetalleCompra = async (compra) => {
+    try {
+      const detalleCompra = await api.get(`/compras/${compra.id}`);
+      setDetalleCompraSeleccionada(detalleCompra);
+      setModalDetalleCompraOpen(true);
+    } catch (err) {
+      setError(crearErrorVisualCompra('No se pudo cargar el detalle de la compra.', err));
     }
   };
 
@@ -359,7 +423,11 @@ export default function ComprasPage() {
                       <strong>{compra.proveedor?.nombreComercial || 'Proveedor'}</strong>
                       <p>{compra.numeroComprobante || `Compra #${compra.id}`}</p>
                     </div>
-                    <span className="chip">{compra.tipoPago}</span>
+                    <div className="purchase-card-badges">
+                      <span className={`purchase-payment-pill ${getPurchasePaymentTone(compra.tipoPago)}`}>
+                        {compra.tipoPago}
+                      </span>
+                    </div>
                   </div>
                   <div className="purchase-card-grid">
                     <span>Fecha: {compra.fechaCompra}</span>
@@ -372,6 +440,17 @@ export default function ComprasPage() {
                         {detalle.sku || 'Sin variante'} · {detalle.nombreProducto} x{detalle.cantidad}
                       </span>
                     ))}
+                  </div>
+                  <div className="purchase-card-actions">
+                    <button
+                      type="button"
+                      className="secondary compact purchase-eye-button"
+                      title="Mostrar detalle de compra"
+                      aria-label="Mostrar detalle de compra"
+                      onClick={() => abrirDetalleCompra(compra)}
+                    >
+                      <Eye size={16} />
+                    </button>
                   </div>
                 </article>
               ))}
@@ -437,7 +516,7 @@ export default function ComprasPage() {
                 <h3>Detalle de la compra</h3>
                 <p>Cada fila usa producto base, variante, cantidad y costo unitario.</p>
                 <p className="purchase-helper-text">
-                  Si agregas la misma variante dos veces, el sistema consolida la fila y crea un solo lote por linea final.
+                  Solo se consolida si coinciden variante, codigo proveedor y costos. Si cambia el proveedor o el costo, se crea otro lote.
                 </p>
               </div>
               <span className="chip">{detallesCompra.length} items</span>
@@ -480,7 +559,7 @@ export default function ComprasPage() {
                   <option value="">Selecciona un producto base</option>
                   {productosBaseFiltrados.map((productoBase) => (
                     <option key={productoBase.id} value={productoBase.id}>
-                      {productoBase.codigoBase} - {productoBase.nombreBase} - {productoBase.modelo || 'Sin modelo'}
+                      {productoBase.nombreBase} - {productoBase.modelo || 'Sin modelo'}
                     </option>
                   ))}
                 </select>
@@ -491,10 +570,19 @@ export default function ComprasPage() {
                   <option value="">Selecciona una variante</option>
                   {variantesDisponibles.map((variante) => (
                     <option key={variante.id} value={variante.id}>
-                      {variante.codigoVariante} - {variante.calidad} - {variante.tipoPresentacion || 'Sin presentacion'}
+                      {variante.calidad || 'Sin calidad'}{variante.tipoPresentacion ? ` - ${variante.tipoPresentacion}` : ''} - Stock {variante.stockDisponibleTotal || 0}
                     </option>
                   ))}
                 </select>
+              </label>
+              <label>
+                <span>Codigo proveedor</span>
+                <input
+                  value={detalleForm.codigoProveedor}
+                  onChange={(event) => setDetalleForm((actual) => ({ ...actual, codigoProveedor: event.target.value }))}
+                  placeholder="Se genera automaticamente segun el proveedor"
+                  readOnly
+                />
               </label>
               <label>
                 <span>Precio de venta sugerido</span>
@@ -518,7 +606,7 @@ export default function ComprasPage() {
             </div>
 
             <div className="purchase-builder-actions">
-              <button type="button" className="secondary" onClick={agregarDetalle}>
+              <button type="button" className="purchase-add-item-button" onClick={agregarDetalle}>
                 Agregar item
               </button>
             </div>
@@ -532,6 +620,7 @@ export default function ComprasPage() {
                     <tr>
                       <th>Base / Variante</th>
                       <th>Marca</th>
+                      <th>Cod. proveedor</th>
                       <th>Cantidad</th>
                       <th>Costo</th>
                       <th>P. venta sugerido</th>
@@ -544,6 +633,7 @@ export default function ComprasPage() {
                       <tr key={`${detalle.varianteId}-${index}`}>
                         <td>{detalle.productoBaseCodigo} · {detalle.nombreProducto} · {detalle.codigoVariante}</td>
                         <td>{detalle.marca}</td>
+                        <td>{detalle.codigoProveedor || 'Sin codigo'}</td>
                         <td>{detalle.cantidad}</td>
                         <td>Bs {currency.format(detalle.precioCompraUnitario)}</td>
                         <td>Bs {currency.format(detalle.precioVentaUnitario)}</td>
@@ -574,6 +664,90 @@ export default function ComprasPage() {
             <button type="submit">Guardar compra</button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={modalDetalleCompraOpen}
+        onClose={() => setModalDetalleCompraOpen(false)}
+        title="Comprobante de compra"
+        subtitle="Detalle completo de la compra registrada."
+        size="xl"
+      >
+        {detalleCompraSeleccionada ? (
+          <div className="purchase-receipt-shell">
+            <div className="purchase-receipt-actions">
+              <button type="button" className="secondary compact" onClick={() => window.print()}>
+                <Printer size={16} />
+                Imprimir / PDF
+              </button>
+            </div>
+
+            <div className="purchase-receipt-card">
+              <div className="purchase-receipt-header">
+                <div>
+                  <span className="purchase-receipt-kicker">Comprobante de compra</span>
+                  <h3>{detalleCompraSeleccionada.numeroComprobante || `Compra #${detalleCompraSeleccionada.id}`}</h3>
+                  <p>Proveedor: {detalleCompraSeleccionada.proveedor?.nombreComercial || 'Proveedor no disponible'}</p>
+                </div>
+                <span className={`purchase-payment-pill ${getPurchasePaymentTone(detalleCompraSeleccionada.tipoPago)}`}>
+                  {detalleCompraSeleccionada.tipoPago || 'CONTADO'}
+                </span>
+              </div>
+
+              <div className="purchase-receipt-grid">
+                <article className="purchase-receipt-info">
+                  <span>Fecha de compra</span>
+                  <strong>{detalleCompraSeleccionada.fechaCompra || 'Sin fecha'}</strong>
+                  <p>Registro: {detalleCompraSeleccionada.fechaRegistro || 'No disponible'}</p>
+                </article>
+                <article className="purchase-receipt-info">
+                  <span>Observaciones</span>
+                  <strong>{detalleCompraSeleccionada.observaciones || 'Sin observaciones'}</strong>
+                </article>
+              </div>
+
+              <div className="purchase-receipt-table-wrap">
+                <table className="inventory-table">
+                  <thead>
+                    <tr>
+                      <th>Producto</th>
+                      <th>Variante</th>
+                      <th>Codigo proveedor</th>
+                      <th>Cantidad</th>
+                      <th>Costo unitario</th>
+                      <th>Subtotal</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(detalleCompraSeleccionada.detalles || []).map((detalle) => (
+                      <tr key={detalle.id || `${detalle.sku}-${detalle.cantidad}`}>
+                        <td>{detalle.nombreProducto || 'Sin producto'}</td>
+                        <td>
+                          {detalle.sku || 'Sin variante'}
+                          <div>{detalle.tipoPresentacion || 'Sin presentacion'}</div>
+                        </td>
+                        <td>{detalle.codigoProveedor || 'Sin codigo'}</td>
+                        <td>{detalle.cantidad}</td>
+                        <td>Bs {currency.format(Number(detalle.precioCompraUnitario || 0))}</td>
+                        <td>Bs {currency.format(Number(detalle.subtotal || 0))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="purchase-total-strip purchase-receipt-total">
+                <div>
+                  <strong>Total de compra</strong>
+                  <p>El total refleja la suma de todas las lineas registradas en esta compra.</p>
+                </div>
+                <span>Bs {currency.format(Number(detalleCompraSeleccionada.total || 0))}</span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <EmptyState title="Sin detalle disponible" description="Selecciona una compra valida para ver su comprobante." />
+        )}
       </Modal>
     </div>
   );

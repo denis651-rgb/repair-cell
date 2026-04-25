@@ -28,6 +28,10 @@ public class LoteInventario extends EntidadBase {
     @JoinColumn(name = "variante_id", nullable = false)
     private ProductoVariante variante;
 
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "proveedor_id")
+    private Proveedor proveedor;
+
     @NotBlank(message = "El codigo de lote es obligatorio")
     @Column(name = "codigo_lote", nullable = false, unique = true)
     private String codigoLote;

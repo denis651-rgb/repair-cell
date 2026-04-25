@@ -23,6 +23,8 @@ public class CompraDetalleRegistroRequest {
 
     private String calidad;
 
+    private String codigoProveedor;
+
     @NotNull(message = "La cantidad es obligatoria")
     @Min(value = 1, message = "La cantidad debe ser mayor a cero")
     private Integer cantidad;

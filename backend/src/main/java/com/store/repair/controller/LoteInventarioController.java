@@ -3,6 +3,7 @@ package com.store.repair.controller;
 import com.store.repair.domain.EstadoLoteInventario;
 import com.store.repair.domain.LoteInventario;
 import com.store.repair.dto.CerrarLoteManualRequest;
+import com.store.repair.dto.CodigoSugeridoResponse;
 import com.store.repair.dto.LoteInventarioHistorialResponse;
 import com.store.repair.dto.LoteInventarioRequest;
 import com.store.repair.service.LoteInventarioService;
@@ -35,6 +36,11 @@ public class LoteInventarioController {
     @GetMapping("/{id}")
     public LoteInventario findById(@PathVariable Long id) {
         return service.findById(id);
+    }
+
+    @GetMapping("/sugerir-codigo-proveedor")
+    public CodigoSugeridoResponse sugerirCodigoProveedor(@RequestParam Long proveedorId) {
+        return new CodigoSugeridoResponse(service.sugerirCodigoProveedor(proveedorId));
     }
 
     @GetMapping("/{id}/detalle")

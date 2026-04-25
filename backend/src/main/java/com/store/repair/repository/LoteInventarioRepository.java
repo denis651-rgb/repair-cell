@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface LoteInventarioRepository extends JpaRepository<LoteInventario, Long> {
 
@@ -16,10 +17,13 @@ public interface LoteInventarioRepository extends JpaRepository<LoteInventario, 
 
     boolean existsByVarianteId(Long varianteId);
 
+    Optional<LoteInventario> findTopByCodigoProveedorStartingWithOrderByCodigoProveedorDesc(String prefijoCodigo);
+
     @Query("""
             select li from LoteInventario li
             join li.variante v
             join v.productoBase pb
+            left join li.proveedor p
             left join pb.categoria c
             left join pb.marca m
             where (:varianteId is null or v.id = :varianteId)
@@ -37,6 +41,7 @@ public interface LoteInventarioRepository extends JpaRepository<LoteInventario, 
                    or lower(coalesce(pb.nombreBase, '')) like lower(concat('%', :busqueda, '%'))
                    or lower(coalesce(pb.modelo, '')) like lower(concat('%', :busqueda, '%'))
                    or lower(coalesce(v.calidad, '')) like lower(concat('%', :busqueda, '%'))
+                   or lower(coalesce(p.nombreComercial, '')) like lower(concat('%', :busqueda, '%'))
                    or lower(coalesce(m.nombre, '')) like lower(concat('%', :busqueda, '%'))
                    or lower(coalesce(c.nombre, '')) like lower(concat('%', :busqueda, '%')))
             order by li.fechaIngreso desc, li.id desc
@@ -59,6 +64,19 @@ public interface LoteInventarioRepository extends JpaRepository<LoteInventario, 
               and coalesce(li.cantidadDisponible, 0) > 0
             """)
     Integer sumStockDisponibleActivoByVarianteId(@Param("varianteId") Long varianteId);
+
+    @Query("""
+            select coalesce(sum(coalesce(li.cantidadDisponible, 0)), 0)
+            from LoteInventario li
+            where li.variante.id = :varianteId
+              and li.proveedor.id = :proveedorId
+              and li.activo = true
+              and li.estado = com.store.repair.domain.EstadoLoteInventario.ACTIVO
+              and coalesce(li.cantidadDisponible, 0) > 0
+            """)
+    Integer sumStockDisponibleActivoByVarianteIdAndProveedorId(
+            @Param("varianteId") Long varianteId,
+            @Param("proveedorId") Long proveedorId);
 
     @Query("""
             select count(li)
