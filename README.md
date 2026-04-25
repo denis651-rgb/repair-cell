@@ -144,6 +144,19 @@ resources/runtime/bin/java.exe
 
 Si luego quieres evitar instalar Java en cada PC, el siguiente paso es empaquetar un JRE dentro del instalador.
 
+## Backups locales en desktop
+
+En producciÃ³n, la aplicaciÃ³n usa por defecto una carpeta propia del sistema para los respaldos locales:
+
+```text
+C:\Users\<usuario>\.taller-celular\backups
+```
+
+Notas:
+- Si `APP_BACKUP_DIRECTORY` estÃ¡ definido, esa ruta tiene prioridad.
+- Si desde la UI se ingresa una ruta relativa como `./backups`, el backend la normaliza automÃ¡ticamente a la carpeta segura de la app en desktop.
+- Los respaldos se generan como `.zip` por defecto cuando `zipEnabled=true`.
+
 ## Endpoints principales
 
 ### Clientes

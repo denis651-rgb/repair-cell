@@ -260,6 +260,11 @@ CREATE TABLE IF NOT EXISTS backup_settings (
     google_drive_enabled INTEGER NOT NULL DEFAULT 0,
     google_drive_folder_id TEXT,
     google_service_account_key_path TEXT,
+    google_drive_folder_name TEXT,
+    google_oauth_client_id TEXT,
+    google_oauth_client_secret TEXT,
+    google_oauth_refresh_token TEXT,
+    google_oauth_connected_at TEXT,
     last_automatic_backup_at TEXT,
     creado_en TEXT,
     actualizado_en TEXT
