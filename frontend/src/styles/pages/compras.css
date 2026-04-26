@@ -354,6 +354,7 @@
 
 :root[data-theme='dark'] .purchase-card-header strong,
 :root[data-theme='dark'] .purchase-builder-header h3,
+:root[data-theme='dark'] .purchase-receipt-header h3,
 :root[data-theme='dark'] .purchase-total-strip span,
 :root[data-theme='dark'] .purchase-receipt-total span {
   color: var(--text);
@@ -368,9 +369,58 @@
 :root[data-theme='dark'] .purchase-helper-text,
 :root[data-theme='dark'] .purchase-card-header p,
 :root[data-theme='dark'] .purchase-builder-header p,
+:root[data-theme='dark'] .purchase-receipt-header p,
 :root[data-theme='dark'] .purchase-total-strip p,
 :root[data-theme='dark'] .purchase-card-grid {
   color: var(--muted);
+}
+
+:root[data-theme='dark'] .purchase-receipt-card {
+  background: linear-gradient(180deg, rgba(17, 24, 39, 0.98), rgba(15, 23, 42, 0.98));
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+:root[data-theme='dark'] .purchase-receipt-kicker,
+:root[data-theme='dark'] .purchase-receipt-info span {
+  color: #9fb1c9;
+}
+
+:root[data-theme='dark'] .purchase-receipt-info {
+  background: rgba(30, 41, 59, 0.72);
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+:root[data-theme='dark'] .purchase-receipt-info strong {
+  color: #f8fafc;
+}
+
+:root[data-theme='dark'] .purchase-receipt-info p,
+:root[data-theme='dark'] .purchase-receipt-table-wrap td div {
+  color: #a8b6c9;
+}
+
+:root[data-theme='dark'] .purchase-receipt-table-wrap table {
+  border-collapse: collapse;
+}
+
+:root[data-theme='dark'] .purchase-receipt-table-wrap th {
+  color: #cbd5e1;
+  background: rgba(15, 23, 42, 0.72);
+  border-color: rgba(148, 163, 184, 0.14);
+}
+
+:root[data-theme='dark'] .purchase-receipt-table-wrap td {
+  color: #e5eef8;
+  border-color: rgba(148, 163, 184, 0.12);
+}
+
+:root[data-theme='dark'] .purchase-receipt-table-wrap tbody tr:hover {
+  background: rgba(30, 41, 59, 0.5);
+}
+
+:root[data-theme='dark'] .purchase-receipt-actions .secondary {
+  background: rgba(37, 99, 235, 0.24);
+  color: #dbeafe;
 }
 
 :root[data-theme='dark'] .purchase-payment-pill.is-cash {
@@ -409,4 +459,33 @@
 :root[data-theme='dark'] .purchase-payment-field select option {
   color: #e5eefc;
   background: #111827;
+}
+
+@media print {
+  :root[data-theme='dark'] .purchase-receipt-card,
+  :root[data-theme='dark'] .purchase-receipt-info,
+  :root[data-theme='dark'] .purchase-total-strip {
+    background: #ffffff;
+    color: #0f172a;
+    box-shadow: none;
+  }
+
+  :root[data-theme='dark'] .purchase-receipt-header h3,
+  :root[data-theme='dark'] .purchase-receipt-info strong,
+  :root[data-theme='dark'] .purchase-receipt-total span,
+  :root[data-theme='dark'] .purchase-receipt-table-wrap td {
+    color: #0f172a;
+  }
+
+  :root[data-theme='dark'] .purchase-receipt-header p,
+  :root[data-theme='dark'] .purchase-receipt-info p,
+  :root[data-theme='dark'] .purchase-receipt-table-wrap td div {
+    color: #475569;
+  }
+
+  :root[data-theme='dark'] .purchase-receipt-kicker,
+  :root[data-theme='dark'] .purchase-receipt-info span,
+  :root[data-theme='dark'] .purchase-receipt-table-wrap th {
+    color: #64748b;
+  }
 }
