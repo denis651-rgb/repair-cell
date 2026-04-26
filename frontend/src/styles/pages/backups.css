@@ -384,8 +384,9 @@
 .backups-form-meta > div {
   padding: 14px 16px;
   border-radius: 18px;
-  background: #f8faf9;
-  border: 1px solid rgba(217, 226, 221, 0.92);
+  background: linear-gradient(180deg, rgba(248, 250, 249, 0.98), rgba(243, 247, 245, 0.96));
+  border: 1px solid rgba(217, 226, 221, 0.88);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
 .backups-record-card {
@@ -422,7 +423,9 @@
 .backups-record-grid > div {
   padding: 12px 14px;
   border-radius: 16px;
-  background: #f8faf9;
+  background: linear-gradient(180deg, rgba(248, 250, 249, 0.98), rgba(243, 247, 245, 0.96));
+  border: 1px solid rgba(217, 226, 221, 0.82);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
 .backups-record-meta {
@@ -558,4 +561,117 @@
   .backups-pagination-row {
     flex-wrap: wrap;
   }
+}
+
+:root[data-theme='dark'] .backups-toast {
+  background: rgba(15, 23, 42, 0.96);
+  border-color: rgba(148, 163, 184, 0.16);
+  color: var(--text);
+  box-shadow: 0 22px 48px rgba(2, 6, 23, 0.42);
+}
+
+:root[data-theme='dark'] .backups-toast.is-success,
+:root[data-theme='dark'] .backups-success-banner {
+  background: rgba(20, 83, 45, 0.34);
+  border-color: rgba(34, 197, 94, 0.2);
+  color: #bbf7d0;
+}
+
+:root[data-theme='dark'] .backups-toast.is-error {
+  background: rgba(127, 29, 29, 0.34);
+  border-color: rgba(248, 113, 113, 0.2);
+  color: #fecaca;
+}
+
+:root[data-theme='dark'] .backups-toast button {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+:root[data-theme='dark'] .backups-toast button:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+:root[data-theme='dark'] .backups-hero-card,
+:root[data-theme='dark'] .backups-kpi-card,
+:root[data-theme='dark'] .backups-panel,
+:root[data-theme='dark'] .backups-summary-item,
+:root[data-theme='dark'] .backups-drive-item,
+:root[data-theme='dark'] .backups-record-card,
+:root[data-theme='dark'] .backups-toggle-card,
+:root[data-theme='dark'] .backups-drive-note {
+  background: linear-gradient(180deg, rgba(17, 24, 39, 0.96), rgba(15, 23, 42, 0.96));
+  border-color: rgba(148, 163, 184, 0.14);
+  box-shadow: 0 18px 40px rgba(2, 6, 23, 0.3);
+}
+
+:root[data-theme='dark'] .backups-hero-card {
+  background:
+    radial-gradient(circle at top right, rgba(47, 125, 87, 0.14), transparent 30%),
+    linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(17, 24, 39, 0.96));
+}
+
+:root[data-theme='dark'] .backups-kicker {
+  color: #5eead4;
+}
+
+:root[data-theme='dark'] .backups-hero-copy h2,
+:root[data-theme='dark'] .backups-kpi-value,
+:root[data-theme='dark'] .backups-panel-header h3,
+:root[data-theme='dark'] .backups-record-top strong,
+:root[data-theme='dark'] .backups-summary-item strong,
+:root[data-theme='dark'] .backups-drive-item strong,
+:root[data-theme='dark'] .backups-record-grid strong,
+:root[data-theme='dark'] .backups-form-meta strong,
+:root[data-theme='dark'] .backups-record-meta p strong,
+:root[data-theme='dark'] .backups-drive-note strong {
+  color: var(--text);
+}
+
+:root[data-theme='dark'] .backups-hero-copy p,
+:root[data-theme='dark'] .backups-kpi-label,
+:root[data-theme='dark'] .backups-kpi-card p,
+:root[data-theme='dark'] .backups-panel-header p,
+:root[data-theme='dark'] .backups-record-top p,
+:root[data-theme='dark'] .backups-summary-item span,
+:root[data-theme='dark'] .backups-drive-item span,
+:root[data-theme='dark'] .backups-record-grid span,
+:root[data-theme='dark'] .backups-form-meta span,
+:root[data-theme='dark'] .backups-record-meta p,
+:root[data-theme='dark'] .backups-drive-note p {
+  color: var(--text-secondary);
+}
+
+:root[data-theme='dark'] .backups-hero-badge.is-ready,
+:root[data-theme='dark'] .backups-drive-item.is-ready {
+  background: rgba(20, 83, 45, 0.32);
+  color: #bbf7d0;
+  border-color: rgba(34, 197, 94, 0.18);
+}
+
+:root[data-theme='dark'] .backups-hero-badge.is-pending,
+:root[data-theme='dark'] .backups-drive-item.is-missing {
+  background: rgba(120, 53, 15, 0.3);
+  color: #fcd34d;
+  border-color: rgba(245, 158, 11, 0.18);
+}
+
+:root[data-theme='dark'] .backups-kpi-card-accent {
+  background: linear-gradient(180deg, rgba(6, 78, 59, 0.28), rgba(15, 23, 42, 0.96));
+}
+
+:root[data-theme='dark'] .backups-form-meta > div,
+:root[data-theme='dark'] .backups-record-grid > div {
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.9), rgba(17, 24, 39, 0.94));
+  border-color: rgba(148, 163, 184, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+:root[data-theme='dark'] .icon-success {
+  background: rgba(20, 83, 45, 0.34);
+  color: #bbf7d0;
+}
+
+:root[data-theme='dark'] .icon-info {
+  background: rgba(30, 64, 175, 0.34);
+  color: #bfdbfe;
 }

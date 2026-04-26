@@ -86,6 +86,7 @@ CREATE TABLE IF NOT EXISTS productos_variantes (
     tipo_presentacion TEXT,
     color TEXT,
     precio_venta_sugerido REAL NOT NULL DEFAULT 0,
+    stock_minimo INTEGER NOT NULL DEFAULT 0,
     activo INTEGER NOT NULL DEFAULT 1,
     creado_en TEXT NOT NULL,
     actualizado_en TEXT NOT NULL,
@@ -224,7 +225,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
     username TEXT NOT NULL UNIQUE,
     password TEXT NOT NULL,
     nombre TEXT NOT NULL,
-    rol TEXT NOT NULL,
+    rol TEXT NOT NULL CHECK (rol in ('ADMIN','TIENDA','TECNICO','CAJERO')),
     activo INTEGER NOT NULL DEFAULT 1,
     creado_en TEXT NOT NULL,
     actualizado_en TEXT NOT NULL
@@ -424,6 +425,7 @@ CREATE INDEX IF NOT EXISTS idx_productos_base_compat_modelo ON productos_base_co
 CREATE INDEX IF NOT EXISTS idx_productos_base_compat_marca ON productos_base_compatibilidades(marca_compatible);
 CREATE INDEX IF NOT EXISTS idx_productos_variantes_producto_base ON productos_variantes(producto_base_id);
 CREATE INDEX IF NOT EXISTS idx_productos_variantes_calidad ON productos_variantes(calidad);
+CREATE INDEX IF NOT EXISTS idx_productos_variantes_stock_minimo ON productos_variantes(stock_minimo);
 CREATE INDEX IF NOT EXISTS idx_lotes_variante ON lotes_inventario(variante_id);
 CREATE INDEX IF NOT EXISTS idx_lotes_proveedor ON lotes_inventario(proveedor_id);
 CREATE INDEX IF NOT EXISTS idx_lotes_estado ON lotes_inventario(estado);

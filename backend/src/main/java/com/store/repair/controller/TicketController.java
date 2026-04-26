@@ -7,6 +7,7 @@ import com.store.repair.service.OrdenReparacionService;
 import com.store.repair.util.OrdenMontoUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,6 +22,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/api/tickets")
 @RequiredArgsConstructor
+@PreAuthorize("hasAuthority('PERM_REPARACIONES_VIEW')")
 public class TicketController {
 
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");

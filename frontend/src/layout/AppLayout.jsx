@@ -10,48 +10,52 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  Moon,
   Package,
   Plus,
   Search,
   ShoppingCart,
   Smartphone,
   Sparkles,
+  Sun,
   Truck,
   Users,
   Wrench,
   X,
 } from 'lucide-react';
 import yiyoTecMark from '../assets/yiyo-tec-mark.svg';
+import { useTheme } from '../context/ThemeContext';
+import { clearStoredSession, getCurrentUser, hasPermission } from '../utils/permissions';
 
 const navSections = [
   {
     id: 'operacion',
     label: 'Operacion',
     items: [
-      { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-      { to: '/clientes', label: 'Clientes', icon: Users },
-      { to: '/dispositivos', label: 'Dispositivos', icon: Smartphone },
-      { to: '/reparaciones', label: 'Ordenes', icon: Wrench },
+      { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, permission: 'DASHBOARD_VIEW' },
+      { to: '/clientes', label: 'Clientes', icon: Users, permission: 'CLIENTES_VIEW' },
+      { to: '/dispositivos', label: 'Dispositivos', icon: Smartphone, permission: 'DISPOSITIVOS_VIEW' },
+      { to: '/reparaciones', label: 'Ordenes', icon: Wrench, permission: 'REPARACIONES_VIEW' },
     ],
   },
   {
     id: 'comercial',
     label: 'Comercial',
     items: [
-      { to: '/inventario', label: 'Inventario', icon: Package },
-      { to: '/proveedores', label: 'Proveedores', icon: Truck },
-      { to: '/compras', label: 'Compras', icon: ShoppingCart },
-      { to: '/ventas', label: 'Ventas', icon: BadgeDollarSign },
-      { to: '/cuentas-por-cobrar', label: 'Cuentas por cobrar', icon: HandCoins },
+      { to: '/inventario', label: 'Inventario', icon: Package, permission: 'INVENTARIO_VIEW' },
+      { to: '/proveedores', label: 'Proveedores', icon: Truck, permission: 'PROVEEDORES_VIEW' },
+      { to: '/compras', label: 'Compras', icon: ShoppingCart, permission: 'COMPRAS_VIEW' },
+      { to: '/ventas', label: 'Ventas', icon: BadgeDollarSign, permission: 'VENTAS_VIEW' },
+      { to: '/cuentas-por-cobrar', label: 'Cuentas por cobrar', icon: HandCoins, permission: 'CUENTAS_POR_COBRAR_VIEW' },
     ],
   },
   {
     id: 'finanzas',
     label: 'Finanzas y control',
     items: [
-      { to: '/contabilidad', label: 'Contabilidad', icon: Calculator },
-      { to: '/reportes', label: 'Reportes', icon: BarChart3 },
-      { to: '/respaldos', label: 'Respaldos', icon: DatabaseBackup },
+      { to: '/contabilidad', label: 'Contabilidad', icon: Calculator, permission: 'CONTABILIDAD_VIEW' },
+      { to: '/reportes', label: 'Reportes', icon: BarChart3, permission: 'REPORTES_VIEW' },
+      { to: '/respaldos', label: 'Respaldos', icon: DatabaseBackup, permission: 'BACKUPS_VIEW' },
     ],
   },
 ];
@@ -67,8 +71,21 @@ export default function AppLayout() {
   const [seccionesAbiertas, setSeccionesAbiertas] = useState(initialSections);
   const location = useLocation();
   const navigate = useNavigate();
+  const { theme, isDark, toggleTheme } = useTheme();
+  const currentUser = getCurrentUser();
+  const visibleSections = useMemo(() => navSections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => !item.permission || hasPermission(currentUser, item.permission)),
+    }))
+    .filter((section) => section.items.length > 0), [currentUser]);
 
   const pageMeta = useMemo(() => {
+    const canViewDashboard = hasPermission(currentUser, 'DASHBOARD_VIEW');
+    const canViewAccounting = hasPermission(currentUser, 'CONTABILIDAD_VIEW');
+    const canViewReports = hasPermission(currentUser, 'REPORTES_VIEW');
+    const canViewBackups = hasPermission(currentUser, 'BACKUPS_VIEW');
+
     if (location.pathname.includes('/clientes')) {
       return {
         placeholder: 'Buscar clientes o telefonos',
@@ -125,21 +142,21 @@ export default function AppLayout() {
         description: 'Seguimiento de creditos, abonos y saldos pendientes.',
       };
     }
-    if (location.pathname.includes('/contabilidad')) {
+    if (location.pathname.includes('/contabilidad') && canViewAccounting) {
       return {
         placeholder: 'Buscar movimientos, categorias o modulos',
         title: 'Contabilidad',
         description: 'Caja diaria y movimientos automaticos por modulo.',
       };
     }
-    if (location.pathname.includes('/reportes')) {
+    if (location.pathname.includes('/reportes') && canViewReports) {
       return {
         placeholder: 'Buscar metricas, rangos o resultados',
         title: 'Reportes',
         description: 'Lectura gerencial y tecnica del desempeño del taller.',
       };
     }
-    if (location.pathname.includes('/respaldos')) {
+    if (location.pathname.includes('/respaldos') && canViewBackups) {
       return {
         placeholder: 'Buscar respaldos, carpetas o estados',
         title: 'Respaldos',
@@ -148,10 +165,12 @@ export default function AppLayout() {
     }
     return {
       placeholder: 'Buscar en el sistema',
-      title: 'Dashboard',
-      description: 'Resumen institucional del negocio y su operacion.',
+      title: canViewDashboard ? 'Dashboard' : 'Panel operativo',
+      description: canViewDashboard
+        ? 'Resumen institucional del negocio y su operacion.'
+        : 'Vista de trabajo filtrada segun los permisos del usuario actual.',
     };
-  }, [location.pathname]);
+  }, [currentUser, location.pathname]);
 
   const enviarBusqueda = (event) => {
     event.preventDefault();
@@ -161,8 +180,7 @@ export default function AppLayout() {
   };
 
   const cerrarSesion = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    clearStoredSession();
     setMenuOpen(false);
     navigate('/login', { replace: true });
   };
@@ -198,7 +216,7 @@ export default function AppLayout() {
         <div className="sidebar-section-label">Navegacion por modulos</div>
 
         <nav className="module-nav">
-          {navSections.map((section) => {
+          {visibleSections.map((section) => {
             const activa = section.items.some((item) => location.pathname.startsWith(item.to));
             const abierta = seccionesAbiertas[section.id];
 
@@ -284,6 +302,22 @@ export default function AppLayout() {
           </div>
 
           <div className="top-bar-actions">
+            <button
+              type="button"
+              className={`theme-toggle ${isDark ? 'is-dark' : 'is-light'}`}
+              onClick={toggleTheme}
+              aria-label={isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+              aria-pressed={isDark}
+              title={isDark ? 'Modo oscuro activo' : 'Modo claro activo'}
+            >
+              <span className="theme-toggle-thumb" aria-hidden="true" />
+              <span className={`theme-toggle-option ${theme === 'light' ? 'is-active' : ''}`} aria-hidden="true">
+                <Sun size={15} />
+              </span>
+              <span className={`theme-toggle-option ${theme === 'dark' ? 'is-active' : ''}`} aria-hidden="true">
+                <Moon size={15} />
+              </span>
+            </button>
             <button type="button" className="topbar-logout-button icon-only" onClick={cerrarSesion} aria-label="Cerrar sesion" title="Cerrar sesion">
               <LogOut size={16} />
             </button>

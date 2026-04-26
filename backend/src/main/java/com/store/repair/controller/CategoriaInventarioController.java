@@ -4,6 +4,7 @@ import com.store.repair.domain.CategoriaInventario;
 import com.store.repair.service.CategoriaInventarioService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -11,6 +12,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/inventario/categorias")
 @RequiredArgsConstructor
+@PreAuthorize("hasAuthority('PERM_INVENTARIO_VIEW')")
 public class CategoriaInventarioController {
 
     private final CategoriaInventarioService service;

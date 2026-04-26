@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
+import PermissionRoute from './components/auth/PermissionRoute';
 import AppLayout from './layout/AppLayout';
 import DashboardPage from './pages/DashboardPage';
 import CustomersPage from './pages/CustomersPage';
@@ -15,23 +16,23 @@ import ReportesPage from './pages/ReportesPage';
 import BackupsPage from './pages/BackupsPage';
 
 import LoginPage from './pages/LoginPage';
+import { clearStoredSession, getCurrentUser, getDefaultRouteForUser } from './utils/permissions';
 
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem('token');
-  let user = {};
-  try {
-    user = JSON.parse(localStorage.getItem('user') || '{}');
-  } catch {
-    user = {};
-  }
+  const user = getCurrentUser();
 
-  if (!token || user?.rol !== 'ADMIN') {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+  if (!token || !user?.username || !user?.rol) {
+    clearStoredSession();
     return <Navigate to="/login" replace />;
   }
 
   return children;
+}
+
+function HomeRedirect() {
+  const user = getCurrentUser();
+  return <Navigate to={getDefaultRouteForUser(user)} replace />;
 }
 
 export default function App() {
@@ -39,8 +40,8 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-        <Route index element={<Navigate to="/dashboard" replace />} />
-        <Route path="dashboard" element={<DashboardPage />} />
+        <Route index element={<HomeRedirect />} />
+        <Route path="dashboard" element={<PermissionRoute permission="DASHBOARD_VIEW"><DashboardPage /></PermissionRoute>} />
         <Route path="clientes" element={<CustomersPage />} />
         <Route path="dispositivos" element={<DevicesPage />} />
         <Route path="reparaciones" element={<RepairOrdersPage />} />
@@ -50,9 +51,9 @@ export default function App() {
         <Route path="compras" element={<ComprasPage />} />
         <Route path="ventas" element={<VentasPage />} />
         <Route path="cuentas-por-cobrar" element={<CuentasPorCobrarPage />} />
-        <Route path="contabilidad" element={<AccountingPage />} />
-        <Route path="reportes" element={<ReportesPage />} />
-        <Route path="respaldos" element={<BackupsPage />} />
+        <Route path="contabilidad" element={<PermissionRoute permission="CONTABILIDAD_VIEW"><AccountingPage /></PermissionRoute>} />
+        <Route path="reportes" element={<PermissionRoute permission="REPORTES_VIEW"><ReportesPage /></PermissionRoute>} />
+        <Route path="respaldos" element={<PermissionRoute permission="BACKUPS_VIEW"><BackupsPage /></PermissionRoute>} />
       </Route>
     </Routes>
   );

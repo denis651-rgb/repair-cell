@@ -11,6 +11,7 @@ import com.store.repair.repository.LoteInventarioRepository;
 import com.store.repair.repository.ProductoVarianteRepository;
 import com.store.repair.repository.ProveedorRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -74,6 +75,13 @@ public class ProductoVarianteService {
     }
 
     @Transactional
+    @CacheEvict(value = {
+            "reportes_resumen",
+            "reportes_panel",
+            "reportes_resumen_global",
+            "reportes_panel_global",
+            "reportes_clientes_global"
+    }, allEntries = true)
     public ProductoVariante save(Long id, ProductoVarianteRequest request) {
         ProductoBase productoBase = productoBaseService.findById(request.getProductoBaseId());
         String calidad = validarTextoObligatorio(request.getCalidad(), "La calidad es obligatoria");
@@ -84,6 +92,9 @@ public class ProductoVarianteService {
 
         if (request.getPrecioVentaSugerido() == null || request.getPrecioVentaSugerido() < 0) {
             throw new BusinessException("El precio sugerido de la variante no puede ser negativo.");
+        }
+        if (request.getStockMinimo() != null && request.getStockMinimo() < 0) {
+            throw new BusinessException("El stock minimo de la variante no puede ser negativo.");
         }
 
         if (id == null) {
@@ -99,6 +110,7 @@ public class ProductoVarianteService {
             Long marcaId,
             String modelo,
             String calidad,
+            boolean soloStockBajo,
             boolean soloConStock,
             int pagina,
             int tamano) {
@@ -112,16 +124,52 @@ public class ProductoVarianteService {
                         true)
                 .stream()
                 .peek(this::aplicarResumenLotes)
-                .filter(variante -> !soloConStock
-                        || (variante.getStockDisponibleTotal() == null ? 0 : variante.getStockDisponibleTotal()) > 0)
                 .map(this::toInventarioOperativoResponse)
+                .filter(response -> !soloConStock
+                        || soloStockBajo
+                        || (response.getStockDisponibleTotal() == null ? 0 : response.getStockDisponibleTotal()) > 0)
+                .filter(response -> !soloStockBajo || Boolean.TRUE.equals(response.getStockBajo()))
                 .sorted(Comparator
-                        .comparing(InventarioOperativoVarianteResponse::getMarcaNombre, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
+                        .comparing(
+                                (InventarioOperativoVarianteResponse item) -> !Boolean.TRUE.equals(item.getStockBajo()))
+                        .thenComparing(
+                                item -> item.getFaltanteReposicion() == null ? 0 : item.getFaltanteReposicion(),
+                                Comparator.reverseOrder())
+                        .thenComparing(InventarioOperativoVarianteResponse::getMarcaNombre, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
                         .thenComparing(InventarioOperativoVarianteResponse::getModelo, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
                         .thenComparing(InventarioOperativoVarianteResponse::getCalidad, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
                         .thenComparing(InventarioOperativoVarianteResponse::getCodigoVariante, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
                 .toList();
         return paginar(resultados, pagina, tamano);
+    }
+
+    public List<InventarioOperativoVarianteResponse> findInventarioOperativoStockBajo(
+            String busqueda,
+            Long categoriaId,
+            Long marcaId,
+            String modelo,
+            String calidad) {
+        return repository.search(
+                        busqueda == null ? "" : busqueda.trim(),
+                        null,
+                        categoriaId,
+                        marcaId,
+                        modelo == null ? "" : modelo.trim(),
+                        calidad == null ? "" : calidad.trim(),
+                        true)
+                .stream()
+                .peek(this::aplicarResumenLotes)
+                .map(this::toInventarioOperativoResponse)
+                .filter(response -> Boolean.TRUE.equals(response.getStockBajo()))
+                .sorted(Comparator
+                        .comparing(
+                                (InventarioOperativoVarianteResponse item) -> item.getFaltanteReposicion() == null ? 0 : item.getFaltanteReposicion(),
+                                Comparator.reverseOrder())
+                        .thenComparing(InventarioOperativoVarianteResponse::getMarcaNombre, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
+                        .thenComparing(InventarioOperativoVarianteResponse::getModelo, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
+                        .thenComparing(InventarioOperativoVarianteResponse::getCalidad, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
+                        .thenComparing(InventarioOperativoVarianteResponse::getCodigoVariante, Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
+                .toList();
     }
 
     public InventarioOperativoVarianteResponse findInventarioOperativoById(Long varianteId) {
@@ -211,6 +259,7 @@ public class ProductoVarianteService {
         destino.setTipoPresentacion(tipoPresentacion);
         destino.setColor(SanitizadorTexto.limpiar(request.getColor()));
         destino.setPrecioVentaSugerido(request.getPrecioVentaSugerido());
+        destino.setStockMinimo(request.getStockMinimo() == null ? 0 : request.getStockMinimo());
         destino.setActivo(request.getActivo() == null ? Boolean.TRUE : request.getActivo());
     }
 
@@ -304,6 +353,10 @@ public class ProductoVarianteService {
                 "",
                 EstadoLoteInventario.ACTIVO,
                 true);
+        int stockDisponibleTotal = variante.getStockDisponibleTotal() == null ? 0 : variante.getStockDisponibleTotal();
+        int stockMinimo = variante.getStockMinimo() == null ? 0 : variante.getStockMinimo();
+        boolean stockBajo = stockMinimo > 0 && stockDisponibleTotal <= stockMinimo;
+        int faltanteReposicion = stockBajo ? Math.max(stockMinimo - stockDisponibleTotal, 0) : 0;
 
         return InventarioOperativoVarianteResponse.builder()
                 .varianteId(variante.getId())
@@ -322,7 +375,10 @@ public class ProductoVarianteService {
                 .tipoPresentacion(variante.getTipoPresentacion())
                 .color(variante.getColor())
                 .precioVentaSugerido(variante.getPrecioVentaSugerido())
-                .stockDisponibleTotal(variante.getStockDisponibleTotal() == null ? 0 : variante.getStockDisponibleTotal())
+                .stockMinimo(stockMinimo)
+                .stockDisponibleTotal(stockDisponibleTotal)
+                .stockBajo(stockBajo)
+                .faltanteReposicion(faltanteReposicion)
                 .lotesActivos(variante.getLotesActivos() == null ? 0 : variante.getLotesActivos())
                 .lotesOperativos(lotesOperativos.stream().map(lote -> LoteInventarioServiceStatic.toHistorialResponse(lote)).toList())
                 .build();

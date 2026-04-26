@@ -5,6 +5,7 @@ import com.store.repair.service.DispositivoService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -12,6 +13,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/dispositivos")
 @RequiredArgsConstructor
+@PreAuthorize("hasAuthority('PERM_DISPOSITIVOS_VIEW')")
 public class DispositivoController {
 
     private final DispositivoService service;

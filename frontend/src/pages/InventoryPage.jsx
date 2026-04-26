@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { X } from 'lucide-react';
 import { api } from '../api/api';
 import Modal from '../components/common/Modal';
 import CatalogoBaseManager from '../components/inventory/CatalogoBaseManager';
@@ -21,11 +22,26 @@ export default function InventoryPage() {
   const [marcaForm, setMarcaForm] = useState(marcaInicial);
   const [categoriaEditando, setCategoriaEditando] = useState(null);
   const [marcaEditando, setMarcaEditando] = useState(null);
-  const [error, setError] = useState(null);
+  const [notifications, setNotifications] = useState([]);
+
+  const pushNotification = (type, title, detail, options = {}) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const duration = options.duration ?? (type === 'error' ? 7000 : 5000);
+    setNotifications((current) => [...current, { id, type, title, detail }]);
+
+    if (duration > 0) {
+      window.setTimeout(() => {
+        setNotifications((current) => current.filter((item) => item.id !== id));
+      }, duration);
+    }
+  };
+
+  const removeNotification = (id) => {
+    setNotifications((current) => current.filter((item) => item.id !== id));
+  };
 
   const cargarResumen = async () => {
     try {
-      setError(null);
       const [listaCategorias, listaMarcas] = await Promise.all([
         api.get('/inventario/categorias'),
         api.get('/inventario/marcas'),
@@ -33,7 +49,8 @@ export default function InventoryPage() {
       setCategorias(listaCategorias || []);
       setMarcas(listaMarcas || []);
     } catch (err) {
-      setError(crearErrorVisual('No se pudo cargar el resumen de inventario.', err));
+      const errorVisual = crearErrorVisual('No se pudo cargar el resumen de inventario.', err);
+      pushNotification('error', errorVisual.titulo, errorVisual.detalle);
     }
   };
 
@@ -81,13 +98,19 @@ export default function InventoryPage() {
       setCategoriaForm(categoriaInicial);
       setCategoriaEditando(null);
       await cargarResumen();
-    } catch (err) {
-      setError(
-        crearErrorVisual(
-          categoriaEditando ? 'No se pudo actualizar la categoria.' : 'No se pudo guardar la categoria.',
-          err,
-        ),
+      pushNotification(
+        'success',
+        categoriaEditando ? 'Categoria actualizada.' : 'Categoria creada.',
+        categoriaEditando
+          ? 'La categoria del inventario se actualizo correctamente.'
+          : 'La nueva categoria ya esta disponible en el catalogo.',
       );
+    } catch (err) {
+      const errorVisual = crearErrorVisual(
+        categoriaEditando ? 'No se pudo actualizar la categoria.' : 'No se pudo guardar la categoria.',
+        err,
+      );
+      pushNotification('error', errorVisual.titulo, errorVisual.detalle);
     }
   };
 
@@ -102,13 +125,19 @@ export default function InventoryPage() {
       setMarcaForm(marcaInicial);
       setMarcaEditando(null);
       await cargarResumen();
-    } catch (err) {
-      setError(
-        crearErrorVisual(
-          marcaEditando ? 'No se pudo actualizar la marca.' : 'No se pudo guardar la marca.',
-          err,
-        ),
+      pushNotification(
+        'success',
+        marcaEditando ? 'Marca actualizada.' : 'Marca creada.',
+        marcaEditando
+          ? 'La marca se actualizo correctamente.'
+          : 'La nueva marca ya esta disponible para catalogo y compras.',
       );
+    } catch (err) {
+      const errorVisual = crearErrorVisual(
+        marcaEditando ? 'No se pudo actualizar la marca.' : 'No se pudo guardar la marca.',
+        err,
+      );
+      pushNotification('error', errorVisual.titulo, errorVisual.detalle);
     }
   };
 
@@ -117,8 +146,10 @@ export default function InventoryPage() {
     try {
       await api.delete(`/inventario/categorias/${categoria.id}`);
       await cargarResumen();
+      pushNotification('success', 'Categoria eliminada.', `La categoria "${categoria.nombre}" se elimino correctamente.`);
     } catch (err) {
-      setError(crearErrorVisual(`No se pudo eliminar la categoria "${categoria.nombre}".`, err));
+      const errorVisual = crearErrorVisual(`No se pudo eliminar la categoria "${categoria.nombre}".`, err);
+      pushNotification('error', errorVisual.titulo, errorVisual.detalle);
     }
   };
 
@@ -127,24 +158,28 @@ export default function InventoryPage() {
     try {
       await api.delete(`/inventario/marcas/${marca.id}`);
       await cargarResumen();
+      pushNotification('success', 'Marca eliminada.', `La marca "${marca.nombre}" se elimino correctamente.`);
     } catch (err) {
-      setError(crearErrorVisual(`No se pudo eliminar la marca "${marca.nombre}".`, err));
+      const errorVisual = crearErrorVisual(`No se pudo eliminar la marca "${marca.nombre}".`, err);
+      pushNotification('error', errorVisual.titulo, errorVisual.detalle);
     }
   };
 
   return (
     <div className="page-stack inventory-page">
-      {error && (
-        <div className="alert inventory-alert-detailed">
-          <div className="inventory-alert-copy">
-            <strong>{error.titulo}</strong>
-            <p>{error.detalle}</p>
+      <div className="inventory-toast-stack" aria-live="polite" aria-atomic="true">
+        {notifications.map((notification) => (
+          <div key={notification.id} className={`inventory-toast is-${notification.type}`}>
+            <div className="inventory-toast-copy">
+              <strong>{notification.title}</strong>
+              {notification.detail ? <p>{notification.detail}</p> : null}
+            </div>
+            <button type="button" onClick={() => removeNotification(notification.id)} aria-label="Cerrar notificacion">
+              <X size={16} />
+            </button>
           </div>
-          <button type="button" className="secondary compact" onClick={() => setError(null)}>
-            Cerrar
-          </button>
-        </div>
-      )}
+        ))}
+      </div>
 
       <section className="inventory-catalogo-stage">
         <CatalogoBaseManager
@@ -152,6 +187,7 @@ export default function InventoryPage() {
           marcas={marcas}
           onOpenCategorias={abrirCategorias}
           onOpenMarcas={abrirMarcas}
+          onNotify={pushNotification}
         />
       </section>
 

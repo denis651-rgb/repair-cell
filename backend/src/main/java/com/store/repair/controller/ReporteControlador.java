@@ -12,6 +12,7 @@ import com.store.repair.dto.SerieFinancieraDiariaResponse;
 import com.store.repair.service.ReporteServicio;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -24,6 +25,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/reportes")
 @RequiredArgsConstructor
+@PreAuthorize("hasAuthority('PERM_REPORTES_VIEW')")
 public class ReporteControlador {
 
     private final ReporteServicio reporteServicio;

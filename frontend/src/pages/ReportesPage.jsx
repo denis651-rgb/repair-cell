@@ -841,7 +841,7 @@ export default function ReportesPage() {
             <div className="reports-kpi-icon icon-danger"><Package size={20} /></div>
             <span className="reports-kpi-label">Stock critico</span>
             <strong className="reports-kpi-value">{panelGlobal?.inventarioBajo || 0}</strong>
-            <p>Productos en o bajo su minimo</p>
+            <p>Variantes en o bajo su minimo</p>
           </article>
         </section>
 
@@ -895,30 +895,35 @@ export default function ReportesPage() {
             <div className="reports-table-header">
               <div>
                 <h3>Stock critico</h3>
-                <p>Productos que ya necesitan reposicion o seguimiento cercano.</p>
+                <p>Variantes que ya necesitan reposicion o seguimiento cercano.</p>
               </div>
-              <span className="chip">{panelGlobal?.productosStockBajo?.length || 0} productos</span>
+              <span className="chip">{panelGlobal?.productosStockBajo?.length || 0} variantes</span>
             </div>
             <div className="responsive-table-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th>Producto</th>
+                    <th>Variante</th>
                     <th>Stock</th>
                     <th>Minimo</th>
+                    <th>Faltante</th>
                   </tr>
                 </thead>
                 <tbody>
                   {stockCriticoPaginado.filas.map((producto) => (
                     <tr key={producto.id}>
-                      <td>{producto.nombre}</td>
-                      <td>{producto.cantidadStock}</td>
+                      <td>
+                        <strong>{producto.nombre}</strong>
+                        <div>{producto.codigoVariante || 'Sin codigo'} · {producto.marcaNombre || 'Sin marca'} · {producto.modelo || 'Sin modelo'}</div>
+                      </td>
+                      <td>{producto.stockActual}</td>
                       <td>{producto.stockMinimo}</td>
+                      <td>{producto.faltanteReposicion}</td>
                     </tr>
                   ))}
                   {stockCriticoPaginado.total === 0 && (
                     <tr>
-                      <td colSpan="3" className="table-empty-cell">No hay productos criticos.</td>
+                      <td colSpan="4" className="table-empty-cell">No hay variantes criticas.</td>
                     </tr>
                   )}
                 </tbody>
@@ -928,7 +933,7 @@ export default function ReportesPage() {
               datos={stockCriticoPaginado}
               pagina={paginaStockCritico}
               onChange={setPaginaStockCritico}
-              etiqueta="productos"
+              etiqueta="variantes"
             />
           </article>
         </section>

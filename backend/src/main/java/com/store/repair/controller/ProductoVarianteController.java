@@ -6,6 +6,7 @@ import com.store.repair.dto.ProductoVarianteRequest;
 import com.store.repair.service.ProductoVarianteService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -13,6 +14,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/catalogo/productos-variantes")
 @RequiredArgsConstructor
+@PreAuthorize("hasAuthority('PERM_INVENTARIO_VIEW')")
 public class ProductoVarianteController {
 
     private final ProductoVarianteService service;

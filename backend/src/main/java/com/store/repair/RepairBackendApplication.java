@@ -18,7 +18,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 public class RepairBackendApplication {
 
-    private static final String DEFAULT_DB_URL = "jdbc:sqlite:" + AppStoragePaths.resolveAppStorageDir() + "/data/repair-shop.db";
+    private static final String DEFAULT_DB_URL = "jdbc:sqlite:" + AppStoragePaths.resolveAppStorageDir()
+            + "/data/repair-shop.db";
 
     public static void main(String[] args) {
         prepareRuntimeDirectories();
@@ -98,8 +99,7 @@ public class RepairBackendApplication {
                     "restoredFrom", displaySource,
                     "backupBeforeRestorePath", String.valueOf(plan.containsKey("backupBeforeRestorePath")
                             ? plan.get("backupBeforeRestorePath")
-                            : "")
-            ));
+                            : "")));
         } catch (Exception exception) {
             try {
                 objectMapper.writeValue(lastResult.toFile(), Map.of(
@@ -107,11 +107,11 @@ public class RepairBackendApplication {
                         "message", "La restauracion local fallo al iniciar el backend: " + exception.getMessage(),
                         "restoredAt", LocalDateTime.now().toString(),
                         "restoredFrom", "",
-                        "backupBeforeRestorePath", ""
-                ));
+                        "backupBeforeRestorePath", ""));
             } catch (IOException ignored) {
             }
-            throw new IllegalStateException("No se pudo aplicar la restauracion pendiente antes de iniciar el backend.", exception);
+            throw new IllegalStateException("No se pudo aplicar la restauracion pendiente antes de iniciar el backend.",
+                    exception);
         }
     }
 

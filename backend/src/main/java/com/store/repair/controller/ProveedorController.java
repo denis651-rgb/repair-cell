@@ -5,6 +5,7 @@ import com.store.repair.service.ProveedorService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -12,6 +13,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/proveedores")
 @RequiredArgsConstructor
+@PreAuthorize("hasAuthority('PERM_PROVEEDORES_VIEW')")
 public class ProveedorController {
 
     private final ProveedorService service;

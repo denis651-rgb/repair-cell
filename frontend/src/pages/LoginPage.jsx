@@ -4,26 +4,19 @@ import { ArrowRight, LockKeyhole, ShieldCheck, UserRound, Wrench } from 'lucide-
 import { api } from '../api/api';
 import yiyoTecMark from '../assets/yiyo-tec-mark.svg';
 import '../styles/pages/login.css';
-
-function getStoredUser() {
-  try {
-    return JSON.parse(localStorage.getItem('user') || '{}');
-  } catch {
-    return {};
-  }
-}
+import { getCurrentUser, getDefaultRouteForUser } from '../utils/permissions';
 
 export default function LoginPage() {
   const token = localStorage.getItem('token');
-  const currentUser = getStoredUser();
+  const currentUser = getCurrentUser();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  if (token && currentUser?.rol === 'ADMIN') {
-    return <Navigate to="/dashboard" replace />;
+  if (token && currentUser?.rol) {
+    return <Navigate to={getDefaultRouteForUser(currentUser)} replace />;
   }
 
   const handleLogin = async (event) => {
@@ -38,8 +31,14 @@ export default function LoginPage() {
         username: data.username,
         nombre: data.nombre,
         rol: data.rol,
+        permisos: Array.isArray(data.permisos) ? data.permisos : [],
       }));
-      navigate('/dashboard');
+      navigate(getDefaultRouteForUser({
+        username: data.username,
+        nombre: data.nombre,
+        rol: data.rol,
+        permisos: Array.isArray(data.permisos) ? data.permisos : [],
+      }));
     } catch (err) {
       setError(err.message || 'No fue posible iniciar sesión.');
     } finally {
@@ -89,7 +88,7 @@ export default function LoginPage() {
             </div>
             <div>
               <strong>Acceso protegido</strong>
-              <p>Solo cuentas administrativas pueden entrar a los módulos internos.</p>
+              <p>La interfaz muestra solo los modulos permitidos segun los permisos de tu cuenta.</p>
             </div>
           </article>
         </div>
@@ -100,7 +99,7 @@ export default function LoginPage() {
           <div className="login-form-card__header">
             <span className="login-form-card__badge">Acceso seguro</span>
             <h2>Iniciar sesión</h2>
-            <p>Usa tus credenciales de administrador para entrar al sistema.</p>
+            <p>Usa tus credenciales para entrar al sistema con el alcance asignado a tu rol.</p>
           </div>
 
           {error && <div className="login-alert">{error}</div>}
@@ -142,7 +141,7 @@ export default function LoginPage() {
 
           <div className="login-footer-note">
             <strong>Acceso restringido</strong>
-            <p>Si tu cuenta no tiene rol `ADMIN`, el sistema bloqueará la entrada.</p>
+            <p>Las rutas y modulos visibles cambian segun el rol y los permisos que entrega el backend.</p>
           </div>
         </div>
       </section>

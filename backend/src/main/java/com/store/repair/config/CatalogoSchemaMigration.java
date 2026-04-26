@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
@@ -67,16 +68,20 @@ public class CatalogoSchemaMigration implements ApplicationRunner {
                         tipo_presentacion TEXT,
                         color TEXT,
                         precio_venta_sugerido REAL NOT NULL DEFAULT 0,
+                        stock_minimo INTEGER NOT NULL DEFAULT 0,
                         activo INTEGER NOT NULL DEFAULT 1,
                         creado_en TEXT NOT NULL,
                         actualizado_en TEXT NOT NULL,
                         FOREIGN KEY (producto_base_id) REFERENCES productos_base(id)
                     )
                     """);
+            asegurarColumna(connection, "productos_variantes", "stock_minimo", "INTEGER NOT NULL DEFAULT 0");
             statement.executeUpdate(
                     "CREATE INDEX IF NOT EXISTS idx_productos_variantes_producto_base ON productos_variantes(producto_base_id)");
             statement.executeUpdate(
                     "CREATE INDEX IF NOT EXISTS idx_productos_variantes_calidad ON productos_variantes(calidad)");
+            statement.executeUpdate(
+                    "CREATE INDEX IF NOT EXISTS idx_productos_variantes_stock_minimo ON productos_variantes(stock_minimo)");
             statement.executeUpdate(
                     "CREATE UNIQUE INDEX IF NOT EXISTS ux_productos_variantes_base_calidad_presentacion ON productos_variantes(producto_base_id, lower(calidad), lower(coalesce(tipo_presentacion, '')))");
         }
@@ -104,6 +109,28 @@ public class CatalogoSchemaMigration implements ApplicationRunner {
                     "CREATE INDEX IF NOT EXISTS idx_productos_base_compat_modelo ON productos_base_compatibilidades(modelo_compatible)");
             statement.executeUpdate(
                     "CREATE INDEX IF NOT EXISTS idx_productos_base_compat_marca ON productos_base_compatibilidades(marca_compatible)");
+        }
+    }
+
+    private boolean existeColumna(Connection connection, String nombreTabla, String nombreColumna) throws SQLException {
+        try (Statement statement = connection.createStatement();
+             ResultSet resultSet = statement.executeQuery("PRAGMA table_info(" + nombreTabla + ")")) {
+            while (resultSet.next()) {
+                if (nombreColumna.equalsIgnoreCase(resultSet.getString("name"))) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    }
+
+    private void asegurarColumna(Connection connection, String nombreTabla, String nombreColumna, String definicion) throws SQLException {
+        if (existeColumna(connection, nombreTabla, nombreColumna)) {
+            return;
+        }
+
+        try (Statement statement = connection.createStatement()) {
+            statement.executeUpdate("ALTER TABLE " + nombreTabla + " ADD COLUMN " + nombreColumna + " " + definicion);
         }
     }
 }
