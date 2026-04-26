@@ -10,6 +10,7 @@ import com.store.repair.service.LoteInventarioService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -17,6 +18,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/catalogo/lotes")
 @RequiredArgsConstructor
+@PreAuthorize("hasAuthority('PERM_INVENTARIO_VIEW')")
 public class LoteInventarioController {
 
     private final LoteInventarioService service;

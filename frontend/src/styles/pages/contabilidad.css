@@ -334,9 +334,10 @@
   gap: 6px;
   padding: 16px;
   border-radius: 20px;
-  background: rgba(255, 255, 255, 0.95);
-  border: 1px solid rgba(221, 214, 254, 0.9);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(249, 245, 255, 0.94));
+  border: 1px solid rgba(221, 214, 254, 0.78);
   min-width: 0;
+  box-shadow: 0 14px 28px rgba(76, 48, 136, 0.06);
 }
 
 .accounting-summary-card span {
@@ -495,4 +496,111 @@
   .accounting-kpi-value {
     font-size: 28px;
   }
+}
+
+:root[data-theme='dark'] .accounting-ghost-button,
+:root[data-theme='dark'] .accounting-status-strip,
+:root[data-theme='dark'] .accounting-kpi-card,
+:root[data-theme='dark'] .accounting-panel,
+:root[data-theme='dark'] .accounting-helper-card,
+:root[data-theme='dark'] .accounting-range-summary,
+:root[data-theme='dark'] .accounting-table-panel,
+:root[data-theme='dark'] .accounting-filter-panel,
+:root[data-theme='dark'] .accounting-cash-panel {
+  background: linear-gradient(180deg, rgba(17, 24, 39, 0.96), rgba(15, 23, 42, 0.96));
+  border-color: rgba(148, 163, 184, 0.14);
+  box-shadow: 0 18px 40px rgba(2, 6, 23, 0.3);
+}
+
+:root[data-theme='dark'] .accounting-status-strip p,
+:root[data-theme='dark'] .accounting-kpi-label,
+:root[data-theme='dark'] .accounting-kpi-card p,
+:root[data-theme='dark'] .accounting-panel-header p,
+:root[data-theme='dark'] .accounting-helper-card p,
+:root[data-theme='dark'] .accounting-range-summary span {
+  color: var(--muted);
+}
+
+:root[data-theme='dark'] .accounting-status-pill.is-open {
+  background: rgba(20, 83, 45, 0.36);
+  color: #bbf7d0;
+}
+
+:root[data-theme='dark'] .accounting-status-pill.is-closed {
+  background: rgba(127, 29, 29, 0.32);
+  color: #fecdd3;
+}
+
+:root[data-theme='dark'] .accounting-kpi-value,
+:root[data-theme='dark'] .accounting-panel-header h3,
+:root[data-theme='dark'] .accounting-helper-card strong,
+:root[data-theme='dark'] .accounting-range-summary strong {
+  color: var(--text);
+}
+
+:root[data-theme='dark'] .accounting-summary-card {
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.92), rgba(17, 24, 39, 0.96));
+  border-color: rgba(148, 163, 184, 0.12);
+  box-shadow: 0 16px 30px rgba(2, 6, 23, 0.2);
+}
+
+:root[data-theme='dark'] .accounting-summary-card-accent {
+  background: linear-gradient(180deg, rgba(79, 70, 229, 0.18), rgba(30, 41, 59, 0.96));
+}
+
+:root[data-theme='dark'] .accounting-summary-card span,
+:root[data-theme='dark'] .accounting-summary-card p {
+  color: var(--text-secondary);
+}
+
+:root[data-theme='dark'] .accounting-summary-card strong {
+  color: var(--text);
+}
+
+:root[data-theme='dark'] .accounting-guide-panel {
+  background: linear-gradient(135deg, rgba(79, 70, 229, 0.58), rgba(15, 23, 42, 0.98));
+}
+
+:root[data-theme='dark'] .accounting-guide-panel::after {
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.12), transparent 66%);
+}
+
+:root[data-theme='dark'] .accounting-guide-kicker {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+:root[data-theme='dark'] .accounting-guide-panel h3,
+:root[data-theme='dark'] .accounting-guide-panel p,
+:root[data-theme='dark'] .accounting-guide-panel li {
+  color: #f8fafc;
+}
+
+:root[data-theme='dark'] .accounting-chip-auto {
+  background: rgba(20, 83, 45, 0.32);
+  color: #bbf7d0;
+}
+
+:root[data-theme='dark'] .accounting-chip-neutral,
+:root[data-theme='dark'] .accounting-chip-muted {
+  background: rgba(51, 65, 85, 0.5);
+  color: #cbd5e1;
+}
+
+:root[data-theme='dark'] .accounting-amount-cell {
+  color: #c4b5fd;
+}
+
+:root[data-theme='dark'] .accounting-page .recharts-cartesian-axis-tick-value,
+:root[data-theme='dark'] .accounting-page .recharts-legend-item-text {
+  fill: #94a3b8;
+  color: #94a3b8;
+}
+
+:root[data-theme='dark'] .accounting-page .recharts-cartesian-grid line {
+  stroke: rgba(148, 163, 184, 0.16);
+}
+
+:root[data-theme='dark'] .accounting-page .recharts-tooltip-wrapper .recharts-default-tooltip {
+  background-color: rgba(15, 23, 42, 0.96) !important;
+  border: 1px solid rgba(148, 163, 184, 0.16) !important;
 }

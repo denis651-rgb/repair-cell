@@ -1,5 +1,6 @@
 package com.store.repair.config;
 
+import com.store.repair.domain.Permiso;
 import com.store.repair.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
@@ -15,7 +16,8 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
-import java.util.Collections;
+import java.util.ArrayList;
+import java.util.List;
 
 @Configuration(proxyBeanMethods = false)
 @RequiredArgsConstructor
@@ -31,9 +33,18 @@ public class ApplicationConfig {
                         u.getPassword(),
                         u.getActivo(),
                         true, true, true,
-                        Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + u.getRol().name()))
+                        buildAuthorities(u.getRol().name(), RolePermissions.authoritiesFor(u.getRol()))
                 ))
                 .orElseThrow(() -> new UsernameNotFoundException("Usuario no encontrado"));
+    }
+
+    private List<SimpleGrantedAuthority> buildAuthorities(String roleName, java.util.Set<String> permissions) {
+        List<SimpleGrantedAuthority> authorities = new ArrayList<>();
+        authorities.add(new SimpleGrantedAuthority("ROLE_" + roleName));
+        permissions.stream()
+                .map(SimpleGrantedAuthority::new)
+                .forEach(authorities::add);
+        return authorities;
     }
 
     @Bean

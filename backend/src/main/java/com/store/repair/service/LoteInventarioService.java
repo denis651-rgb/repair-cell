@@ -12,6 +12,7 @@ import com.store.repair.repository.CompraRepository;
 import com.store.repair.repository.LoteInventarioRepository;
 import com.store.repair.repository.VentaDetalleLoteRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -97,6 +98,13 @@ public class LoteInventarioService {
     }
 
     @Transactional
+    @CacheEvict(value = {
+            "reportes_resumen",
+            "reportes_panel",
+            "reportes_resumen_global",
+            "reportes_panel_global",
+            "reportes_clientes_global"
+    }, allEntries = true)
     public LoteInventario save(Long id, LoteInventarioRequest request) {
         LoteInventario destino = id == null ? new LoteInventario() : findById(id);
         ProductoVariante varianteDestino = productoVarianteService.findById(request.getVarianteId());
@@ -159,6 +167,13 @@ public class LoteInventarioService {
     }
 
     @Transactional
+    @CacheEvict(value = {
+            "reportes_resumen",
+            "reportes_panel",
+            "reportes_resumen_global",
+            "reportes_panel_global",
+            "reportes_clientes_global"
+    }, allEntries = true)
     public LoteInventario cerrarManual(Long id, CerrarLoteManualRequest request) {
         LoteInventario lote = findById(id);
         String motivo = SanitizadorTexto.limpiar(request == null ? null : request.getMotivo());

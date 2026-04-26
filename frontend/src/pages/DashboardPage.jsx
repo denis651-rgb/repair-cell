@@ -431,7 +431,7 @@ export default function DashboardPage() {
                 <div className="card-icon-box icon-danger"><Package size={20} /></div>
                 <div className="dash-card-label">Stock bajo</div>
                 <div className="dash-card-value">{panel.inventarioBajo}</div>
-                <p>Productos en o bajo su minimo</p>
+                <p>Variantes en o bajo su minimo</p>
               </article>
 
               <article className="dashboard-kpi-card">
@@ -463,7 +463,7 @@ export default function DashboardPage() {
 
               <article className="card card-pad dashboard-panel dashboard-stock-panel">
                 <div className="section-title-row">
-                  <h3>Productos criticos</h3>
+                  <h3>Variantes criticas</h3>
                   <span className="chip">Top {productosCriticos.length}</span>
                 </div>
                 <div className="stock-list dashboard-stock-list">
@@ -471,11 +471,11 @@ export default function DashboardPage() {
                     <div className="empty-stock-state">
                       <Package size={28} />
                       <h4>Sin alertas criticas</h4>
-                      <p>Todos los productos tienen stock suficiente.</p>
+                      <p>Todas las variantes tienen stock suficiente.</p>
                     </div>
                   ) : (
                     productosCriticos.map((producto) => {
-                      const stockActual = Number(producto.cantidadStock ?? producto.stockActual ?? 0);
+                      const stockActual = Number(producto.stockActual ?? producto.cantidadStock ?? 0);
                       const stockMinimo = Number(producto.stockMinimo ?? 0);
                       const ratio = Math.max(8, Math.min(100, Math.round((stockActual / Math.max(stockMinimo, 1)) * 100)));
 
@@ -483,12 +483,21 @@ export default function DashboardPage() {
                         <div key={producto.id} className="dashboard-stock-item">
                           <div className="dashboard-stock-copy">
                             <strong>{producto.nombre}</strong>
-                            <p>Stock {stockActual} / minimo {stockMinimo}</p>
+                            <p className="dashboard-stock-model">{producto.modelo || 'Sin modelo'}</p>
+                            <p>
+                              {producto.codigoVariante ? `${producto.codigoVariante} · ` : ''}
+                              {producto.marcaNombre || 'Sin marca'} · {producto.modelo || 'Sin modelo'}
+                            </p>
+                            <span className="dashboard-stock-variant">
+                              {producto.codigoVariante || 'Sin codigo'}
+                            </span>
                             <div className="dashboard-stock-track">
                               <div className="dashboard-stock-fill" style={{ width: `${ratio}%` }} />
                             </div>
                           </div>
-                          <span className="badge badge-danger">{stockActual}</span>
+                          <span className="badge badge-danger">
+                            {producto.faltanteReposicion ? `Faltan ${producto.faltanteReposicion}` : stockActual}
+                          </span>
                         </div>
                       );
                     })

@@ -42,6 +42,11 @@ public class ProductoVariante extends EntidadBase {
     @Column(name = "precio_venta_sugerido", nullable = false)
     private Double precioVentaSugerido;
 
+    @Min(value = 0, message = "El stock minimo no puede ser negativo")
+    @Column(name = "stock_minimo", nullable = false)
+    @Builder.Default
+    private Integer stockMinimo = 0;
+
     @Column(name = "activo", nullable = false)
     private Boolean activo;
 

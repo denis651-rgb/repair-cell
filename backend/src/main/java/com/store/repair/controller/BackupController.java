@@ -29,6 +29,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/admin/backups")
 @RequiredArgsConstructor
+@PreAuthorize("hasAuthority('PERM_BACKUPS_VIEW')")
 public class BackupController {
 
     private final BackupService backupService;

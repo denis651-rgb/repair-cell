@@ -4,6 +4,7 @@ import com.store.repair.domain.MarcaInventario;
 import com.store.repair.service.MarcaInventarioService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -11,6 +12,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/inventario/marcas")
 @RequiredArgsConstructor
+@PreAuthorize("hasAuthority('PERM_INVENTARIO_VIEW')")
 public class MarcaInventarioController {
 
     private final MarcaInventarioService service;

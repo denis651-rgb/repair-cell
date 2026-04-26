@@ -10,6 +10,7 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/contabilidad/caja")
 @RequiredArgsConstructor
 @Validated
+@PreAuthorize("hasAuthority('PERM_CONTABILIDAD_VIEW')")
 public class CajaController {
 
     private final AccountingService accountingService;

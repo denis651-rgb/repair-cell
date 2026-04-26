@@ -389,3 +389,105 @@
     align-items: stretch;
   }
 }
+
+:root[data-theme='dark'] .reports-status-card,
+:root[data-theme='dark'] .reports-hero-card,
+:root[data-theme='dark'] .reports-filter-card,
+:root[data-theme='dark'] .reports-section,
+:root[data-theme='dark'] .reports-panel,
+:root[data-theme='dark'] .reports-table-card,
+:root[data-theme='dark'] .reports-nav-card,
+:root[data-theme='dark'] .reports-kpi-card {
+  background: linear-gradient(180deg, rgba(17, 24, 39, 0.96), rgba(15, 23, 42, 0.96));
+  border-color: rgba(148, 163, 184, 0.14);
+  box-shadow: 0 18px 40px rgba(2, 6, 23, 0.3);
+}
+
+:root[data-theme='dark'] .reports-status-card strong,
+:root[data-theme='dark'] .reports-block-alert strong {
+  color: #fecaca;
+}
+
+:root[data-theme='dark'] .reports-status-card p,
+:root[data-theme='dark'] .reports-block-alert p,
+:root[data-theme='dark'] .reports-hero-copy p,
+:root[data-theme='dark'] .reports-table-header p,
+:root[data-theme='dark'] .reports-nav-card p,
+:root[data-theme='dark'] .reports-kpi-label,
+:root[data-theme='dark'] .reports-kpi-card p,
+:root[data-theme='dark'] .reports-table-pagination,
+:root[data-theme='dark'] .table-empty-cell,
+:root[data-theme='dark'] .reports-filter-grid label span,
+:root[data-theme='dark'] .reports-filter-summary span {
+  color: var(--muted);
+}
+
+:root[data-theme='dark'] .reports-status-card-danger,
+:root[data-theme='dark'] .reports-block-alert {
+  background: linear-gradient(180deg, rgba(127, 29, 29, 0.34), rgba(15, 23, 42, 0.96));
+  border-color: rgba(248, 113, 113, 0.18);
+}
+
+:root[data-theme='dark'] .reports-ghost-button {
+  background: rgba(15, 23, 42, 0.88);
+  color: var(--text);
+  border-color: rgba(148, 163, 184, 0.16);
+}
+
+:root[data-theme='dark'] .reports-hero-card {
+  background:
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.12), transparent 28%),
+    linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(17, 24, 39, 0.96));
+}
+
+:root[data-theme='dark'] .reports-hero-copy h2,
+:root[data-theme='dark'] .reports-section-header h2,
+:root[data-theme='dark'] .reports-table-header h3,
+:root[data-theme='dark'] .reports-nav-card strong,
+:root[data-theme='dark'] .reports-kpi-value,
+:root[data-theme='dark'] .reports-filter-summary strong {
+  color: var(--text);
+}
+
+:root[data-theme='dark'] .reports-kicker {
+  color: #5eead4;
+}
+
+:root[data-theme='dark'] .reports-hero-badge {
+  background: rgba(20, 83, 45, 0.34);
+  color: #bbf7d0;
+}
+
+:root[data-theme='dark'] .reports-hero-badge-danger {
+  background: rgba(127, 29, 29, 0.32);
+  color: #fecdd3;
+}
+
+:root[data-theme='dark'] .reports-filter-summary > div,
+:root[data-theme='dark'] .reports-nav-card {
+  background: rgba(15, 23, 42, 0.82);
+  border-color: rgba(148, 163, 184, 0.14);
+}
+
+:root[data-theme='dark'] .reports-kpi-card-accent {
+  background: linear-gradient(180deg, rgba(30, 64, 175, 0.3), rgba(15, 23, 42, 0.96));
+}
+
+:root[data-theme='dark'] .reports-kpi-card::after {
+  background: radial-gradient(circle, rgba(37, 99, 235, 0.12), transparent 70%);
+}
+
+:root[data-theme='dark'] .reports-page .recharts-cartesian-axis-tick-value,
+:root[data-theme='dark'] .reports-page .recharts-legend-item-text {
+  fill: #94a3b8;
+  color: #94a3b8;
+}
+
+:root[data-theme='dark'] .reports-page .recharts-cartesian-grid line {
+  stroke: rgba(148, 163, 184, 0.16);
+}
+
+:root[data-theme='dark'] .reports-page .recharts-tooltip-wrapper .recharts-default-tooltip {
+  background-color: rgba(15, 23, 42, 0.96) !important;
+  border: 1px solid rgba(148, 163, 184, 0.16) !important;
+}

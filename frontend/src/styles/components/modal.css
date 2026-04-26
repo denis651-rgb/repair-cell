@@ -6,7 +6,7 @@
     align-items: center;
     justify-content: center;
     padding: 24px;
-    background: rgba(15, 23, 42, 0.42);
+    background: var(--modal-overlay-bg);
     backdrop-filter: blur(4px);
 }
 
@@ -19,8 +19,9 @@
     display: flex;
     flex-direction: column;
     border-radius: 24px;
-    background: #ffffff;
-    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.24);
+    background: var(--modal-panel-bg);
+    box-shadow: var(--modal-panel-shadow);
+    border: 1px solid var(--card-border);
 }
 
 .modal-md {
@@ -41,19 +42,19 @@
     justify-content: space-between;
     gap: 16px;
     padding: 22px 24px 16px;
-    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+    border-bottom: 1px solid var(--card-border);
 }
 
 .modal-shell__header h2 {
     margin: 0;
     font-size: 20px;
     line-height: 1.2;
-    color: #0f172a;
+    color: var(--text);
 }
 
 .modal-shell__header p {
     margin: 8px 0 0;
-    color: #64748b;
+    color: var(--muted);
     line-height: 1.5;
 }
 

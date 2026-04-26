@@ -107,6 +107,7 @@ export default function RepairOrdersPage() {
   const [clientQuery, setClientQuery] = useState('');
   const [deviceQuery, setDeviceQuery] = useState('');
   const [error, setError] = useState('');
+  const [notifications, setNotifications] = useState([]);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const [historyItems, setHistoryItems] = useState([]);
@@ -124,6 +125,23 @@ export default function RepairOrdersPage() {
   const debouncedOrderSearch = useDebouncedValue(searchOrders, 400);
   const debouncedClientQuery = useDebouncedValue(clientQuery, 250);
   const debouncedDeviceQuery = useDebouncedValue(deviceQuery, 250);
+
+  const pushNotification = (type, message, duration = type === 'error' ? 7000 : 5000) => {
+    if (!message) return;
+
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setNotifications((current) => [...current, { id, type, message }]);
+
+    if (duration > 0) {
+      window.setTimeout(() => {
+        setNotifications((current) => current.filter((item) => item.id !== id));
+      }, duration);
+    }
+  };
+
+  const removeNotification = (id) => {
+    setNotifications((current) => current.filter((item) => item.id !== id));
+  };
 
   const loadCatalogs = async () => {
     const [clientesData, dispositivosData, productosData] = await Promise.all([
@@ -158,6 +176,12 @@ export default function RepairOrdersPage() {
       setError(err.message);
     });
   }, []);
+
+  useEffect(() => {
+    if (!error) return;
+    pushNotification('error', error);
+    setError('');
+  }, [error]);
 
   useEffect(() => {
     const params = {};
@@ -326,6 +350,7 @@ export default function RepairOrdersPage() {
       setQuickClientForm(initialQuickClientForm);
       setQuickClientOpen(false);
       setQuickDeviceOpen(false);
+      pushNotification('success', 'Cliente rápido creado correctamente.');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -357,6 +382,7 @@ export default function RepairOrdersPage() {
       handleSelectDevice(nuevoDispositivo);
       setQuickDeviceForm(initialQuickDeviceForm);
       setQuickDeviceOpen(false);
+      pushNotification('success', 'Dispositivo rápido creado correctamente.');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -403,6 +429,7 @@ export default function RepairOrdersPage() {
       : [draft, ...currentDrafts];
 
     persistDrafts(nextDrafts);
+    pushNotification('success', exists ? 'Borrador actualizado correctamente.' : 'Borrador guardado correctamente.');
     closeCreateModal();
   };
 
@@ -455,6 +482,7 @@ export default function RepairOrdersPage() {
       removeCurrentDraftIfNeeded();
       closeCreateModal();
       await loadOrders(0, debouncedOrderSearch);
+      pushNotification('success', 'Orden de reparación creada correctamente.');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -466,6 +494,7 @@ export default function RepairOrdersPage() {
     try {
       await api.patch(`/ordenes-reparacion/${id}/estado`, { estado });
       await loadOrders(currentPage, debouncedOrderSearch);
+      pushNotification('success', `Estado actualizado a ${estado}.`);
     } catch (err) {
       setError(err.message);
     }
@@ -482,6 +511,19 @@ export default function RepairOrdersPage() {
 
   return (
     <div className="page-stack repair-orders-page">
+      <div className="repair-orders-toast-stack" aria-live="polite">
+        {notifications.map((notification) => (
+          <div key={notification.id} className={`repair-orders-toast is-${notification.type}`}>
+            <div className="repair-orders-toast-copy">
+              <strong>{notification.type === 'error' ? 'No se pudo completar la acción' : 'Operación realizada'}</strong>
+              <p>{notification.message}</p>
+            </div>
+            <button type="button" onClick={() => removeNotification(notification.id)} aria-label="Cerrar aviso">
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
       <PageHeader
         title="Órdenes de reparación"
         subtitle="Gestiona ingresos, estados, borradores e historial desde una vista más clara y lista para el trabajo diario."
@@ -504,8 +546,6 @@ export default function RepairOrdersPage() {
           </button>
         </div>
       </PageHeader>
-
-      {error && <div className="alert">{error}</div>}
 
       <section className="repair-orders-hero-card">
         <label className="repair-orders-search">

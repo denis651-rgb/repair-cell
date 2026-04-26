@@ -1,7 +1,7 @@
 package com.store.repair.controller;
 
+import com.store.repair.config.RolePermissions;
 import com.store.repair.config.JwtService;
-import com.store.repair.domain.Rol;
 import com.store.repair.domain.Usuario;
 import com.store.repair.repository.UsuarioRepository;
 import jakarta.validation.Valid;
@@ -22,6 +22,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.http.HttpStatus;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -48,17 +50,18 @@ public class AuthController {
         Usuario usuario = usuarioRepository.findByUsername(request.getUsername().trim())
                 .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado"));
 
-        if (usuario.getRol() != Rol.ADMIN) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Solo los usuarios ADMIN pueden acceder al sistema");
-        }
-
         String token = jwtService.generateToken(user);
+        List<String> permisos = RolePermissions.permissionsFor(usuario.getRol()).stream()
+                .map(Enum::name)
+                .sorted()
+                .toList();
 
         return ResponseEntity.ok(AuthResponse.builder()
                 .token(token)
                 .username(usuario.getUsername())
                 .nombre(usuario.getNombre())
                 .rol(usuario.getRol().name())
+                .permisos(permisos)
                 .build());
     }
 
@@ -78,5 +81,6 @@ public class AuthController {
         private String username;
         private String nombre;
         private String rol;
+        private List<String> permisos;
     }
 }

@@ -21,7 +21,10 @@ public class InventarioOperativoVarianteResponse {
     private String tipoPresentacion;
     private String color;
     private Double precioVentaSugerido;
+    private Integer stockMinimo;
     private Integer stockDisponibleTotal;
+    private Boolean stockBajo;
+    private Integer faltanteReposicion;
     private Integer lotesActivos;
     private List<LoteInventarioHistorialResponse> lotesOperativos;
 }

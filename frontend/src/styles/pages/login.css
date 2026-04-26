@@ -328,3 +328,87 @@
     font-size: 16px;
   }
 }
+
+:root[data-theme='dark'] .login-page {
+  background:
+    radial-gradient(circle at top left, rgba(45, 212, 191, 0.12), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(59, 130, 246, 0.14), transparent 24%),
+    linear-gradient(135deg, #020617 0%, #0b1120 44%, #111827 100%);
+}
+
+:root[data-theme='dark'] .login-page__bg--one {
+  background: radial-gradient(circle, rgba(45, 212, 191, 0.18), rgba(45, 212, 191, 0));
+}
+
+:root[data-theme='dark'] .login-page__bg--two {
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.16), rgba(59, 130, 246, 0));
+}
+
+:root[data-theme='dark'] .login-brand__mark-shell {
+  background: linear-gradient(145deg, #112434, #183246);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 18px 36px rgba(2, 6, 23, 0.28);
+}
+
+:root[data-theme='dark'] .login-brand__eyebrow {
+  color: #5eead4;
+}
+
+:root[data-theme='dark'] .login-brand h1,
+:root[data-theme='dark'] .login-hero-copy h2,
+:root[data-theme='dark'] .login-feature-card strong,
+:root[data-theme='dark'] .login-form-card__header h2,
+:root[data-theme='dark'] .login-input-shell input {
+  color: var(--text);
+}
+
+:root[data-theme='dark'] .login-brand p,
+:root[data-theme='dark'] .login-hero-copy p,
+:root[data-theme='dark'] .login-feature-card p,
+:root[data-theme='dark'] .login-form-card__header p,
+:root[data-theme='dark'] .login-field span,
+:root[data-theme='dark'] .login-footer-note {
+  color: var(--muted);
+}
+
+:root[data-theme='dark'] .login-feature-card {
+  background: rgba(15, 23, 42, 0.72);
+  border-color: rgba(148, 163, 184, 0.12);
+  box-shadow: 0 18px 34px rgba(2, 6, 23, 0.24);
+}
+
+:root[data-theme='dark'] .login-feature-icon {
+  background: linear-gradient(135deg, #1fa37f, #0f766e);
+}
+
+:root[data-theme='dark'] .login-form-card {
+  background: rgba(15, 23, 42, 0.88);
+  border-color: rgba(148, 163, 184, 0.14);
+  box-shadow: 0 30px 70px rgba(2, 6, 23, 0.38);
+}
+
+:root[data-theme='dark'] .login-form-card__badge {
+  background: rgba(20, 83, 45, 0.32);
+  color: #bbf7d0;
+}
+
+:root[data-theme='dark'] .login-alert {
+  background: rgba(127, 29, 29, 0.32);
+  border-color: rgba(248, 113, 113, 0.18);
+  color: #fecaca;
+}
+
+:root[data-theme='dark'] .login-input-shell {
+  border-color: rgba(148, 163, 184, 0.16);
+  background: rgba(15, 23, 42, 0.84);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+:root[data-theme='dark'] .login-submit {
+  box-shadow: 0 20px 40px rgba(15, 118, 110, 0.28);
+}
+
+:root[data-theme='dark'] .login-footer-note {
+  border-top-color: rgba(148, 163, 184, 0.12);
+}

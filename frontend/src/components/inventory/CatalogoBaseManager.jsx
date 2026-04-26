@@ -35,6 +35,7 @@ const varianteInicial = {
   tipoPresentacion: '',
   color: '',
   precioVentaSugerido: 0,
+  stockMinimo: 0,
   activo: true,
 };
 
@@ -176,7 +177,7 @@ function PaginationRow({ pagina, onChange }) {
   );
 }
 
-export default function CatalogoBaseManager({ categorias, marcas, onOpenCategorias, onOpenMarcas }) {
+export default function CatalogoBaseManager({ categorias, marcas, onOpenCategorias, onOpenMarcas, onNotify }) {
   const [vistaActiva, setVistaActiva] = useState('OPERACION');
   const [productosBase, setProductosBase] = useState([]);
   const [variantes, setVariantes] = useState([]);
@@ -189,6 +190,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
   const [modeloFiltro, setModeloFiltro] = useState('');
   const [calidadFiltro, setCalidadFiltro] = useState('');
   const [soloConStock, setSoloConStock] = useState(true);
+  const [soloStockBajo, setSoloStockBajo] = useState(false);
   const [soloActivos, setSoloActivos] = useState(true);
   const [estadoLoteFiltro, setEstadoLoteFiltro] = useState('OPERATIVOS');
   const [estadoHistorialFiltro, setEstadoHistorialFiltro] = useState('TODOS');
@@ -213,7 +215,19 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
   const [varianteForm, setVarianteForm] = useState(varianteInicial);
   const [codigoVarianteSugerido, setCodigoVarianteSugerido] = useState('');
   const [loteForm, setLoteForm] = useState(loteInicial);
-  const [error, setError] = useState(null);
+
+  const notifyError = (titulo, err) => {
+    const errorVisual = crearErrorVisual(titulo, err);
+    if (onNotify) {
+      onNotify('error', errorVisual.titulo, errorVisual.detalle);
+    }
+  };
+
+  const notifySuccess = (titulo, detalle) => {
+    if (onNotify) {
+      onNotify('success', titulo, detalle);
+    }
+  };
 
   const currency = useMemo(
     () => new Intl.NumberFormat('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
@@ -254,7 +268,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
         }
       }
     } catch (err) {
-      setError(crearErrorVisual('No se pudo cargar el catalogo base.', err));
+      notifyError('No se pudo cargar el catalogo base.', err);
     }
   };
 
@@ -276,7 +290,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
         setVarianteSeleccionada(actualizada);
       }
     } catch (err) {
-      setError(crearErrorVisual('No se pudieron cargar las variantes.', err));
+      notifyError('No se pudieron cargar las variantes.', err);
     }
   };
 
@@ -303,7 +317,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
       const respuesta = await api.get('/catalogo/lotes', params);
       setLotes(respuesta || []);
     } catch (err) {
-      setError(crearErrorVisual('No se pudieron cargar los lotes.', err));
+      notifyError('No se pudieron cargar los lotes.', err);
     }
   };
 
@@ -314,13 +328,14 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
         marcaId: filtrosGlobales.marcaId,
         modelo: filtrosGlobales.modelo,
         calidad: filtrosGlobales.calidad,
+        soloStockBajo,
         soloConStock,
         pagina: paginaOperativo,
         tamano: OPERACION_PAGE_SIZE,
       });
       setInventarioOperativo(normalizarPagina(respuesta, OPERACION_PAGE_SIZE));
     } catch (err) {
-      setError(crearErrorVisual('No se pudo cargar el inventario operativo.', err));
+      notifyError('No se pudo cargar el inventario operativo.', err);
     }
   };
 
@@ -334,7 +349,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
       const respuesta = await api.get(`/catalogo/inventario-operativo/${varianteSeleccionada.id}`);
       setDetalleOperativo(respuesta || detalleOperativoInicial);
     } catch (err) {
-      setError(crearErrorVisual('No se pudo cargar el detalle operativo de la variante.', err));
+      notifyError('No se pudo cargar el detalle operativo de la variante.', err);
     }
   };
 
@@ -360,7 +375,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
       const respuesta = await api.get('/catalogo/lotes/historico', params);
       setHistorialLotes(normalizarPagina(respuesta, HISTORICO_PAGE_SIZE));
     } catch (err) {
-      setError(crearErrorVisual('No se pudo cargar el historico de lotes.', err));
+      notifyError('No se pudo cargar el historico de lotes.', err);
     }
   };
 
@@ -396,6 +411,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
     filtrosGlobales.marcaId,
     filtrosGlobales.modelo,
     filtrosGlobales.calidad,
+    soloStockBajo,
     soloConStock,
     paginaOperativo,
   ]);
@@ -605,6 +621,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
         tipoPresentacion: variante.tipoPresentacion || '',
         color: '',
         precioVentaSugerido: variante.precioVentaSugerido ?? 0,
+        stockMinimo: variante.stockMinimo ?? 0,
         activo: variante.activo ?? true,
       });
     setModalVarianteOpen(true);
@@ -658,11 +675,17 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
       setProductoBaseForm(productoBaseInicial);
       setCodigoBaseSugerido('');
       await recargarCatalogo();
+      notifySuccess(
+        productoBaseEditando ? 'Producto base actualizado.' : 'Producto base creado.',
+        productoBaseEditando
+          ? 'La base del catalogo se actualizo correctamente.'
+          : 'La nueva base ya esta disponible para crear variantes.',
+      );
     } catch (err) {
-      setError(crearErrorVisual(
+      notifyError(
         productoBaseEditando ? 'No se pudo actualizar el producto base.' : 'No se pudo crear el producto base.',
         err,
-      ));
+      );
     }
   };
 
@@ -674,6 +697,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
         color: '',
         productoBaseId: Number(varianteForm.productoBaseId),
         precioVentaSugerido: Number(varianteForm.precioVentaSugerido || 0),
+        stockMinimo: Number(varianteForm.stockMinimo || 0),
       };
 
       if (varianteEditando) {
@@ -687,11 +711,17 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
       setVarianteForm(varianteInicial);
       setCodigoVarianteSugerido('');
       await Promise.all([recargarCatalogo(), recargarOperacion()]);
+      notifySuccess(
+        varianteEditando ? 'Variante actualizada.' : 'Variante creada.',
+        varianteEditando
+          ? 'La variante se actualizo correctamente.'
+          : 'La variante ya forma parte del inventario operativo.',
+      );
     } catch (err) {
-      setError(crearErrorVisual(
+      notifyError(
         varianteEditando ? 'No se pudo actualizar la variante.' : 'No se pudo crear la variante.',
         err,
-      ));
+      );
     }
   };
 
@@ -718,11 +748,17 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
       setLoteEditando(null);
       setLoteForm(loteInicial);
       await Promise.all([recargarCatalogo(), recargarOperacion()]);
+      notifySuccess(
+        loteEditando ? 'Lote actualizado.' : 'Lote creado.',
+        loteEditando
+          ? 'El lote se actualizo correctamente.'
+          : 'El nuevo lote ya suma stock a la variante seleccionada.',
+      );
     } catch (err) {
-      setError(crearErrorVisual(
+      notifyError(
         loteEditando ? 'No se pudo actualizar el lote.' : 'No se pudo crear el lote.',
         err,
-      ));
+      );
     }
   };
 
@@ -740,8 +776,9 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
 
       await api.post(`/catalogo/lotes/${lote.id}/cerrar-manual`, { motivo });
       await Promise.all([recargarCatalogo(), recargarOperacion()]);
+      notifySuccess('Lote cerrado.', `El lote ${lote.codigoLote} se cerro correctamente.`);
     } catch (err) {
-      setError(crearErrorVisual(`No se pudo cerrar manualmente el lote ${lote.codigoLote}.`, err));
+      notifyError(`No se pudo cerrar manualmente el lote ${lote.codigoLote}.`, err);
     }
   };
 
@@ -802,18 +839,6 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
             </div>
           )}
         </div>
-
-        {error && (
-          <div className="alert inventory-alert-detailed">
-            <div className="inventory-alert-copy">
-              <strong>{error.titulo}</strong>
-              <p>{error.detalle}</p>
-            </div>
-            <button type="button" className="secondary compact" onClick={() => setError(null)}>
-              Cerrar
-            </button>
-          </div>
-        )}
 
         <div className="catalogo-grid">
           <div className="catalogo-tabs">
@@ -888,6 +913,14 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                     <label className="catalogo-checkbox">
                       <input
                         type="checkbox"
+                        checked={soloStockBajo}
+                        onChange={(event) => setSoloStockBajo(event.target.checked)}
+                      />
+                      Solo stock bajo
+                    </label>
+                    <label className="catalogo-checkbox">
+                      <input
+                        type="checkbox"
                         checked={soloConStock}
                         onChange={(event) => setSoloConStock(event.target.checked)}
                       />
@@ -913,6 +946,8 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                             <th>Marca / modelo</th>
                             <th>Calidad</th>
                             <th>Stock total</th>
+                            <th>Stock minimo</th>
+                            <th>Estado</th>
                             <th>Lotes activos</th>
                             <th>Precio venta</th>
                             <th>Accion</th>
@@ -937,6 +972,14 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                               </td>
                               <td>{item.calidad || 'Sin calidad'}</td>
                               <td>{item.stockDisponibleTotal || 0}</td>
+                              <td>{item.stockMinimo || 0}</td>
+                              <td>
+                                {item.stockBajo ? (
+                                  <span className="badge badge-danger">Bajo</span>
+                                ) : (
+                                  <span className="chip">OK</span>
+                                )}
+                              </td>
                               <td>{item.lotesActivos || 0}</td>
                               <td>Bs {currency.format(Number(item.precioVentaSugerido || 0))}</td>
                               <td>
@@ -949,6 +992,9 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                                       codigoVariante: item.codigoVariante,
                                       calidad: item.calidad,
                                       precioVentaSugerido: item.precioVentaSugerido,
+                                      stockMinimo: item.stockMinimo,
+                                      stockBajo: item.stockBajo,
+                                      faltanteReposicion: item.faltanteReposicion,
                                       productoBase: {
                                         id: item.productoBaseId,
                                         nombreBase: item.nombreBase,
@@ -976,11 +1022,17 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                     <h4>Detalle de variante</h4>
                     <p>
                       {detalleOperativo
-                        ? `${detalleOperativo.codigoVariante} muestra una sola variante con stock total consolidado y detalle por lote/proveedor.`
+                        ? `${detalleOperativo.codigoVariante} muestra el stock real consolidado y ahora tambien el umbral minimo para reposicion.`
                         : 'Selecciona una variante en la tabla principal para ver su stock real por lote.'}
                     </p>
                   </div>
-                  {detalleOperativo && <span className="chip">Stock {detalleOperativo.stockDisponibleTotal || 0}</span>}
+                  {detalleOperativo && (
+                    <span className={detalleOperativo.stockBajo ? 'badge badge-danger' : 'chip'}>
+                      {detalleOperativo.stockBajo
+                        ? `Stock bajo · ${detalleOperativo.stockDisponibleTotal || 0}/${detalleOperativo.stockMinimo || 0}`
+                        : `Stock ${detalleOperativo.stockDisponibleTotal || 0}`}
+                    </span>
+                  )}
                 </div>
 
                 {!detalleOperativo ? (
@@ -1006,11 +1058,19 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                         <strong>{detalleOperativo.stockDisponibleTotal || 0}</strong>
                       </article>
                       <article className="catalogo-kpi-card">
+                        <span>Stock minimo</span>
+                        <strong>{detalleOperativo.stockMinimo || 0}</strong>
+                      </article>
+                      <article className="catalogo-kpi-card">
                         <span>Lotes activos</span>
                         <strong>{detalleOperativo.lotesActivos || 0}</strong>
                       </article>
                       <article className="catalogo-kpi-card">
-                          <span>Precio venta</span>
+                        <span>Estado</span>
+                        <strong>{detalleOperativo.stockBajo ? 'Bajo' : 'Normal'}</strong>
+                      </article>
+                      <article className="catalogo-kpi-card">
+                        <span>Precio venta</span>
                         <strong>Bs {currency.format(Number(detalleOperativo.precioVentaSugerido || 0))}</strong>
                       </article>
                     </div>
@@ -1640,7 +1700,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
         open={modalVarianteOpen}
         onClose={() => setModalVarianteOpen(false)}
         title={varianteEditando ? 'Editar variante' : 'Nueva variante'}
-        subtitle="La variante define calidad, presentacion y precio sugerido, sin stock real todavia."
+        subtitle="La variante define calidad, precio sugerido y el umbral minimo desde el que debe alertar reposicion."
       >
         <form className="entity-form" onSubmit={guardarVariante}>
           <div className="form-grid two-columns">
@@ -1690,13 +1750,24 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                 <span>Precio venta sugerido</span>
                 <input
                   type="number"
-                min="0"
-                step="0.01"
-                value={varianteForm.precioVentaSugerido}
-                onChange={(event) => setVarianteForm((actual) => ({ ...actual, precioVentaSugerido: event.target.value }))}
-                required
-              />
-            </label>
+                  min="0"
+                  step="0.01"
+                  value={varianteForm.precioVentaSugerido}
+                  onChange={(event) => setVarianteForm((actual) => ({ ...actual, precioVentaSugerido: event.target.value }))}
+                  required
+                />
+              </label>
+              <label>
+                <span>Stock minimo</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={varianteForm.stockMinimo}
+                  onChange={(event) => setVarianteForm((actual) => ({ ...actual, stockMinimo: event.target.value }))}
+                  required
+                />
+              </label>
             <label>
               <span>Stock por lotes activos</span>
               <input value={varianteEditando?.stockDisponibleTotal ?? 0} readOnly />
@@ -1862,3 +1933,4 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
     </section>
   );
 }
+

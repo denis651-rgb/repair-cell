@@ -4,10 +4,10 @@ import com.store.repair.domain.EntradaContable;
 import com.store.repair.domain.EstadoCuentaPorCobrar;
 import com.store.repair.domain.EstadoReparacion;
 import com.store.repair.domain.OrdenReparacion;
-import com.store.repair.domain.ProductoInventario;
 import com.store.repair.domain.TipoEntrada;
 import com.store.repair.domain.Venta;
 import com.store.repair.dto.ClienteMontoAcumuladoDto;
+import com.store.repair.dto.InventarioOperativoVarianteResponse;
 import com.store.repair.dto.PanelResumenResponse;
 import com.store.repair.dto.PanelTallerResponse;
 import com.store.repair.dto.ProductoStockBajoResponse;
@@ -29,7 +29,6 @@ import com.store.repair.repository.CompraRepository;
 import com.store.repair.repository.CuentaPorCobrarRepository;
 import com.store.repair.repository.EntradaContableRepository;
 import com.store.repair.repository.OrdenReparacionRepository;
-import com.store.repair.repository.ProductoInventarioRepository;
 import com.store.repair.repository.VentaRepository;
 import com.store.repair.repository.AbonoCuentaPorCobrarRepository;
 import com.store.repair.repository.VentaDetalleLoteRepository;
@@ -53,20 +52,20 @@ public class ReporteServicio {
 
     private final ClienteRepository clienteRepositorio;
     private final OrdenReparacionRepository ordenRepositorio;
-    private final ProductoInventarioRepository productoRepositorio;
     private final EntradaContableRepository entradaContableRepositorio;
     private final VentaRepository ventaRepositorio;
     private final CompraRepository compraRepositorio;
     private final CuentaPorCobrarRepository cuentaPorCobrarRepositorio;
     private final AbonoCuentaPorCobrarRepository abonoCuentaPorCobrarRepositorio;
     private final VentaDetalleLoteRepository ventaDetalleLoteRepositorio;
+    private final ProductoVarianteService productoVarianteService;
 
     @Cacheable("reportes_resumen")
     public ReporteResumenResponse obtenerResumen() {
         long totalClientes = clienteRepositorio.count();
         long totalOrdenes = ordenRepositorio.count();
         long ordenesPendientes = ordenRepositorio.countByEstadoNot(EstadoReparacion.ENTREGADO);
-        long productosStockBajo = obtenerProductosConStockBajo().size();
+        long productosStockBajo = obtenerVariantesConStockBajo().size();
 
         return new ReporteResumenResponse(
                 totalClientes,
@@ -78,7 +77,7 @@ public class ReporteServicio {
     @Cacheable("reportes_panel")
     public PanelTallerResponse obtenerPanelTaller() {
         List<OrdenReparacion> ordenes = ordenRepositorio.findAll();
-        List<ProductoInventario> stockBajo = obtenerProductosConStockBajo();
+        List<InventarioOperativoVarianteResponse> stockBajo = obtenerVariantesConStockBajo();
 
         double totalIngresos = ordenes.stream()
                 .mapToDouble(OrdenMontoUtils::resolveMontoVisible)
@@ -119,7 +118,7 @@ public class ReporteServicio {
                 compraRepositorio.count(),
                 cuentasAbiertas,
                 saldoPendiente,
-                obtenerProductosConStockBajo().size(),
+                obtenerVariantesConStockBajo().size(),
                 ingresosTotales,
                 egresosTotales,
                 ingresosTotales - egresosTotales);
@@ -129,7 +128,7 @@ public class ReporteServicio {
     public PanelResumenResponse obtenerPanelGlobal() {
         List<OrdenReparacion> ordenes = ordenRepositorio.findAll();
         List<EntradaContable> entradasContables = entradaContableRepositorio.findAll();
-        List<ProductoInventario> stockBajo = obtenerProductosConStockBajo();
+        List<InventarioOperativoVarianteResponse> stockBajo = obtenerVariantesConStockBajo();
 
         double ingresosTotales = sumarPorTipoEntrada(entradasContables, TipoEntrada.ENTRADA);
         double egresosTotales = sumarPorTipoEntrada(entradasContables, TipoEntrada.SALIDA);
@@ -371,23 +370,23 @@ public class ReporteServicio {
                 .build();
     }
 
-    private List<ProductoInventario> obtenerProductosConStockBajo() {
-        return productoRepositorio.findByCantidadStockLessThanEqualOrderByCantidadStockAsc(Integer.MAX_VALUE)
-                .stream()
-                .filter(producto -> producto.getCantidadStock() != null)
-                .filter(producto -> producto.getStockMinimo() != null)
-                .filter(producto -> producto.getCantidadStock() <= producto.getStockMinimo())
-                .toList();
+    private List<InventarioOperativoVarianteResponse> obtenerVariantesConStockBajo() {
+        return productoVarianteService.findInventarioOperativoStockBajo(null, null, null, null, null);
     }
 
-    private List<ProductoStockBajoResponse> mapearProductosStockBajo(List<ProductoInventario> productos) {
+    private List<ProductoStockBajoResponse> mapearProductosStockBajo(List<InventarioOperativoVarianteResponse> productos) {
         return productos.stream()
                 .limit(10)
                 .map(producto -> new ProductoStockBajoResponse(
-                        producto.getId(),
-                        producto.getNombre(),
-                        producto.getCantidadStock(),
-                        producto.getStockMinimo()))
+                        producto.getVarianteId(),
+                        producto.getProductoBaseId(),
+                        producto.getNombreBase(),
+                        producto.getCodigoVariante(),
+                        producto.getMarcaNombre(),
+                        producto.getModelo(),
+                        producto.getStockDisponibleTotal() == null ? 0 : producto.getStockDisponibleTotal(),
+                        producto.getStockMinimo() == null ? 0 : producto.getStockMinimo(),
+                        producto.getFaltanteReposicion() == null ? 0 : producto.getFaltanteReposicion()))
                 .toList();
     }
 

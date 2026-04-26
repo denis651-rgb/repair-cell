@@ -23,5 +23,8 @@ public class ProductoVarianteRequest {
     @Min(value = 0, message = "El precio sugerido no puede ser negativo")
     private Double precioVentaSugerido;
 
+    @Min(value = 0, message = "El stock minimo no puede ser negativo")
+    private Integer stockMinimo;
+
     private Boolean activo;
 }

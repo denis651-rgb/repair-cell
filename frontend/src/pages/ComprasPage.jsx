@@ -569,8 +569,12 @@ export default function ComprasPage() {
                 <select value={detalleForm.varianteId} onChange={(event) => setDetalleForm((actual) => ({ ...actual, varianteId: event.target.value }))}>
                   <option value="">Selecciona una variante</option>
                   {variantesDisponibles.map((variante) => (
-                    <option key={variante.id} value={variante.id}>
-                      {variante.calidad || 'Sin calidad'}{variante.tipoPresentacion ? ` - ${variante.tipoPresentacion}` : ''} - Stock {variante.stockDisponibleTotal || 0}
+                  <option key={variante.id} value={variante.id}>
+                      {variante.calidad || 'Sin calidad'}
+                      {variante.tipoPresentacion ? ` - ${variante.tipoPresentacion}` : ''}
+                      {` - Stock ${variante.stockDisponibleTotal || 0}`}
+                      {Number(variante.stockMinimo || 0) > 0 ? ` / Min ${variante.stockMinimo}` : ''}
+                      {variante.stockBajo ? ' - Reponer' : ''}
                     </option>
                   ))}
                 </select>

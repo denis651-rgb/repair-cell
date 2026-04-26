@@ -7,11 +7,13 @@ import com.store.repair.service.CuentaPorCobrarService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/cuentas-por-cobrar")
 @RequiredArgsConstructor
+@PreAuthorize("hasAuthority('PERM_CUENTAS_POR_COBRAR_VIEW')")
 public class CuentaPorCobrarController {
 
     private final CuentaPorCobrarService service;

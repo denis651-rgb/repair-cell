@@ -7,8 +7,6 @@ import {
   Trash2,
   ChevronRight,
   Funnel,
-  UserRoundPlus,
-  SmartphoneNfc,
   UserRound,
   Smartphone,
   Package,
@@ -159,7 +157,7 @@ export default function RepairOrderModal({
                   aria-label="Agregar cliente rapido"
                   title="Agregar cliente rapido"
                 >
-                  <UserRoundPlus size={15} />
+                  <Plus size={16} />
                 </button>
               </div>
 
@@ -280,7 +278,7 @@ export default function RepairOrderModal({
                   title="Agregar dispositivo rapido"
                   disabled={!form.clienteId}
                 >
-                  <SmartphoneNfc size={15} />
+                  <Plus size={16} />
                 </button>
               </div>
 
