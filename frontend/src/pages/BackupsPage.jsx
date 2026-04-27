@@ -426,13 +426,16 @@ export default function BackupsPage() {
       const response = await api.post('/admin/backups/restore/execute', {
         sessionId: validation.sessionId,
       });
-      pushNotification('success', response.message, { duration: 9000 });
+
+      pushNotification(
+        'success',
+        `${response.message} Espera a que el sistema termine y te envíe al login.`,
+        { duration: 12000 }
+      );
+
       setRestoreValidation(null);
       setRemoteRestoreValidation(null);
       setRestoreFile(null);
-      window.setTimeout(() => {
-        window.location.reload();
-      }, 8000);
     } catch (err) {
       pushNotification('error', err.message);
     } finally {
@@ -580,9 +583,8 @@ export default function BackupsPage() {
               <h3>Preparacion de Google Drive</h3>
               <p>La app usa OAuth personal y crea una carpeta propia en tu Drive para guardar los respaldos.</p>
             </div>
-            <span className={`backups-status-chip ${
-              driveTest?.ok ? 'is-success' : driveTest ? 'is-danger' : settings.googleDriveReady ? 'is-success' : 'is-warning'
-            }`}>
+            <span className={`backups-status-chip ${driveTest?.ok ? 'is-success' : driveTest ? 'is-danger' : settings.googleDriveReady ? 'is-success' : 'is-warning'
+              }`}>
               {driveTest?.ok ? 'Conexion validada' : driveTest ? 'Validacion fallida' : settings.googleDriveReady ? 'Conectado' : 'Pendiente'}
             </span>
           </div>

@@ -237,6 +237,33 @@ function waitForBackendReady(timeoutMs = BACKEND_START_TIMEOUT_MS) {
     probe();
   });
 }
+async function clearSessionAndGoToLogin() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+
+  try {
+    await mainWindow.webContents.executeJavaScript(`
+      try {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        sessionStorage.clear();
+
+        if (window.location.protocol === 'file:') {
+          window.location.hash = '#/login';
+        } else {
+          window.location.href = '/login';
+        }
+      } catch (error) {
+        console.error('No se pudo limpiar la sesion despues de restaurar', error);
+      }
+    `);
+
+    mainWindow.webContents.reloadIgnoringCache();
+  } catch (error) {
+    logElectron(`No se pudo enviar al login despues de restaurar: ${error.message}`);
+  }
+}
 
 function probeBackendHealth(timeoutMs = 1500) {
   return new Promise((resolve) => {
@@ -304,22 +331,31 @@ function startBackend() {
     );
   });
 
-  backendProcess.on('close', (code) => {
+  backendProcess.on('close', async (code) => {
     logElectron(`Backend finalizado con codigo ${code}`);
+
     if (!isQuitting && ownsBackendProcess && fs.existsSync(getPendingRestorePlanPath())) {
       const restoreApplied = applyPendingRestoreIfNeeded();
+
       try {
         startBackend();
+
+        await waitForBackendReady(60000);
+
+        await clearSessionAndGoToLogin();
+
         if (mainWindow && !mainWindow.isDestroyed()) {
-          setTimeout(() => {
-            try {
-              mainWindow.webContents.reloadIgnoringCache();
-            } catch (reloadError) {
-              logElectron(`No se pudo recargar la ventana despues de restaurar: ${reloadError.message}`);
-            }
-          }, 3000);
+          dialog.showMessageBox(mainWindow, {
+            type: 'info',
+            title: 'Restauración completada',
+            message: restoreApplied
+              ? 'La restauración se aplicó correctamente. Por seguridad, vuelve a iniciar sesión.'
+              : 'La restauración no se pudo aplicar correctamente. Revisa el resultado en la sección de respaldos.',
+          });
         }
       } catch (error) {
+        logElectron(`No se pudo reiniciar despues de restaurar: ${error.stack || error.message}`);
+
         dialog.showErrorBox(
           'No se pudo reiniciar despues de restaurar',
           buildFailureMessage(
@@ -330,6 +366,7 @@ function startBackend() {
           )
         );
       }
+
       return;
     }
 
