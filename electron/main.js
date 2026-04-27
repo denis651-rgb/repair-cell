@@ -1,5 +1,5 @@
 const { app, BrowserWindow, dialog } = require('electron');
-const { spawn } = require('child_process');
+const { spawn, execFile } = require('child_process');
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
@@ -14,7 +14,26 @@ let isApplyingPendingRestore = false;
 
 const BACKEND_PORT = 8080;
 const BACKEND_HEALTH_URL = `http://127.0.0.1:${BACKEND_PORT}/actuator/health`;
-const BACKEND_START_TIMEOUT_MS = 30000;
+const BACKEND_START_TIMEOUT_MS = 120000;
+
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+      }
+      mainWindow.focus();
+    }
+  });
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function getBackendJarPath() {
   if (app.isPackaged) {
@@ -62,21 +81,25 @@ function ensureAppDirectories() {
 
 function initializeLogPaths() {
   const logsPath = path.join(getAppStoragePath(), 'logs');
+  fs.mkdirSync(logsPath, { recursive: true });
+
   backendLogPath = path.join(logsPath, 'backend.log');
   electronLogPath = path.join(logsPath, 'electron.log');
+
   fs.writeFileSync(backendLogPath, '', { flag: 'w' });
   fs.writeFileSync(electronLogPath, '', { flag: 'w' });
 }
 
 function appendLog(filePath, message) {
+  if (!filePath) {
+    return;
+  }
+
   const line = `[${new Date().toISOString()}] ${message}\n`;
   fs.appendFileSync(filePath, line, 'utf8');
 }
 
 function logElectron(message) {
-  if (!electronLogPath) {
-    return;
-  }
   appendLog(electronLogPath, message);
 }
 
@@ -84,6 +107,7 @@ function logBackendChunk(prefix, chunk) {
   if (!backendLogPath) {
     return;
   }
+
   const text = chunk.toString().replace(/\r?\n$/, '');
   if (text) {
     appendLog(backendLogPath, `${prefix} ${text}`);
@@ -106,6 +130,10 @@ function getLastRestoreResultPath() {
   return path.join(getAppStoragePath(), 'restore', 'last-restore-result.json');
 }
 
+function getBackendPidPath() {
+  return path.join(getAppStoragePath(), 'backend.pid');
+}
+
 function readJsonFile(filePath) {
   if (!fs.existsSync(filePath)) {
     return null;
@@ -124,6 +152,65 @@ function removePathIfExists(filePath) {
   }
 }
 
+function isProcessAlive(pid) {
+  if (!pid) {
+    return false;
+  }
+
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function killProcessTree(pid) {
+  return new Promise((resolve) => {
+    if (!pid) {
+      resolve();
+      return;
+    }
+
+    if (process.platform === 'win32') {
+      execFile('taskkill', ['/PID', String(pid), '/T', '/F'], () => resolve());
+      return;
+    }
+
+    try {
+      process.kill(pid, 'SIGTERM');
+    } catch {
+      // Ignorar si el proceso ya no existe.
+    }
+
+    resolve();
+  });
+}
+
+async function cleanupStaleBackendProcessIfNeeded() {
+  const pidPath = getBackendPidPath();
+
+  if (!fs.existsSync(pidPath)) {
+    return;
+  }
+
+  const rawPid = fs.readFileSync(pidPath, 'utf8').trim();
+  const pid = Number(rawPid);
+
+  if (!pid || Number.isNaN(pid)) {
+    removePathIfExists(pidPath);
+    return;
+  }
+
+  if (isProcessAlive(pid)) {
+    logElectron(`Cerrando backend anterior con PID ${pid}.`);
+    await killProcessTree(pid);
+    await delay(1500);
+  }
+
+  removePathIfExists(pidPath);
+}
+
 function applyPendingRestoreIfNeeded() {
   const planPath = getPendingRestorePlanPath();
   if (!fs.existsSync(planPath)) {
@@ -131,6 +218,7 @@ function applyPendingRestoreIfNeeded() {
   }
 
   isApplyingPendingRestore = true;
+
   try {
     const plan = readJsonFile(planPath);
     if (!plan || !plan.sourceDatabasePath || !plan.targetDatabasePath) {
@@ -174,8 +262,10 @@ function applyPendingRestoreIfNeeded() {
     return true;
   } catch (error) {
     const plan = readJsonFile(planPath);
+
     if (plan && plan.targetDatabasePath) {
       const rollbackPath = `${plan.targetDatabasePath}.rollback`;
+
       try {
         if (fs.existsSync(rollbackPath)) {
           removePathIfExists(plan.targetDatabasePath);
@@ -188,7 +278,7 @@ function applyPendingRestoreIfNeeded() {
 
     writeJsonFile(getLastRestoreResultPath(), {
       ok: false,
-      message: `La restauracion local fallo: ${error.message}`,
+      message: `La restauracion fallo: ${error.message}`,
       restoredAt: new Date().toISOString(),
       restoredFrom: plan?.sourceDatabasePath || '',
       backupBeforeRestorePath: plan?.backupBeforeRestorePath || ''
@@ -202,17 +292,61 @@ function applyPendingRestoreIfNeeded() {
   }
 }
 
+function probeBackendHealth(timeoutMs = 1500) {
+  return new Promise((resolve) => {
+    let resolved = false;
+
+    const finish = (value) => {
+      if (!resolved) {
+        resolved = true;
+        resolve(value);
+      }
+    };
+
+    const request = http.get(BACKEND_HEALTH_URL, (response) => {
+      response.resume();
+      finish(response.statusCode === 200);
+    });
+
+    request.on('error', () => finish(false));
+    request.setTimeout(timeoutMs, () => {
+      request.destroy();
+      finish(false);
+    });
+  });
+}
+
 function waitForBackendReady(timeoutMs = BACKEND_START_TIMEOUT_MS) {
   const startedAt = Date.now();
 
   return new Promise((resolve, reject) => {
+    let finished = false;
+
+    const finishOk = () => {
+      if (!finished) {
+        finished = true;
+        logElectron(`Backend listo en ${BACKEND_HEALTH_URL}`);
+        resolve();
+      }
+    };
+
+    const finishError = (error) => {
+      if (!finished) {
+        finished = true;
+        reject(error);
+      }
+    };
+
     const probe = () => {
+      if (finished) {
+        return;
+      }
+
       const request = http.get(BACKEND_HEALTH_URL, (response) => {
         response.resume();
 
         if (response.statusCode === 200) {
-          logElectron(`Backend listo en ${BACKEND_HEALTH_URL}`);
-          resolve();
+          finishOk();
           return;
         }
 
@@ -227,16 +361,22 @@ function waitForBackendReady(timeoutMs = BACKEND_START_TIMEOUT_MS) {
     };
 
     const retry = () => {
-      if (Date.now() - startedAt >= timeoutMs) {
-        reject(new Error('El backend no respondio a tiempo.'));
+      if (finished) {
         return;
       }
+
+      if (Date.now() - startedAt >= timeoutMs) {
+        finishError(new Error('El backend no respondio a tiempo.'));
+        return;
+      }
+
       setTimeout(probe, 700);
     };
 
     probe();
   });
 }
+
 async function clearSessionAndGoToLogin() {
   if (!mainWindow || mainWindow.isDestroyed()) {
     return;
@@ -247,6 +387,7 @@ async function clearSessionAndGoToLogin() {
       try {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
+        localStorage.removeItem('auth');
         sessionStorage.clear();
 
         if (window.location.protocol === 'file:') {
@@ -265,22 +406,12 @@ async function clearSessionAndGoToLogin() {
   }
 }
 
-function probeBackendHealth(timeoutMs = 1500) {
-  return new Promise((resolve) => {
-    const request = http.get(BACKEND_HEALTH_URL, (response) => {
-      response.resume();
-      resolve(response.statusCode === 200);
-    });
-
-    request.on('error', () => resolve(false));
-    request.setTimeout(timeoutMs, () => {
-      request.destroy();
-      resolve(false);
-    });
-  });
-}
-
 function startBackend() {
+  if (backendProcess && backendProcess.exitCode === null && !backendProcess.killed) {
+    logElectron(`El backend ya se esta ejecutando con PID ${backendProcess.pid}. No se iniciara otro proceso.`);
+    return backendProcess;
+  }
+
   const jarPath = getBackendJarPath();
 
   if (!fs.existsSync(jarPath)) {
@@ -288,7 +419,6 @@ function startBackend() {
   }
 
   ensureAppDirectories();
-  initializeLogPaths();
 
   const appStoragePath = getAppStoragePath();
   const dbPath = toPortablePath(path.join(appStoragePath, 'data', 'repair-shop.db'));
@@ -301,7 +431,7 @@ function startBackend() {
   logElectron(`DB_URL=jdbc:sqlite:${dbPath}`);
   logElectron(`APP_BACKUP_DIRECTORY=${backupPath}`);
 
-  backendProcess = spawn(javaCommand, javaArgs, {
+  const child = spawn(javaCommand, javaArgs, {
     cwd: path.dirname(jarPath),
     windowsHide: true,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -315,13 +445,18 @@ function startBackend() {
     }
   });
 
+  backendProcess = child;
   ownsBackendProcess = true;
 
-  backendProcess.stdout.on('data', (chunk) => logBackendChunk('[stdout]', chunk));
-  backendProcess.stderr.on('data', (chunk) => logBackendChunk('[stderr]', chunk));
+  fs.writeFileSync(getBackendPidPath(), String(child.pid), 'utf8');
+  logElectron(`Backend iniciado con PID ${child.pid}`);
 
-  backendProcess.on('error', (error) => {
+  child.stdout.on('data', (chunk) => logBackendChunk('[stdout]', chunk));
+  child.stderr.on('data', (chunk) => logBackendChunk('[stderr]', chunk));
+
+  child.on('error', (error) => {
     logElectron(`Error al iniciar backend: ${error.stack || error.message}`);
+
     dialog.showErrorBox(
       'No se pudo iniciar el backend',
       buildFailureMessage(
@@ -331,30 +466,49 @@ function startBackend() {
     );
   });
 
-  backendProcess.on('close', async (code) => {
+  child.on('close', async (code) => {
     logElectron(`Backend finalizado con codigo ${code}`);
 
-    if (!isQuitting && ownsBackendProcess && fs.existsSync(getPendingRestorePlanPath())) {
+    try {
+      const pidPath = getBackendPidPath();
+      if (fs.existsSync(pidPath)) {
+        const storedPid = fs.readFileSync(pidPath, 'utf8').trim();
+        if (storedPid === String(child.pid)) {
+          removePathIfExists(pidPath);
+        }
+      }
+    } catch {
+      // Ignorar error de limpieza de PID.
+    }
+
+    if (backendProcess === child) {
+      backendProcess = null;
+    }
+
+    if (!isQuitting && fs.existsSync(getPendingRestorePlanPath())) {
       const restoreApplied = applyPendingRestoreIfNeeded();
 
       try {
         startBackend();
-
-        await waitForBackendReady(60000);
-
+        await waitForBackendReady(BACKEND_START_TIMEOUT_MS);
         await clearSessionAndGoToLogin();
 
         if (mainWindow && !mainWindow.isDestroyed()) {
           dialog.showMessageBox(mainWindow, {
             type: 'info',
-            title: 'Restauración completada',
+            title: 'Restauracion completada',
             message: restoreApplied
-              ? 'La restauración se aplicó correctamente. Por seguridad, vuelve a iniciar sesión.'
-              : 'La restauración no se pudo aplicar correctamente. Revisa el resultado en la sección de respaldos.',
+              ? 'La restauracion se aplico correctamente. Por seguridad, vuelve a iniciar sesion.'
+              : 'La restauracion no se pudo aplicar correctamente. Revisa el resultado en la seccion de respaldos.'
           });
         }
       } catch (error) {
         logElectron(`No se pudo reiniciar despues de restaurar: ${error.stack || error.message}`);
+
+        if (backendProcess && backendProcess.pid) {
+          await killProcessTree(backendProcess.pid);
+          backendProcess = null;
+        }
 
         dialog.showErrorBox(
           'No se pudo reiniciar despues de restaurar',
@@ -370,7 +524,7 @@ function startBackend() {
       return;
     }
 
-    if (!isQuitting && ownsBackendProcess && code !== 0) {
+    if (!isQuitting && !isApplyingPendingRestore && code !== 0) {
       dialog.showErrorBox(
         'El backend se cerro inesperadamente',
         buildFailureMessage(
@@ -380,6 +534,8 @@ function startBackend() {
       );
     }
   });
+
+  return child;
 }
 
 function createWindow() {
@@ -396,54 +552,102 @@ function createWindow() {
     }
   });
 
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
+
   const frontendEntry = getFrontendEntry();
+
   if (app.isPackaged) {
     mainWindow.loadFile(frontendEntry);
+  } else {
+    mainWindow.loadURL(frontendEntry);
+  }
+
+  return mainWindow;
+}
+
+async function stopOwnedBackend() {
+  if (!backendProcess || !ownsBackendProcess || !backendProcess.pid) {
     return;
   }
 
-  mainWindow.loadURL(frontendEntry);
+  const pid = backendProcess.pid;
+
+  try {
+    logElectron(`Cerrando backend con PID ${pid}.`);
+    await killProcessTree(pid);
+  } catch (error) {
+    logElectron(`No se pudo cerrar el backend con PID ${pid}: ${error.message}`);
+  } finally {
+    backendProcess = null;
+    removePathIfExists(getBackendPidPath());
+  }
 }
 
-app.whenReady().then(async () => {
+async function bootstrapApplication() {
   try {
     ensureAppDirectories();
-    applyPendingRestoreIfNeeded();
-    const existingBackend = await probeBackendHealth();
+    initializeLogPaths();
+
+    logElectron('Iniciando aplicacion de escritorio.');
+
+    await cleanupStaleBackendProcessIfNeeded();
+
+    const restoredAtStartup = applyPendingRestoreIfNeeded();
+    const existingBackend = await probeBackendHealth(3000);
+
     if (existingBackend) {
       logElectron(`Se reutilizara un backend ya activo en ${BACKEND_HEALTH_URL}`);
+      ownsBackendProcess = false;
     } else {
       startBackend();
     }
 
-    await waitForBackendReady();
-    createWindow();
+    await waitForBackendReady(BACKEND_START_TIMEOUT_MS);
+
+    const window = createWindow();
+
+    if (restoredAtStartup) {
+      window.webContents.once('did-finish-load', () => {
+        clearSessionAndGoToLogin();
+      });
+    }
   } catch (error) {
     logElectron(`Fallo al abrir la aplicacion: ${error.stack || error.message}`);
+
+    if (backendProcess && backendProcess.pid && ownsBackendProcess) {
+      await killProcessTree(backendProcess.pid);
+      backendProcess = null;
+      removePathIfExists(getBackendPidPath());
+    }
+
     dialog.showErrorBox(
       'No se pudo abrir la aplicacion',
       buildFailureMessage(
         'No se pudo abrir la aplicacion',
-        `${error.message}\n\nRevisa que el backend este empaquetado y que Java 17 este disponible.`
+        `${error.message}\n\nRevisa que el backend este empaquetado, que Java este disponible y que el puerto ${BACKEND_PORT} no este ocupado.`
       )
     );
+
     app.quit();
   }
-});
+}
 
-app.on('window-all-closed', () => {
-  isQuitting = true;
-  if (backendProcess && ownsBackendProcess) {
-    backendProcess.kill();
-  }
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
-});
+if (gotTheLock) {
+  app.whenReady().then(bootstrapApplication);
 
-app.on('before-quit', () => {
-  isQuitting = true;
-  if (backendProcess && ownsBackendProcess) {
-    backendProcess.kill();
-  }
-});
+  app.on('window-all-closed', () => {
+    isQuitting = true;
+    stopOwnedBackend().finally(() => {
+      if (process.platform !== 'darwin') {
+        app.quit();
+      }
+    });
+  });
+
+  app.on('before-quit', () => {
+    isQuitting = true;
+    stopOwnedBackend();
+  });
+}
