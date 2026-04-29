@@ -53,4 +53,7 @@ export function getDefaultRouteForUser(user) {
 export function clearStoredSession() {
   localStorage.removeItem('token');
   localStorage.removeItem('user');
+  localStorage.removeItem('auth');
+  localStorage.removeItem('usuarioActual');
+  sessionStorage.clear();
 }

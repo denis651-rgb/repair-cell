@@ -21,9 +21,10 @@ async function parseResponse(response) {
 }
 
 function extractErrorMessage(payload) {
-  if (!payload) return 'Ocurrió un error inesperado';
+  const fallback = 'Ocurrio un error inesperado. Intenta nuevamente o revisa los logs de la app.';
+  if (!payload) return fallback;
   if (typeof payload === 'string') return payload;
-  return payload.message || payload.error || payload.mensaje || 'Ocurrió un error inesperado';
+  return payload.message || payload.error || payload.mensaje || fallback;
 }
 
 async function request(path, options = {}) {
@@ -44,13 +45,16 @@ async function request(path, options = {}) {
     });
   } catch {
     throw new Error(
-      'No se pudo conectar con el backend local. Si acabas de restaurar un backup, espera unos segundos y vuelve a iniciar sesión.'
+      'Sin conexion con el backend local. Verifica que la app haya terminado de iniciar. Si acabas de restaurar un backup, espera unos segundos y vuelve a iniciar sesion.'
     );
   }
 
   if (response.status === 401) {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('auth');
+    localStorage.removeItem('usuarioActual');
+    sessionStorage.clear();
   }
 
   if (!response.ok) {

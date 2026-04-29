@@ -39,6 +39,7 @@
       }
     ],
     "win": {
+      "icon": "electron/assets/icon.ico",
       "target": "nsis"
     },
     "nsis": {

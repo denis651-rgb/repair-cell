@@ -1,4 +1,6 @@
 .backups-page {
+  width: min(100%, 1280px);
+  margin: 0 auto;
   gap: 22px;
   container-type: inline-size;
   min-width: 0;
@@ -248,7 +250,7 @@
 
 .backups-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr));
+  grid-template-columns: 1fr;
   gap: 18px;
   align-items: start;
 }
@@ -565,7 +567,7 @@
 
 @media (max-width: 1500px) {
   .backups-grid {
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr));
+    grid-template-columns: 1fr;
   }
 }
 

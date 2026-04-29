@@ -842,15 +842,28 @@ public class GoogleDriveBackupStorageService implements RemoteBackupStorageServi
             String reason = root.path("error").path("errors").path(0).path("reason").asText();
 
             if ("invalid_grant".equals(error)) {
-                return prefix + " La autorizacion expiro o fue revocada. Conecta Google Drive nuevamente.";
+                return prefix
+                        + " Google revoco o vencio el permiso guardado. Presiona Desconectar, importa el JSON OAuth si cambio y vuelve a conectar Google Drive.";
+            }
+
+            if ("invalid_client".equals(error) || "unauthorized_client".equals(error)) {
+                return prefix
+                        + " El Client ID o Client Secret no coincide con el JSON OAuth de Google Cloud. Importa nuevamente el archivo JSON correcto y vuelve a conectar.";
+            }
+
+            if ("access_denied".equals(error) || "forbidden".equals(error) || "insufficientFilePermissions".equals(reason)
+                    || "appNotAuthorizedToFile".equals(reason)) {
+                return prefix
+                        + " Google no dio permiso para usar la carpeta o el archivo. Desconecta Drive, vuelve a conectar y acepta los permisos solicitados.";
             }
 
             if ("invalid_request".equals(error) && !errorDescription.isBlank()) {
-                return prefix + " " + errorDescription;
+                return prefix + " Google rechazo la solicitud OAuth: " + errorDescription;
             }
 
             if ("storageQuotaExceeded".equals(reason)) {
-                return prefix + " No hay espacio suficiente disponible en tu Google Drive personal.";
+                return prefix
+                        + " No hay espacio suficiente en Google Drive. Libera espacio o usa otra cuenta de Google y vuelve a intentar.";
             }
 
             JsonNode messageNode = root.path("error").path("message");
@@ -886,7 +899,7 @@ public class GoogleDriveBackupStorageService implements RemoteBackupStorageServi
                     || current instanceof ConnectException
                     || current instanceof HttpTimeoutException) {
                 return new RemoteBackupException(
-                        "No hay conexion disponible para comunicarse con Google Drive.",
+                        "Sin internet o sin acceso a Google Drive. Revisa la conexion de la laptop y vuelve a intentar.",
                         ex,
                         true);
             }

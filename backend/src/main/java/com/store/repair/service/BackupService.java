@@ -560,7 +560,7 @@ public class BackupService {
 
     private String resolveBackupIoMessage(IOException ex, String fallbackMessage) {
         if (ex instanceof AccessDeniedException) {
-            return "La carpeta de backups no tiene permisos de escritura.";
+            return "La carpeta local de backups no tiene permisos de escritura. Elige una carpeta dentro de tu usuario, por ejemplo Documentos o la carpeta por defecto de la app.";
         }
 
         if (ex instanceof FileSystemException fileSystemException) {
@@ -570,7 +570,7 @@ public class BackupService {
                 if (lowerReason.contains("not enough space")
                         || lowerReason.contains("espacio")
                         || lowerReason.contains("disk full")) {
-                    return "No hay espacio suficiente en disco para generar el backup.";
+                    return "No hay espacio suficiente en disco para generar el backup. Libera espacio en la laptop o cambia la carpeta local de respaldos.";
                 }
             }
         }
@@ -581,7 +581,7 @@ public class BackupService {
             if (lowerMessage.contains("not enough space")
                     || lowerMessage.contains("espacio")
                     || lowerMessage.contains("disk full")) {
-                return "No hay espacio suficiente en disco para generar el backup.";
+                return "No hay espacio suficiente en disco para generar el backup. Libera espacio en la laptop o cambia la carpeta local de respaldos.";
             }
         }
 
