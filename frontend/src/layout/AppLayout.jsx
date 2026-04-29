@@ -69,6 +69,7 @@ export default function AppLayout() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [busqueda, setBusqueda] = useState('');
   const [seccionesAbiertas, setSeccionesAbiertas] = useState(initialSections);
+  const [logoutModalOpen, setLogoutModalOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { theme, isDark, toggleTheme } = useTheme();
@@ -180,10 +181,19 @@ export default function AppLayout() {
   };
 
   const cerrarSesion = () => {
-    clearStoredSession();
-    setMenuOpen(false);
-    navigate('/login', { replace: true });
-  };
+  setLogoutModalOpen(true);
+};
+
+const confirmarCerrarSesion = () => {
+  clearStoredSession();
+  setMenuOpen(false);
+  setLogoutModalOpen(false);
+  navigate('/login', { replace: true });
+};
+
+const cancelarCerrarSesion = () => {
+  setLogoutModalOpen(false);
+};
 
   const toggleSection = (sectionId) => {
     setSeccionesAbiertas((actual) => ({
@@ -328,6 +338,59 @@ export default function AppLayout() {
           <Outlet />
         </main>
       </div>
+      {logoutModalOpen && (
+        <div className="logout-confirm-backdrop" role="presentation">
+          <div
+            className="logout-confirm-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="logout-confirm-title"
+            aria-describedby="logout-confirm-description"
+          >
+            <div className="logout-confirm-icon">
+              <LogOut size={22} />
+            </div>
+
+            <div className="logout-confirm-copy">
+              <h3 id="logout-confirm-title">¿Cerrar sesión?</h3>
+              <p id="logout-confirm-description">
+                Se cerrará tu sesión actual y volverás a la pantalla de inicio de sesión.
+              </p>
+            </div>
+
+            <div className="logout-confirm-actions">
+              <button
+                type="button"
+                className="logout-confirm-cancel"
+                onClick={cancelarCerrarSesion}
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                className="logout-confirm-submit"
+                onClick={confirmarCerrarSesion}
+              >
+                <LogOut size={16} />
+                Confirmar
+              </button>
+            </div>
+
+            <button
+              type="button"
+              className="logout-confirm-close"
+              onClick={cancelarCerrarSesion}
+              aria-label="Cerrar confirmación"
+              title="Cerrar"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+      
+  

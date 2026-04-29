@@ -1,5 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Archive, FolderTree, Layers3, PackagePlus, Plus, Rows3, Tags } from 'lucide-react';
+import {
+  Archive,
+  ChevronLeft,
+  ChevronRight,
+  CircleX,
+  Eye,
+  FolderTree,
+  Layers3,
+  PackagePlus,
+  Pencil,
+  Plus,
+  Rows3,
+  Tags,
+} from 'lucide-react';
 import { api } from '../../api/api';
 import EmptyState from '../common/EmptyState';
 import Modal from '../common/Modal';
@@ -155,22 +168,28 @@ function PaginationRow({ pagina, onChange }) {
       <div className="catalogo-pagination-actions">
         <button
           type="button"
-          className="secondary compact"
+          className="secondary compact catalogo-icon-button"
           onClick={() => onChange(Math.max(pagina.number - 1, 0))}
           disabled={pagina.first}
+          title="Pagina anterior"
+          aria-label="Pagina anterior"
         >
-          Anterior
+          <ChevronLeft size={16} />
         </button>
+
         <strong>
           Pagina {pagina.number + 1} de {Math.max(pagina.totalPages, 1)}
         </strong>
+
         <button
           type="button"
-          className="secondary compact"
+          className="secondary compact catalogo-icon-button"
           onClick={() => onChange(Math.min(pagina.number + 1, pagina.totalPages - 1))}
           disabled={pagina.last}
+          title="Pagina siguiente"
+          aria-label="Pagina siguiente"
         >
-          Siguiente
+          <ChevronRight size={16} />
         </button>
       </div>
     </div>
@@ -273,54 +292,66 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
   };
 
   const cargarVariantes = async () => {
-    try {
-      const respuesta = await api.get('/catalogo/productos-variantes', {
-        productoBaseId: productoBaseSeleccionado?.id || undefined,
-        categoriaId: filtrosGlobales.categoriaId,
-        marcaId: filtrosGlobales.marcaId,
-        modelo: filtrosGlobales.modelo,
-        calidad: filtrosGlobales.calidad,
-        soloActivas: soloActivos,
-      });
-      const lista = respuesta || [];
-      setVariantes(lista);
+  try {
+    const hayProductoBaseSeleccionado = Boolean(productoBaseSeleccionado?.id);
 
-      if (varianteSeleccionada) {
-        const actualizada = lista.find((item) => item.id === varianteSeleccionada.id) || null;
-        setVarianteSeleccionada(actualizada);
-      }
-    } catch (err) {
-      notifyError('No se pudieron cargar las variantes.', err);
+    const respuesta = await api.get('/catalogo/productos-variantes', {
+      productoBaseId: productoBaseSeleccionado?.id || undefined,
+
+      /*
+       * IMPORTANTE:
+       * Si ya seleccionaste un producto base, no mandamos categoria/marca/modelo.
+       * Eso evita que un modelo compatible bloquee las variantes reales del producto base.
+       */
+      categoriaId: hayProductoBaseSeleccionado ? undefined : filtrosGlobales.categoriaId,
+      marcaId: hayProductoBaseSeleccionado ? undefined : filtrosGlobales.marcaId,
+      modelo: hayProductoBaseSeleccionado ? undefined : filtrosGlobales.modelo,
+
+      calidad: filtrosGlobales.calidad,
+      soloActivas: soloActivos,
+    });
+
+    const lista = respuesta || [];
+    setVariantes(lista);
+
+    if (varianteSeleccionada) {
+      const actualizada = lista.find((item) => item.id === varianteSeleccionada.id) || null;
+      setVarianteSeleccionada(actualizada);
     }
-  };
+  } catch (err) {
+    notifyError('No se pudieron cargar las variantes.', err);
+  }
+};
 
   const cargarLotes = async () => {
-    if (!varianteSeleccionada?.id) {
-      setLotes([]);
-      return;
+  if (!varianteSeleccionada?.id) {
+    setLotes([]);
+    return;
+  }
+
+  try {
+    /*
+     * IMPORTANTE:
+     * Los lotes pertenecen a una variante exacta.
+     * Si ya tenemos varianteId, NO debemos mandar modelo/categoria/marca.
+     * Un modelo compatible puede no ser el modelo principal del producto base.
+     */
+    const params = {
+      varianteId: varianteSeleccionada.id,
+    };
+
+    if (estadoLoteFiltro === 'OPERATIVOS') {
+      params.soloOperativos = true;
+    } else if (estadoLoteFiltro !== 'TODOS') {
+      params.estado = estadoLoteFiltro;
     }
 
-    try {
-      const params = {
-        varianteId: varianteSeleccionada.id,
-        categoriaId: filtrosGlobales.categoriaId,
-        marcaId: filtrosGlobales.marcaId,
-        modelo: filtrosGlobales.modelo,
-      };
-
-      if (estadoLoteFiltro === 'OPERATIVOS') {
-        params.soloOperativos = true;
-      } else if (estadoLoteFiltro !== 'TODOS') {
-        params.estado = estadoLoteFiltro;
-      }
-
-      const respuesta = await api.get('/catalogo/lotes', params);
-      setLotes(respuesta || []);
-    } catch (err) {
-      notifyError('No se pudieron cargar los lotes.', err);
-    }
-  };
-
+    const respuesta = await api.get('/catalogo/lotes', params);
+    setLotes(respuesta || []);
+  } catch (err) {
+    notifyError('No se pudieron cargar los lotes.', err);
+  }
+};
   const cargarInventarioOperativo = async () => {
     try {
       const respuesta = await api.get('/catalogo/inventario-operativo', {
@@ -354,30 +385,34 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
   };
 
   const cargarHistorialLotes = async () => {
-    try {
-      const params = {
-        categoriaId: filtrosGlobales.categoriaId,
-        marcaId: filtrosGlobales.marcaId,
-        modelo: filtrosGlobales.modelo,
-        calidad: filtrosGlobales.calidad,
-        pagina: paginaHistorico,
-        tamano: HISTORICO_PAGE_SIZE,
-      };
+  try {
+    const historialPorVariante = historialLigadoAVariante && varianteSeleccionada?.id;
 
-      if (estadoHistorialFiltro !== 'TODOS') {
-        params.estado = estadoHistorialFiltro;
-      }
+    const params = historialPorVariante
+      ? {
+          varianteId: varianteSeleccionada.id,
+          pagina: paginaHistorico,
+          tamano: HISTORICO_PAGE_SIZE,
+        }
+      : {
+          categoriaId: filtrosGlobales.categoriaId,
+          marcaId: filtrosGlobales.marcaId,
+          modelo: filtrosGlobales.modelo,
+          calidad: filtrosGlobales.calidad,
+          pagina: paginaHistorico,
+          tamano: HISTORICO_PAGE_SIZE,
+        };
 
-      if (historialLigadoAVariante && varianteSeleccionada?.id) {
-        params.varianteId = varianteSeleccionada.id;
-      }
-
-      const respuesta = await api.get('/catalogo/lotes/historico', params);
-      setHistorialLotes(normalizarPagina(respuesta, HISTORICO_PAGE_SIZE));
-    } catch (err) {
-      notifyError('No se pudo cargar el historico de lotes.', err);
+    if (estadoHistorialFiltro !== 'TODOS') {
+      params.estado = estadoHistorialFiltro;
     }
-  };
+
+    const respuesta = await api.get('/catalogo/lotes/historico', params);
+    setHistorialLotes(normalizarPagina(respuesta, HISTORICO_PAGE_SIZE));
+  } catch (err) {
+    notifyError('No se pudo cargar el historico de lotes.', err);
+  }
+};
 
   useEffect(() => {
     cargarProductosBase();
@@ -395,14 +430,8 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
   ]);
 
   useEffect(() => {
-    cargarLotes();
-  }, [
-    varianteSeleccionada?.id,
-    filtrosGlobales.categoriaId,
-    filtrosGlobales.marcaId,
-    filtrosGlobales.modelo,
-    estadoLoteFiltro,
-  ]);
+  cargarLotes();
+}, [varianteSeleccionada?.id, estadoLoteFiltro]);
 
   useEffect(() => {
     cargarInventarioOperativo();
@@ -438,16 +467,16 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
   }, [filtrosGlobales.categoriaId, filtrosGlobales.marcaId, filtrosGlobales.modelo, filtrosGlobales.calidad, soloConStock]);
 
   useEffect(() => {
-    setPaginaHistorico(0);
-  }, [
-    filtrosGlobales.categoriaId,
-    filtrosGlobales.marcaId,
-    filtrosGlobales.modelo,
-    filtrosGlobales.calidad,
-    estadoHistorialFiltro,
-    historialLigadoAVariante,
-    varianteSeleccionada?.id,
-  ]);
+  setPaginaHistorico(0);
+}, [
+  historialLigadoAVariante,
+  varianteSeleccionada?.id,
+  estadoHistorialFiltro,
+  filtrosGlobales.categoriaId,
+  filtrosGlobales.marcaId,
+  filtrosGlobales.modelo,
+  filtrosGlobales.calidad,
+]);
 
   useEffect(() => {
     setPaginaProductosBase(0);
@@ -614,16 +643,16 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
   const editarVariante = (variante) => {
     setVarianteEditando(variante);
     setCodigoVarianteSugerido(variante.codigoVariante || '');
-      setVarianteForm({
-        productoBaseId: variante.productoBase?.id ? String(variante.productoBase.id) : '',
-        codigoVariante: variante.codigoVariante || '',
-        calidad: variante.calidad || '',
-        tipoPresentacion: variante.tipoPresentacion || '',
-        color: '',
-        precioVentaSugerido: variante.precioVentaSugerido ?? 0,
-        stockMinimo: variante.stockMinimo ?? 0,
-        activo: variante.activo ?? true,
-      });
+    setVarianteForm({
+      productoBaseId: variante.productoBase?.id ? String(variante.productoBase.id) : '',
+      codigoVariante: variante.codigoVariante || '',
+      calidad: variante.calidad || '',
+      tipoPresentacion: variante.tipoPresentacion || '',
+      color: '',
+      precioVentaSugerido: variante.precioVentaSugerido ?? 0,
+      stockMinimo: variante.stockMinimo ?? 0,
+      activo: variante.activo ?? true,
+    });
     setModalVarianteOpen(true);
   };
 
@@ -808,36 +837,9 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
       <div className="inventory-main-panel card">
         <div className="inventory-panel-header">
           <div>
-            <h3>Inventario nuevo por operacion y catalogo</h3>
+            <h3>Inventario por operacion y catalogo</h3>
             <p>Una sola tabla maestra para operar, un panel de detalle para entender y un historico separado para auditar.</p>
           </div>
-          {vistaActiva === 'CATALOGO' && (
-            <div className="inventory-header-actions">
-              <button type="button" className="secondary inventory-icon-button" onClick={abrirProductoBaseNuevo} title="Nuevo producto base">
-                <PackagePlus size={16} />
-              </button>
-              <button
-                type="button"
-                className="inventory-primary-button compact"
-                onClick={abrirVarianteNueva}
-                disabled={!productoBaseSeleccionado}
-                title={productoBaseSeleccionado ? 'Nueva variante' : 'Selecciona un producto base'}
-              >
-                <Plus size={16} />
-                Variante
-              </button>
-              <button
-                type="button"
-                className="secondary compact"
-                onClick={abrirLoteNuevo}
-                disabled={!varianteSeleccionada}
-                title={varianteSeleccionada ? 'Nuevo lote manual' : 'Selecciona una variante'}
-              >
-                <Archive size={16} />
-                Lote
-              </button>
-            </div>
-          )}
         </div>
 
         <div className="catalogo-grid">
@@ -863,11 +865,10 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
           <section className="catalogo-panel catalogo-filter-shell">
             <div className="inventory-panel-header inventory-panel-header-tight">
               <div>
-                <h4>Filtros globales</h4>
-                <p>Marca, categoria, modelo y calidad afectan los listados de esta pantalla sin volverla un caos.</p>
+                <h4>Productos base</h4>
+                <p>Definicion de la pieza madre sin precio, costo ni stock.</p>
               </div>
             </div>
-
             <div className="catalogo-filter-row catalogo-filter-row-global">
               <select value={categoriaFiltro} onChange={(event) => setCategoriaFiltro(event.target.value)}>
                 <option value="">Todas las categorias</option>
@@ -985,7 +986,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                               <td>
                                 <button
                                   type="button"
-                                  className="secondary compact"
+                                  className="secondary compact catalogo-icon-button"
                                   onClick={() =>
                                     setVarianteSeleccionada({
                                       id: item.varianteId,
@@ -1001,8 +1002,10 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                                       },
                                     })
                                   }
+                                  title="Ver detalle"
+                                  aria-label="Ver detalle"
                                 >
-                                  Ver detalle
+                                  <Eye size={16} />
                                 </button>
                               </td>
                             </tr>
@@ -1017,7 +1020,8 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
               </section>
 
               <section className="catalogo-panel">
-                <div className="inventory-panel-header inventory-panel-header-tight">
+                <
+                  div className="inventory-panel-header inventory-panel-header-tight">
                   <div>
                     <h4>Detalle de variante</h4>
                     <p>
@@ -1231,6 +1235,18 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                         <h4>Productos base</h4>
                         <p>Definicion de la pieza madre sin precio, costo ni stock.</p>
                       </div>
+
+                      <div className="inventory-header-actions">
+                        <button
+                          type="button"
+                          className="secondary compact catalogo-icon-button"
+                          onClick={abrirProductoBaseNuevo}
+                          title="Nuevo producto base"
+                          aria-label="Nuevo producto base"
+                        >
+                          <PackagePlus size={17} />
+                        </button>
+                      </div>
                     </div>
 
                     {productosBasePaginados.content.length === 0 ? (
@@ -1312,17 +1328,22 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                                     <div className="inventory-inline-actions">
                                       <button
                                         type="button"
-                                        className="secondary compact"
+                                        className="secondary compact catalogo-icon-button"
                                         onClick={() => setProductoBaseSeleccionado(productoBase)}
+                                        title="Ver variantes"
+                                        aria-label={`Ver variantes de ${productoBase.nombreBase}`}
                                       >
-                                        Ver variantes
+                                        <Rows3 size={16} />
                                       </button>
+
                                       <button
                                         type="button"
-                                        className="secondary compact"
+                                        className="secondary compact catalogo-icon-button"
                                         onClick={() => editarProductoBase(productoBase)}
+                                        title="Editar producto base"
+                                        aria-label={`Editar producto base ${productoBase.nombreBase}`}
                                       >
-                                        Editar
+                                        <Pencil size={16} />
                                       </button>
                                     </div>
                                   </td>
@@ -1347,7 +1368,21 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                             : 'Selecciona un producto base para enfocar las variantes.'}
                         </p>
                       </div>
-                      <span className="chip">{variantes.length}</span>
+
+                      <div className="inventory-header-actions">
+                        <span className="chip">{variantes.length}</span>
+
+                        <button
+                          type="button"
+                          className="inventory-primary-button compact catalogo-icon-button"
+                          onClick={abrirVarianteNueva}
+                          disabled={!productoBaseSeleccionado}
+                          title={productoBaseSeleccionado ? 'Nueva variante' : 'Selecciona un producto base'}
+                          aria-label={productoBaseSeleccionado ? 'Nueva variante' : 'Selecciona un producto base'}
+                        >
+                          <Layers3 size={17} />
+                        </button>
+                      </div>
                     </div>
 
                     {variantesPaginadas.content.length === 0 ? (
@@ -1360,13 +1395,13 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                         <div className="responsive-table-wrap">
                           <table className="table">
                             <thead>
-                                <tr>
-                                  <th>Codigo</th>
-                                  <th>Calidad</th>
-                                  <th>Precio venta</th>
-                                  <th>Stock lote</th>
-                                  <th>Accion</th>
-                                </tr>
+                              <tr>
+                                <th>Codigo</th>
+                                <th>Calidad</th>
+                                <th>Precio venta</th>
+                                <th>Stock lote</th>
+                                <th>Accion</th>
+                              </tr>
                             </thead>
                             <tbody>
                               {variantesPaginadas.content.map((variante) => (
@@ -1374,28 +1409,33 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                                   key={variante.id}
                                   className={varianteSeleccionada?.id === variante.id ? 'catalogo-row-active' : ''}
                                 >
-                                    <td>
-                                      <strong>{variante.codigoVariante}</strong>
-                                      <div>{variante.tipoPresentacion || 'Sin presentacion'}</div>
-                                    </td>
-                                    <td>{variante.calidad || 'Sin calidad'}</td>
-                                    <td>Bs {currency.format(Number(variante.precioVentaSugerido || 0))}</td>
-                                    <td>{variante.stockDisponibleTotal || 0}</td>
-                                    <td>
+                                  <td>
+                                    <strong>{variante.codigoVariante}</strong>
+                                    <div>{variante.tipoPresentacion || 'Sin presentacion'}</div>
+                                  </td>
+                                  <td>{variante.calidad || 'Sin calidad'}</td>
+                                  <td>Bs {currency.format(Number(variante.precioVentaSugerido || 0))}</td>
+                                  <td>{variante.stockDisponibleTotal || 0}</td>
+                                  <td>
                                     <div className="inventory-inline-actions">
                                       <button
                                         type="button"
-                                        className="secondary compact"
+                                        className="secondary compact catalogo-icon-button"
                                         onClick={() => setVarianteSeleccionada(variante)}
+                                        title="Ver lotes"
+                                        aria-label={`Ver lotes de ${variante.codigoVariante}`}
                                       >
-                                        Lotes
+                                        <Archive size={16} />
                                       </button>
+
                                       <button
                                         type="button"
-                                        className="secondary compact"
+                                        className="secondary compact catalogo-icon-button"
                                         onClick={() => editarVariante(variante)}
+                                        title="Editar variante"
+                                        aria-label={`Editar variante ${variante.codigoVariante}`}
                                       >
-                                        Editar
+                                        <Pencil size={16} />
                                       </button>
                                     </div>
                                   </td>
@@ -1422,6 +1462,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                         : 'Selecciona una variante para administrar sus lotes manuales e historicos operativos.'}
                     </p>
                   </div>
+
                   <div className="inventory-header-actions">
                     <select value={estadoLoteFiltro} onChange={(event) => setEstadoLoteFiltro(event.target.value)}>
                       <option value="OPERATIVOS">Activos operativos</option>
@@ -1430,7 +1471,19 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                       <option value="CERRADO_MANUAL">Cerrados</option>
                       <option value="TODOS">Todos</option>
                     </select>
+
                     <span className="chip">{lotes.length} lotes</span>
+
+                    <button
+                      type="button"
+                      className="secondary compact catalogo-icon-button"
+                      onClick={abrirLoteNuevo}
+                      disabled={!varianteSeleccionada}
+                      title={varianteSeleccionada ? 'Nuevo lote manual' : 'Selecciona una variante'}
+                      aria-label={varianteSeleccionada ? 'Nuevo lote manual' : 'Selecciona una variante'}
+                    >
+                      <Archive size={17} />
+                    </button>
                   </div>
                 </div>
 
@@ -1473,17 +1526,22 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                                 <div className="inventory-inline-actions">
                                   <button
                                     type="button"
-                                    className="secondary compact"
+                                    className="secondary compact catalogo-icon-button"
                                     onClick={() => editarLote(lote)}
+                                    title="Editar lote"
+                                    aria-label={`Editar lote ${lote.codigoLote}`}
                                   >
-                                    Editar
+                                    <Pencil size={16} />
                                   </button>
+
                                   <button
                                     type="button"
-                                    className="secondary compact"
+                                    className="secondary compact catalogo-icon-button catalogo-icon-button-danger"
                                     onClick={() => cerrarLoteManual(lote)}
+                                    title="Cerrar lote"
+                                    aria-label={`Cerrar lote ${lote.codigoLote}`}
                                   >
-                                    Cerrar
+                                    <CircleX size={16} />
                                   </button>
                                 </div>
                               </td>
@@ -1738,36 +1796,36 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                 required
               />
             </label>
-              <label>
-                <span>Tipo presentacion</span>
-                <input
-                  value={varianteForm.tipoPresentacion}
-                  onChange={(event) => setVarianteForm((actual) => ({ ...actual, tipoPresentacion: event.target.value }))}
-                  placeholder="Ej. Pantalla completa, Con marco, Flex V3"
-                />
-              </label>
-              <label>
-                <span>Precio venta sugerido</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={varianteForm.precioVentaSugerido}
-                  onChange={(event) => setVarianteForm((actual) => ({ ...actual, precioVentaSugerido: event.target.value }))}
-                  required
-                />
-              </label>
-              <label>
-                <span>Stock minimo</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={varianteForm.stockMinimo}
-                  onChange={(event) => setVarianteForm((actual) => ({ ...actual, stockMinimo: event.target.value }))}
-                  required
-                />
-              </label>
+            <label>
+              <span>Tipo presentacion</span>
+              <input
+                value={varianteForm.tipoPresentacion}
+                onChange={(event) => setVarianteForm((actual) => ({ ...actual, tipoPresentacion: event.target.value }))}
+                placeholder="Ej. Pantalla completa, Con marco, Flex V3"
+              />
+            </label>
+            <label>
+              <span>Precio venta sugerido</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={varianteForm.precioVentaSugerido}
+                onChange={(event) => setVarianteForm((actual) => ({ ...actual, precioVentaSugerido: event.target.value }))}
+                required
+              />
+            </label>
+            <label>
+              <span>Stock minimo</span>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={varianteForm.stockMinimo}
+                onChange={(event) => setVarianteForm((actual) => ({ ...actual, stockMinimo: event.target.value }))}
+                required
+              />
+            </label>
             <label>
               <span>Stock por lotes activos</span>
               <input value={varianteEditando?.stockDisponibleTotal ?? 0} readOnly />
@@ -1781,11 +1839,11 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
               />
             </label>
           </div>
-            {codigoVarianteSugerido && (
-              <div className="catalogo-context-note">
-                Codigo sugerido automatico: <strong>{codigoVarianteSugerido}</strong>. El backend asigna y protege este correlativo.
-              </div>
-            )}
+          {codigoVarianteSugerido && (
+            <div className="catalogo-context-note">
+              Codigo sugerido automatico: <strong>{codigoVarianteSugerido}</strong>. El backend asigna y protege este correlativo.
+            </div>
+          )}
           <div className="modal-actions-row">
             <button type="button" className="secondary" onClick={() => setModalVarianteOpen(false)}>
               Cancelar

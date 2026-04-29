@@ -30,15 +30,23 @@ async function request(path, options = {}) {
   const token = localStorage.getItem('token');
   const { query, body, headers, ...rest } = options;
   const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
-  const response = await fetch(buildUrl(path, query), {
-    ...rest,
-    headers: {
-      ...(body !== undefined && !isFormData ? { 'Content-Type': 'application/json' } : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(headers || {}),
-    },
-    ...(body !== undefined ? { body: isFormData ? body : JSON.stringify(body) } : {}),
-  });
+  let response;
+
+  try {
+    response = await fetch(buildUrl(path, query), {
+      ...rest,
+      headers: {
+        ...(body !== undefined && !isFormData ? { 'Content-Type': 'application/json' } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(headers || {}),
+      },
+      ...(body !== undefined ? { body: isFormData ? body : JSON.stringify(body) } : {}),
+    });
+  } catch {
+    throw new Error(
+      'No se pudo conectar con el backend local. Si acabas de restaurar un backup, espera unos segundos y vuelve a iniciar sesión.'
+    );
+  }
 
   if (response.status === 401) {
     localStorage.removeItem('token');

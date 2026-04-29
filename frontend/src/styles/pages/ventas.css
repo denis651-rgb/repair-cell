@@ -575,3 +575,147 @@
   border-color: rgba(96, 165, 250, 0.5);
   box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.12);
 }
+/* =========================================================
+   AJUSTE DARK MODE - COMPROBANTE DE VENTA
+   Pegar al final del archivo CSS
+========================================================= */
+
+:root[data-theme='dark'] .sale-receipt-card {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(2, 6, 23, 0.96));
+  border-color: rgba(148, 163, 184, 0.18);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.38);
+}
+
+/* Títulos y textos principales del comprobante */
+:root[data-theme='dark'] .sale-receipt-header h2,
+:root[data-theme='dark'] .sale-receipt-total strong,
+:root[data-theme='dark'] .sale-receipt-total span,
+:root[data-theme='dark'] .sale-receipt-info strong {
+  color: #e5eefc;
+}
+
+:root[data-theme='dark'] .sale-receipt-header p,
+:root[data-theme='dark'] .sale-receipt-total p,
+:root[data-theme='dark'] .sale-receipt-info p,
+:root[data-theme='dark'] .sale-receipt-table-wrap td div {
+  color: #94a3b8;
+}
+
+:root[data-theme='dark'] .sale-receipt-kicker {
+  color: #38bdf8;
+}
+
+/* Tarjetas internas: Cliente, Fecha, Total */
+:root[data-theme='dark'] .sale-receipt-info {
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.92), rgba(15, 23, 42, 0.96));
+  border-color: rgba(148, 163, 184, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+:root[data-theme='dark'] .sale-receipt-info span {
+  color: #93a4bd;
+}
+
+/* Tabla del comprobante */
+:root[data-theme='dark'] .sale-receipt-table-wrap table {
+  color: #e5eefc;
+  border-collapse: collapse;
+}
+
+:root[data-theme='dark'] .sale-receipt-table-wrap th {
+  color: #a8b5c7;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+:root[data-theme='dark'] .sale-receipt-table-wrap td {
+  color: #e5eefc;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+:root[data-theme='dark'] .sale-receipt-table-wrap tr:last-child td {
+  border-bottom: none;
+}
+
+/* Separadores internos si existen */
+:root[data-theme='dark'] .sale-receipt-card hr,
+:root[data-theme='dark'] .sale-receipt-card .divider {
+  border-color: rgba(148, 163, 184, 0.16);
+}
+
+/* Botón Imprimir / PDF más integrado al oscuro */
+:root[data-theme='dark'] .sale-receipt-actions .btn,
+:root[data-theme='dark'] .sale-receipt-actions button {
+  background: linear-gradient(135deg, rgba(30, 64, 175, 0.88), rgba(37, 99, 235, 0.88));
+  color: #e0f2fe;
+  border-color: rgba(96, 165, 250, 0.28);
+  box-shadow: 0 14px 30px rgba(37, 99, 235, 0.18);
+}
+
+:root[data-theme='dark'] .sale-receipt-actions .btn:hover,
+:root[data-theme='dark'] .sale-receipt-actions button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 34px rgba(37, 99, 235, 0.24);
+}
+
+/* Modal del comprobante si usa contenedor genérico */
+:root[data-theme='dark'] .modal-content,
+:root[data-theme='dark'] .dialog-content,
+:root[data-theme='dark'] .sale-modal-content {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(2, 6, 23, 0.98));
+  border-color: rgba(148, 163, 184, 0.18);
+  color: #e5eefc;
+}
+
+/* Scrollbar del modal en oscuro */
+:root[data-theme='dark'] .sale-receipt-shell,
+:root[data-theme='dark'] .sale-receipt-table-wrap {
+  scrollbar-color: rgba(148, 163, 184, 0.55) rgba(15, 23, 42, 0.6);
+}
+
+:root[data-theme='dark'] .sale-receipt-shell::-webkit-scrollbar,
+:root[data-theme='dark'] .sale-receipt-table-wrap::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+:root[data-theme='dark'] .sale-receipt-shell::-webkit-scrollbar-track,
+:root[data-theme='dark'] .sale-receipt-table-wrap::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.6);
+}
+
+:root[data-theme='dark'] .sale-receipt-shell::-webkit-scrollbar-thumb,
+:root[data-theme='dark'] .sale-receipt-table-wrap::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.42);
+  border-radius: 999px;
+}
+
+/* Mantener el comprobante claro cuando se imprima o genere PDF */
+@media print {
+  .sale-receipt-card,
+  .sale-receipt-info {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    box-shadow: none !important;
+  }
+
+  .sale-receipt-header h2,
+  .sale-receipt-total strong,
+  .sale-receipt-total span,
+  .sale-receipt-info strong,
+  .sale-receipt-table-wrap th,
+  .sale-receipt-table-wrap td {
+    color: #0f172a !important;
+  }
+
+  .sale-receipt-header p,
+  .sale-receipt-total p,
+  .sale-receipt-info p,
+  .sale-receipt-info span,
+  .sale-receipt-table-wrap td div {
+    color: #475569 !important;
+  }
+
+  .sale-receipt-actions {
+    display: none !important;
+  }
+}

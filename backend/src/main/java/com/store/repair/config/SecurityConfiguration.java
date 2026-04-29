@@ -51,7 +51,7 @@ public class SecurityConfiguration {
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/auth/login").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
-                        .requestMatchers("/api/admin/backups/oauth/callback").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/admin/backups/oauth/callback").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
                 .httpBasic(Customizer.withDefaults());

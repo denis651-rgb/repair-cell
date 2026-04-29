@@ -1613,3 +1613,43 @@
 :root[data-theme='dark'] .catalogo-kpi-card strong {
   color: var(--text);
 }
+.catalogo-icon-button {
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  min-height: 42px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  border-radius: 14px;
+}
+
+.catalogo-icon-button svg {
+  flex-shrink: 0;
+}
+
+.catalogo-icon-button-danger {
+  color: #fecaca;
+  border-color: rgba(248, 113, 113, 0.24);
+  background: rgba(127, 29, 29, 0.24);
+}
+
+.catalogo-icon-button-danger:hover {
+  color: #ffffff;
+  border-color: rgba(248, 113, 113, 0.38);
+  background: rgba(185, 28, 28, 0.34);
+}
+
+.inventory-header-actions .catalogo-icon-button {
+  flex-shrink: 0;
+}
+
+.inventory-inline-actions .catalogo-icon-button {
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  min-height: 38px;
+  border-radius: 12px;
+}

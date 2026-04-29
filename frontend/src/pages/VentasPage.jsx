@@ -160,29 +160,58 @@ export default function VentasPage() {
     [variantes, detalleForm.varianteId],
   );
 
-  const productosBaseFiltradosVenta = useMemo(() => {
-    const termino = busquedaVarianteVenta.trim().toLowerCase();
+  const normalizarTextoBusqueda = (valor) =>
+  String(valor || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
 
-    return productosBase.filter((productoBase) => {
-      const coincideCategoria =
-        !detalleForm.categoriaId || String(productoBase.categoria?.id) === String(detalleForm.categoriaId);
-      const coincideMarca =
-        !detalleForm.marcaId || String(productoBase.marca?.id) === String(detalleForm.marcaId);
-      const coincideTexto =
-        !termino ||
-        [
-          productoBase.nombreBase,
-          productoBase.modelo,
-          productoBase.categoria?.nombre,
-          productoBase.marca?.nombre,
-          ...variantes
-            .filter((variante) => String(variante.productoBase?.id) === String(productoBase.id))
-            .flatMap((variante) => [variante.calidad, variante.tipoPresentacion]),
-        ].some((valor) => String(valor || '').toLowerCase().includes(termino));
+const productosBaseFiltradosVenta = useMemo(() => {
+  const termino = normalizarTextoBusqueda(busquedaVarianteVenta);
 
-      return coincideCategoria && coincideMarca && coincideTexto;
-    });
-  }, [productosBase, detalleForm.categoriaId, detalleForm.marcaId, busquedaVarianteVenta, variantes]);
+  return productosBase.filter((productoBase) => {
+    const coincideCategoria =
+      !detalleForm.categoriaId || String(productoBase.categoria?.id) === String(detalleForm.categoriaId);
+
+    const coincideMarca =
+      !detalleForm.marcaId || String(productoBase.marca?.id) === String(detalleForm.marcaId);
+
+    const variantesDelProductoBase = variantes.filter(
+      (variante) => String(variante.productoBase?.id) === String(productoBase.id),
+    );
+
+    const compatibilidadesActivas = (productoBase.compatibilidades || []).filter(
+      (compatibilidad) => compatibilidad.activa ?? true,
+    );
+
+    const coincideTexto =
+      !termino ||
+      [
+        productoBase.codigoBase,
+        productoBase.nombreBase,
+        productoBase.modelo,
+        productoBase.descripcion,
+        productoBase.categoria?.nombre,
+        productoBase.marca?.nombre,
+
+        ...compatibilidadesActivas.flatMap((compatibilidad) => [
+          compatibilidad.marcaCompatible,
+          compatibilidad.modeloCompatible,
+          compatibilidad.codigoReferencia,
+          compatibilidad.nota,
+        ]),
+
+        ...variantesDelProductoBase.flatMap((variante) => [
+          variante.codigoVariante,
+          variante.calidad,
+          variante.tipoPresentacion,
+        ]),
+      ].some((valor) => normalizarTextoBusqueda(valor).includes(termino));
+
+    return coincideCategoria && coincideMarca && coincideTexto;
+  });
+}, [productosBase, detalleForm.categoriaId, detalleForm.marcaId, busquedaVarianteVenta, variantes]);
 
   const variantesDisponibles = useMemo(
     () =>
@@ -683,10 +712,10 @@ export default function VentasPage() {
               <label>
                 <span>Buscar en catalogo</span>
                 <input
-                  value={busquedaVarianteVenta}
-                  onChange={(event) => setBusquedaVarianteVenta(event.target.value)}
-                  placeholder="Filtra por nombre, modelo, calidad o marca"
-                />
+  value={busquedaVarianteVenta}
+  onChange={(event) => setBusquedaVarianteVenta(event.target.value)}
+  placeholder="Filtra por nombre, modelo, compatibilidad, calidad o marca"
+/>
               </label>
               <label>
                 <span>Categoria</span>

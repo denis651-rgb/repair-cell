@@ -10,13 +10,75 @@ import {
   UserRound,
   Smartphone,
   Package,
+  UserPlus,
+  FileCheck2,
+  Check,
 } from 'lucide-react';
 import Modal from '../common/Modal';
 
-const initialPart = { productoId: '', nombreParte: '', cantidad: 1, tipoFuente: 'TIENDA' };
+const initialPart = {
+  productoId: '',
+  varianteId: '',
+  nombreParte: '',
+  cantidad: 1,
+  tipoFuente: 'TIENDA',
+};
 
 function SectionBadge({ number }) {
   return <div className="repair-modal-section-badge">{number}</div>;
+}
+
+function normalizarTextoBusqueda(valor) {
+  return String(valor || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function obtenerCategoriaId(product) {
+  return product?.categoria?.id || product?.categoriaId || product?.categoriaNombre || '';
+}
+
+function obtenerCategoriaNombre(product) {
+  return product?.categoria?.nombre || product?.categoriaNombre || '';
+}
+
+function construirTextoBusquedaProducto(product) {
+  const compatibilidades = product?.compatibilidades || [];
+
+  return [
+    product?.codigoBase,
+    product?.codigoVariante,
+    product?.sku,
+    product?.nombre,
+    product?.nombreBase,
+    product?.descripcion,
+    product?.categoria?.nombre,
+    product?.categoriaNombre,
+    product?.marca?.nombre,
+    product?.marcaNombre,
+    product?.modelo,
+    product?.calidad,
+    product?.tipoPresentacion,
+
+    ...compatibilidades.flatMap((compatibilidad) => [
+      compatibilidad?.marcaCompatible,
+      compatibilidad?.modeloCompatible,
+      compatibilidad?.codigoReferencia,
+      compatibilidad?.nota,
+    ]),
+  ]
+    .map(normalizarTextoBusqueda)
+    .filter(Boolean)
+    .join(' ');
+}
+
+function productoTieneStockDisponible(product) {
+  const stockDisponible = Number(product?.stockDisponibleTotal ?? product?.cantidadStock ?? 0);
+  const lotesActivos = Number(product?.lotesActivos ?? product?.lotesDisponibles ?? 0);
+
+  return stockDisponible > 0 && lotesActivos > 0;
 }
 
 export default function RepairOrderModal({
@@ -63,53 +125,80 @@ export default function RepairOrderModal({
 
   const productCategories = useMemo(() => {
     const categoriesMap = new Map();
-    products.forEach((product) => {
-      const id = product?.categoria?.id || product?.categoriaId || product?.categoriaNombre;
-      const nombre = product?.categoria?.nombre || product?.categoriaNombre;
-      if (!id || !nombre || categoriesMap.has(String(id))) return;
-      categoriesMap.set(String(id), { id: String(id), nombre });
-    });
+
+    products
+      .filter(productoTieneStockDisponible)
+      .forEach((product) => {
+        const id = obtenerCategoriaId(product);
+        const nombre = obtenerCategoriaNombre(product);
+
+        if (!id || !nombre || categoriesMap.has(String(id))) return;
+
+        categoriesMap.set(String(id), { id: String(id), nombre });
+      });
+
     return Array.from(categoriesMap.values()).sort((a, b) => a.nombre.localeCompare(b.nombre));
   }, [products]);
 
   const filteredProducts = useMemo(() => {
-    const termBusqueda = productQuery.trim().toLowerCase();
-    const termParteLibre = selectedPart.nombreParte.trim().toLowerCase();
+    const termBusqueda = normalizarTextoBusqueda(productQuery);
+    const termParteLibre = normalizarTextoBusqueda(selectedPart.nombreParte);
     const term = termBusqueda || termParteLibre;
+    const palabras = term.split(/\s+/).filter(Boolean);
 
-    return products.filter((product) => {
-      const categoriaId = product?.categoria?.id || product?.categoriaId || product?.categoriaNombre;
+    return (products || []).filter((product) => {
+      if (!productoTieneStockDisponible(product)) {
+        return false;
+      }
+
+      const categoriaId = obtenerCategoriaId(product);
       const matchesCategory = !selectedCategory || String(categoriaId) === String(selectedCategory);
-      if (!matchesCategory) return false;
-      if (!term) return true;
 
-      return [
-        product?.nombre,
-        product?.nombreBase,
-        product?.codigoVariante,
-        product?.marcaNombre,
-        product?.modelo,
-        product?.calidad,
-        product?.sku,
-        product?.descripcion,
-        product?.categoria?.nombre,
-        product?.categoriaNombre,
-      ].some((value) => String(value || '').toLowerCase().includes(term));
+      if (!matchesCategory) {
+        return false;
+      }
+
+      if (!palabras.length) {
+        return true;
+      }
+
+      const textoBusqueda = construirTextoBusquedaProducto(product);
+
+      return palabras.every((palabra) => textoBusqueda.includes(palabra));
     });
   }, [products, productQuery, selectedCategory, selectedPart.nombreParte]);
 
   const selectedProduct = useMemo(
-    () => products.find((product) => String(product.varianteId || product.id) === String(selectedPart.varianteId || selectedPart.productoId)),
-    [products, selectedPart.productoId, selectedPart.varianteId],
+    () =>
+      products.find(
+        (product) =>
+          String(product.varianteId || product.id) === String(selectedPart.varianteId),
+      ),
+    [products, selectedPart.varianteId],
   );
 
   const handleSelectProduct = (product) => {
+    const nombreParte = [
+      product.nombreBase || product.nombre,
+      product.modelo,
+      product.calidad,
+      product.tipoPresentacion,
+    ]
+      .filter(Boolean)
+      .join(' - ');
+
     setSelectedPart({
       ...selectedPart,
+
+      // No enviamos productoId porque este producto viene del inventario operativo.
+      // El backend debe procesarlo por varianteId.
       productoId: '',
-      varianteId: String(product.varianteId || product.id),
-      nombreParte: selectedPart.nombreParte || product.nombreBase || product.nombre,
+      varianteId: String(product.varianteId || product.id || ''),
+
+      nombreParte: selectedPart.nombreParte || nombreParte,
+      tipoFuente: 'TIENDA',
     });
+
     setProductQuery('');
     setShowCategoryFilters(false);
   };
@@ -171,10 +260,12 @@ export default function RepairOrderModal({
                 {clientQuery && (
                   <button
                     type="button"
-                    className="repair-search-clear"
+                    className="repair-selected-card__remove"
                     onClick={onClearClient}
+                    title="Quitar cliente"
+                    aria-label="Quitar cliente"
                   >
-                    <X size={14} />
+                    <X size={15} />
                   </button>
                 )}
               </div>
@@ -202,18 +293,23 @@ export default function RepairOrderModal({
                   <div className="repair-quick-create-actions">
                     <button
                       type="button"
-                      className="repair-secondary-btn"
+                      className="repair-secondary-btn repair-icon-only-btn"
                       onClick={() => setQuickClientOpen(false)}
+                      title="Cancelar cliente rápido"
+                      aria-label="Cancelar cliente rápido"
                     >
-                      Cancelar
+                      <X size={16} />
                     </button>
+
                     <button
                       type="button"
-                      className="repair-primary-mini-btn"
+                      className="repair-primary-mini-btn repair-icon-only-btn"
                       onClick={onQuickCreateClient}
                       disabled={quickClientLoading}
+                      title={quickClientLoading ? 'Guardando cliente...' : 'Guardar cliente'}
+                      aria-label={quickClientLoading ? 'Guardando cliente...' : 'Guardar cliente'}
                     >
-                      {quickClientLoading ? 'Guardando...' : 'Guardar cliente'}
+                      <UserPlus size={16} />
                     </button>
                   </div>
                 </div>
@@ -297,10 +393,12 @@ export default function RepairOrderModal({
                 {deviceQuery && (
                   <button
                     type="button"
-                    className="repair-search-clear"
+                    className="repair-selected-card__remove"
                     onClick={onClearDevice}
+                    title="Quitar dispositivo"
+                    aria-label="Quitar dispositivo"
                   >
-                    <X size={14} />
+                    <X size={15} />
                   </button>
                 )}
               </div>
@@ -336,18 +434,23 @@ export default function RepairOrderModal({
                   <div className="repair-quick-create-actions">
                     <button
                       type="button"
-                      className="repair-secondary-btn"
+                      className="repair-secondary-btn repair-icon-only-btn"
                       onClick={() => setQuickDeviceOpen(false)}
+                      title="Cancelar dispositivo rápido"
+                      aria-label="Cancelar dispositivo rápido"
                     >
-                      Cancelar
+                      <X size={16} />
                     </button>
+
                     <button
                       type="button"
-                      className="repair-primary-mini-btn"
+                      className="repair-primary-mini-btn repair-icon-only-btn"
                       onClick={onQuickCreateDevice}
                       disabled={quickDeviceLoading}
+                      title={quickDeviceLoading ? 'Guardando dispositivo...' : 'Guardar dispositivo'}
+                      aria-label={quickDeviceLoading ? 'Guardando dispositivo...' : 'Guardar dispositivo'}
                     >
-                      {quickDeviceLoading ? 'Guardando...' : 'Guardar dispositivo'}
+                      <Smartphone size={16} />
                     </button>
                   </div>
                 </div>
@@ -514,7 +617,7 @@ export default function RepairOrderModal({
                   <input
                     value={productQuery}
                     onChange={(e) => setProductQuery(e.target.value)}
-                    placeholder="Buscar producto, SKU o categoria"
+                    placeholder="Buscar por categoría, marca, modelo o compatibilidad"
                   />
                   <button
                     type="button"
@@ -572,14 +675,20 @@ export default function RepairOrderModal({
                         onClick={() => handleSelectProduct(product)}
                       >
                         <span className="repair-product-list-main">
-                          <strong>{product.nombreBase || product.nombre}</strong>
-                          <small>{product.codigoVariante || product.sku || 'Sin codigo'}</small>
+                          <strong>
+                            {product.nombreBase || product.nombre}
+                          </strong>
+                          <small>
+                            {product.codigoVariante || product.sku || 'Sin codigo'} · {product.calidad || 'Sin calidad'}
+                          </small>
                         </span>
+
                         <span className="repair-product-list-meta">
-                          {product.categoriaNombre || product.categoria?.nombre || 'Sin categoria'}
+                          {product.marcaNombre || product.marca?.nombre || 'Sin marca'} · {product.modelo || 'Sin modelo'} · {obtenerCategoriaNombre(product) || 'Sin categoria'}
                         </span>
+
                         <span className="repair-product-list-stock">
-                          Stock {product.stockDisponibleTotal ?? product.cantidadStock ?? 0}
+                          Stock {product.stockDisponibleTotal ?? product.cantidadStock ?? 0} · Lotes {product.lotesActivos ?? 0}
                         </span>
                       </button>
                     ))
@@ -594,7 +703,9 @@ export default function RepairOrderModal({
                   </div>
                   <div className="repair-selected-card__content">
                     <strong>{selectedProduct.nombreBase || selectedProduct.nombre}</strong>
-                    <span>{selectedProduct.codigoVariante || selectedProduct.sku || 'Sin codigo'} · {selectedProduct.categoriaNombre || selectedProduct.categoria?.nombre || 'Sin categoria'} · Stock {selectedProduct.stockDisponibleTotal ?? selectedProduct.cantidadStock ?? 0}</span>
+                    <span>
+                      {selectedProduct.codigoVariante || selectedProduct.sku || 'Sin codigo'} · {selectedProduct.marcaNombre || selectedProduct.marca?.nombre || 'Sin marca'} · {selectedProduct.modelo || 'Sin modelo'} · Stock {selectedProduct.stockDisponibleTotal ?? selectedProduct.cantidadStock ?? 0} · Lotes {selectedProduct.lotesActivos ?? 0}
+                    </span>
                   </div>
                   <button
                     type="button"
@@ -640,9 +751,14 @@ export default function RepairOrderModal({
                 </label>
 
                 <div className="repair-part-add-wrap">
-                  <button type="button" className="repair-primary-mini-btn" onClick={addPart}>
-                    <Plus size={14} />
-                    Añadir
+                  <button
+                    type="button"
+                    className="repair-primary-mini-btn repair-icon-only-btn"
+                    onClick={addPart}
+                    title="Añadir repuesto"
+                    aria-label="Añadir repuesto"
+                  >
+                    <Plus size={16} />
                   </button>
                 </div>
               </div>
@@ -681,24 +797,36 @@ export default function RepairOrderModal({
         </section>
 
         <div className="repair-modal-footer">
-          <button type="button" className="repair-footer-link" onClick={onClose}>
-            Cancelar
+          <button
+            type="button"
+            className="repair-footer-link repair-icon-only-btn"
+            onClick={onClose}
+            title="Cancelar orden"
+            aria-label="Cancelar orden"
+          >
+            <X size={17} />
           </button>
 
           <div className="repair-modal-footer__actions">
             <button
               type="button"
-              className="repair-secondary-btn"
+              className="repair-secondary-btn repair-icon-only-btn"
               onClick={onSaveDraft}
               disabled={loading}
+              title="Guardar borrador"
+              aria-label="Guardar borrador"
             >
-              <Save size={14} />
-              Guardar borrador
+              <Save size={17} />
             </button>
 
-            <button type="submit" className="repair-primary-btn" disabled={loading}>
-              {loading ? 'Guardando...' : 'Crear orden'}
-              {!loading && <ChevronRight size={16} />}
+            <button
+              type="submit"
+              className="repair-primary-btn repair-icon-only-btn"
+              disabled={loading}
+              title={loading ? 'Guardando orden...' : 'Crear orden'}
+              aria-label={loading ? 'Guardando orden...' : 'Crear orden'}
+            >
+              {loading ? <Check size={17} /> : <FileCheck2 size={17} />}
             </button>
           </div>
         </div>

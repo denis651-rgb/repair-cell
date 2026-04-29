@@ -29,7 +29,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/admin/backups")
 @RequiredArgsConstructor
-@PreAuthorize("hasAuthority('PERM_BACKUPS_VIEW')")
 public class BackupController {
 
     private final BackupService backupService;
@@ -45,8 +44,7 @@ public class BackupController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Page<BackupRecord>> listBackups(
             @RequestParam(defaultValue = "0") int pagina,
-            @RequestParam(defaultValue = "10") int tamano
-    ) {
+            @RequestParam(defaultValue = "10") int tamano) {
         return ResponseEntity.ok(backupService.listBackups(pagina, tamano));
     }
 
@@ -64,17 +62,25 @@ public class BackupController {
 
     @PostMapping("/oauth/start")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<GoogleOAuthStartResponse> startGoogleOAuth(@Valid @RequestBody BackupSettingsRequest request) {
+    public ResponseEntity<GoogleOAuthStartResponse> startGoogleOAuth(
+            @Valid @RequestBody BackupSettingsRequest request) {
         return ResponseEntity.ok(backupService.startGoogleDriveOAuth(request));
     }
 
+    /*
+     * IMPORTANTE:
+     * Este endpoint debe quedar SIN @PreAuthorize.
+     *
+     * Google vuelve a esta URL desde un navegador externo y no manda el JWT del
+     * sistema.
+     * La seguridad real de este flujo la valida el backend usando el "state" OAuth.
+     */
     @GetMapping(value = "/oauth/callback", produces = MediaType.TEXT_HTML_VALUE)
     public ResponseEntity<String> completeGoogleOAuth(
             @RequestParam(required = false) String state,
             @RequestParam(required = false) String code,
             @RequestParam(required = false) String error,
-            @RequestParam(required = false, name = "error_description") String errorDescription
-    ) {
+            @RequestParam(required = false, name = "error_description") String errorDescription) {
         return ResponseEntity.ok(backupService.completeGoogleDriveOAuth(state, code, error, errorDescription));
     }
 
@@ -105,7 +111,8 @@ public class BackupController {
 
     @PostMapping(value = "/restore/validate-local", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<RestoreLocalValidationResponse> validateLocalRestore(@RequestPart("file") MultipartFile file) {
+    public ResponseEntity<RestoreLocalValidationResponse> validateLocalRestore(
+            @RequestPart("file") MultipartFile file) {
         return ResponseEntity.ok(backupRestoreService.validateLocalBackup(file));
     }
 
@@ -124,7 +131,8 @@ public class BackupController {
 
     @PostMapping("/restore/execute-local")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<RestoreExecutionResponse> executeLocalRestore(@Valid @RequestBody RestoreExecuteRequest request) {
+    public ResponseEntity<RestoreExecutionResponse> executeLocalRestore(
+            @Valid @RequestBody RestoreExecuteRequest request) {
         return ResponseEntity.ok(backupRestoreService.executePreparedRestore(request.getSessionId()));
     }
 

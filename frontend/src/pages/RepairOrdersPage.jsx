@@ -144,18 +144,59 @@ export default function RepairOrdersPage() {
   };
 
   const loadCatalogs = async () => {
-    const [clientesData, dispositivosData, productosData] = await Promise.all([
+    const [clientesData, dispositivosData, inventarioData, productosBaseData] = await Promise.all([
       api.get('/clientes'),
       api.get('/dispositivos'),
       api.get('/catalogo/inventario-operativo', {
         pagina: 0,
-        tamano: 200,
+        tamano: 1000,
         soloConStock: true,
       }),
+      api.get('/catalogo/productos-base', {
+        soloActivos: true,
+      }),
     ]);
+
+    const productosBasePorId = new Map(
+      (productosBaseData || []).map((productoBase) => [String(productoBase.id), productoBase]),
+    );
+
+    const productosOperativos = (inventarioData?.content || [])
+      .filter((item) => {
+        const stockDisponible = Number(item.stockDisponibleTotal || 0);
+        const lotesActivos = Number(item.lotesActivos || 0);
+
+        return stockDisponible > 0 && lotesActivos > 0;
+      })
+      .map((item) => {
+        const productoBase = productosBasePorId.get(String(item.productoBaseId)) || {};
+
+        return {
+          ...item,
+
+          // IMPORTANTE:
+          // productoId NO debe ser productoBaseId.
+          // Para inventario operativo se debe enviar varianteId.
+          productoId: null,
+          productoBaseId: item.productoBaseId,
+          varianteId: item.varianteId,
+          id: item.varianteId,
+
+          // Datos visibles / buscables
+          codigoBase: item.codigoBase || productoBase.codigoBase || '',
+          nombreBase: item.nombreBase || productoBase.nombreBase || '',
+          modelo: item.modelo || productoBase.modelo || '',
+          marcaNombre: item.marcaNombre || productoBase.marca?.nombre || '',
+          categoriaNombre: item.categoriaNombre || productoBase.categoria?.nombre || '',
+
+          // Compatibilidades del producto base
+          compatibilidades: productoBase.compatibilidades || [],
+        };
+      });
+
     setClientes(clientesData || []);
     setDispositivos(dispositivosData || []);
-    setProducts(productosData?.content || []);
+    setProducts(productosOperativos);
   };
 
   const loadOrders = async (pagina = currentPage, busqueda = debouncedOrderSearch) => {
@@ -246,7 +287,10 @@ export default function RepairOrdersPage() {
         {
           ...selectedPart,
           cantidad: Number(selectedPart.cantidad || 1),
-          productoId: selectedPart.productoId || null,
+
+          // Si hay varianteId, NO mandamos productoId.
+          // Evita error: Producto no encontrado: ID_PRODUCTO_BASE
+          productoId: selectedPart.varianteId ? null : selectedPart.productoId || null,
           varianteId: selectedPart.varianteId || null,
         },
       ],
@@ -412,12 +456,13 @@ export default function RepairOrdersPage() {
         costoEstimado: Number(form.costoEstimado || 0),
         costoFinal: Number(form.costoFinal || 0),
         diasGarantia: Number(form.diasGarantia || 0),
-          partes: form.partes.map((part) => ({
-            ...part,
-            cantidad: Number(part.cantidad || 1),
-            productoId: part.productoId ? String(part.productoId) : '',
-            varianteId: part.varianteId ? String(part.varianteId) : '',
-          })),
+        partes: form.partes.map((part) => ({
+          ...part,
+
+          // Si la parte viene del inventario operativo, se procesa por varianteId.
+          productoId: part.varianteId ? null : part.productoId ? Number(part.productoId) : null,
+          varianteId: part.varianteId ? Number(part.varianteId) : null,
+        })),
       },
     };
 
