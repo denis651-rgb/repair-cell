@@ -16,7 +16,7 @@ public class BackupSettingsResponse {
     private final String googleDriveFolderName;
     private final String googleServiceAccountKeyPath;
     private final String googleOauthClientId;
-    private final String googleOauthClientSecret;
+    private final boolean googleOauthClientSecretConfigured;
     private final boolean googleOauthConnected;
     private final String googleOauthConnectedAt;
     private final boolean googleDriveReady;

@@ -26,5 +26,11 @@ public class BackupSettingsRequest {
     private String googleDriveFolderId;
     private String googleServiceAccountKeyPath;
     private String googleOauthClientId;
+
+    /**
+     * Este campo solo entra desde el formulario/importación JSON.
+     * El backend no lo devuelve en BackupSettingsResponse.
+     * Si viene vacío, se conserva el secreto guardado actualmente.
+     */
     private String googleOauthClientSecret;
 }

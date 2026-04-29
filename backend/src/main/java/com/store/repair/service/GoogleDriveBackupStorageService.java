@@ -28,9 +28,9 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
@@ -97,8 +97,17 @@ public class GoogleDriveBackupStorageService implements RemoteBackupStorageServi
         try {
             validateConnectedSettings(settings);
             String accessToken = requestAccessTokenFromRefreshToken(settings);
-            DriveFolder folder = ensureAppFolder(settings, accessToken);
-            return listFiles(accessToken, folder.id());
+
+            List<DriveFolder> folders = findAllAppFolders(accessToken);
+
+            if (folders.isEmpty()) {
+                DriveFolder folder = ensureAppFolder(settings, accessToken);
+                folders = List.of(folder);
+            } else {
+                persistFolderIfChanged(settings, folders.get(0));
+            }
+
+            return listFilesFromFolders(accessToken, folders);
         } catch (RemoteBackupException ex) {
             throw ex;
         } catch (InterruptedException ex) {
@@ -118,17 +127,27 @@ public class GoogleDriveBackupStorageService implements RemoteBackupStorageServi
         try {
             validateConnectedSettings(settings);
             String accessToken = requestAccessTokenFromRefreshToken(settings);
-            DriveFolder folder = ensureAppFolder(settings, accessToken);
+
+            DriveFolder currentFolder = ensureAppFolder(settings, accessToken);
             JsonNode fileMetadata = fetchFileMetadata(fileId, accessToken);
-            verifyFileBelongsToFolder(fileMetadata, folder.id());
+
+            List<DriveFolder> folders = findAllAppFolders(accessToken);
+            if (folders.isEmpty()) {
+                folders = List.of(currentFolder);
+            }
+
+            verifyFileBelongsToAnyBackupFolder(fileMetadata, folders);
 
             String fileName = sanitizeFileName(fileMetadata.path("name").asText("drive-backup.db"));
             if (!isSupportedBackupFile(fileName)) {
-                throw new RemoteBackupException("El archivo remoto no tiene extension .db o .zip y no puede restaurarse.", false);
+                throw new RemoteBackupException(
+                        "El archivo remoto no tiene extension .db o .zip y no puede restaurarse.",
+                        false);
             }
 
             java.nio.file.Files.createDirectories(targetDirectory);
             Path targetFile = targetDirectory.resolve(fileName);
+
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create("https://www.googleapis.com/drive/v3/files/" + fileId
                             + "?alt=media&supportsAllDrives=true"))
@@ -137,23 +156,25 @@ public class GoogleDriveBackupStorageService implements RemoteBackupStorageServi
                     .build();
 
             HttpResponse<Path> response = httpClient.send(request, HttpResponse.BodyHandlers.ofFile(targetFile));
+
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                String responseBody = readResponseBody(targetFile);
                 java.nio.file.Files.deleteIfExists(targetFile);
+
                 boolean retryable = response.statusCode() >= 500 || response.statusCode() == 429;
                 throw new RemoteBackupException(
-                        buildGoogleApiMessage("Google Drive no pudo descargar el backup remoto.", readResponseBody(targetFile)),
-                        retryable
-                );
+                        buildGoogleApiMessage("Google Drive no pudo descargar el backup remoto.", responseBody),
+                        retryable);
             }
 
             long sizeBytes = fileMetadata.path("size").asLong(java.nio.file.Files.size(targetFile));
+
             return new DownloadedBackup(
                     fileId,
                     fileName,
                     sizeBytes,
                     fileMetadata.path("createdTime").asText(null),
-                    targetFile
-            );
+                    targetFile);
         } catch (RemoteBackupException ex) {
             throw ex;
         } catch (InterruptedException ex) {
@@ -182,7 +203,10 @@ public class GoogleDriveBackupStorageService implements RemoteBackupStorageServi
         String state = randomUrlSafeToken(24);
         String codeVerifier = randomUrlSafeToken(64);
         String codeChallenge = sha256Base64Url(codeVerifier);
-        pendingOauthSessions.put(state, new PendingOauthSession(settings.getId(), codeVerifier, System.currentTimeMillis()));
+
+        pendingOauthSessions.put(
+                state,
+                new PendingOauthSession(settings.getId(), codeVerifier, System.currentTimeMillis()));
 
         String authUrl = "https://accounts.google.com/o/oauth2/v2/auth"
                 + "?client_id=" + urlEncode(settings.getGoogleOauthClientId())
@@ -213,31 +237,45 @@ public class GoogleDriveBackupStorageService implements RemoteBackupStorageServi
 
         PendingOauthSession session = pendingOauthSessions.remove(state);
         if (session == null || session.isExpired()) {
-            return buildCallbackHtml(false, "La sesion de autorizacion expiro. Vuelve a pulsar \"Conectar Google Drive\".");
+            return buildCallbackHtml(
+                    false,
+                    "La sesion de autorizacion expiro. Vuelve a pulsar \"Conectar Google Drive\".");
         }
 
         BackupSettings settings = backupSettingsRepository.findById(session.settingsId())
                 .orElse(null);
+
         if (settings == null) {
             return buildCallbackHtml(false, "No se encontro la configuracion de backups para completar Google OAuth.");
         }
 
         try {
-            TokenResponse tokenResponse = exchangeAuthorizationCode(settings.getGoogleOauthClientId(), code, session.codeVerifier());
+            TokenResponse tokenResponse = exchangeAuthorizationCode(
+                    settings.getGoogleOauthClientId(),
+                    code,
+                    session.codeVerifier());
+
             String refreshToken = tokenResponse.refreshToken();
+
             if ((refreshToken == null || refreshToken.isBlank())
-                    && (settings.getGoogleOauthRefreshToken() == null || settings.getGoogleOauthRefreshToken().isBlank())) {
-                return buildCallbackHtml(false, "Google no devolvio refresh_token. Vuelve a conectar con consentimiento forzado.");
+                    && (settings.getGoogleOauthRefreshToken() == null
+                            || settings.getGoogleOauthRefreshToken().isBlank())) {
+                return buildCallbackHtml(
+                        false,
+                        "Google no devolvio refresh_token. Quita el acceso anterior en tu Cuenta Google > Seguridad > Apps de terceros y vuelve a presionar Conectar Google Drive.");
             }
 
             DriveFolder folder = ensureAppFolder(settings, tokenResponse.accessToken());
+
             if (refreshToken != null && !refreshToken.isBlank()) {
                 settings.setGoogleOauthRefreshToken(refreshToken);
             }
+
             settings.setGoogleDriveFolderId(folder.id());
             settings.setGoogleDriveFolderName(folder.name());
             settings.setGoogleOauthConnectedAt(LocalDateTime.now());
             settings.setGoogleDriveEnabled(true);
+
             backupSettingsRepository.save(settings);
 
             return buildCallbackHtml(true, "Google Drive conectado correctamente. Ya puedes volver a la app.");
@@ -245,7 +283,8 @@ public class GoogleDriveBackupStorageService implements RemoteBackupStorageServi
             return buildCallbackHtml(false, ex.getMessage());
         } catch (Exception ex) {
             RemoteBackupException remoteException = buildUnexpectedRemoteException(
-                    "No se pudo completar la conexion con Google Drive.", ex);
+                    "No se pudo completar la conexion con Google Drive.",
+                    ex);
             return buildCallbackHtml(false, remoteException.getMessage());
         }
     }
@@ -258,7 +297,10 @@ public class GoogleDriveBackupStorageService implements RemoteBackupStorageServi
         backupSettingsRepository.save(settings);
     }
 
-    private DriveConnectionTestResponse buildFailedResponse(BackupSettings settings, String message, boolean retryable) {
+    private DriveConnectionTestResponse buildFailedResponse(
+            BackupSettings settings,
+            String message,
+            boolean retryable) {
         return DriveConnectionTestResponse.builder()
                 .ok(false)
                 .retryable(retryable)
@@ -287,7 +329,9 @@ public class GoogleDriveBackupStorageService implements RemoteBackupStorageServi
         }
 
         if (settings.getGoogleOauthRefreshToken() == null || settings.getGoogleOauthRefreshToken().isBlank()) {
-            throw new RemoteBackupException("Google Drive todavia no esta conectado. Pulsa \"Conectar Google Drive\".", false);
+            throw new RemoteBackupException(
+                    "Google Drive todavia no esta conectado. Pulsa \"Conectar Google Drive\" para obtener y guardar el refresh_token.",
+                    false);
         }
     }
 
@@ -300,8 +344,12 @@ public class GoogleDriveBackupStorageService implements RemoteBackupStorageServi
                 + "&redirect_uri=" + urlEncode(getRedirectUri())
                 + "&code_verifier=" + urlEncode(codeVerifier);
 
-        JsonNode tokenResponse = sendTokenRequest(body, "Google OAuth rechazo el intercambio del codigo de autorizacion.");
+        JsonNode tokenResponse = sendTokenRequest(
+                body,
+                "Google OAuth rechazo el intercambio del codigo de autorizacion.");
+
         String accessToken = tokenResponse.path("access_token").asText();
+
         if (accessToken.isBlank()) {
             throw new RemoteBackupException("Google OAuth no devolvio access_token.", false);
         }
@@ -309,7 +357,8 @@ public class GoogleDriveBackupStorageService implements RemoteBackupStorageServi
         return new TokenResponse(accessToken, tokenResponse.path("refresh_token").asText(null));
     }
 
-    private String requestAccessTokenFromRefreshToken(BackupSettings settings) throws IOException, InterruptedException {
+    private String requestAccessTokenFromRefreshToken(BackupSettings settings)
+            throws IOException, InterruptedException {
         String body = "grant_type=" + urlEncode("refresh_token")
                 + "&client_id=" + urlEncode(settings.getGoogleOauthClientId())
                 + "&client_secret=" + urlEncode(settings.getGoogleOauthClientSecret())
@@ -317,9 +366,11 @@ public class GoogleDriveBackupStorageService implements RemoteBackupStorageServi
 
         JsonNode tokenResponse = sendTokenRequest(body, "Google OAuth rechazo la renovacion del token.");
         String accessToken = tokenResponse.path("access_token").asText();
+
         if (accessToken.isBlank()) {
             throw new RemoteBackupException("Google OAuth no devolvio access_token.", false);
         }
+
         return accessToken;
     }
 
@@ -331,22 +382,27 @@ public class GoogleDriveBackupStorageService implements RemoteBackupStorageServi
                 .build();
 
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
             boolean retryable = response.statusCode() >= 500 || response.statusCode() == 429;
             throw new RemoteBackupException(buildGoogleApiMessage(prefix, response.body()), retryable);
         }
+
         return objectMapper.readTree(response.body());
     }
 
-    private DriveFolder ensureAppFolder(BackupSettings settings, String accessToken) throws IOException, InterruptedException {
+    private DriveFolder ensureAppFolder(BackupSettings settings, String accessToken)
+            throws IOException, InterruptedException {
         String existingFolderId = settings.getGoogleDriveFolderId();
+
         if (existingFolderId != null && !existingFolderId.isBlank()) {
             try {
                 JsonNode folderNode = fetchFolder(existingFolderId, accessToken);
+
                 DriveFolder folder = new DriveFolder(
                         folderNode.path("id").asText(existingFolderId),
-                        folderNode.path("name").asText(APP_FOLDER_NAME)
-                );
+                        folderNode.path("name").asText(APP_FOLDER_NAME));
+
                 persistFolderIfChanged(settings, folder);
                 return folder;
             } catch (RemoteBackupException ex) {
@@ -356,66 +412,184 @@ public class GoogleDriveBackupStorageService implements RemoteBackupStorageServi
             }
         }
 
+        List<DriveFolder> existingFolders = findAllAppFolders(accessToken);
+
+        if (!existingFolders.isEmpty()) {
+            DriveFolder folder = existingFolders.get(0);
+            persistFolderIfChanged(settings, folder);
+            return folder;
+        }
+
         DriveFolder folder = createFolder(accessToken);
         persistFolderIfChanged(settings, folder);
         return folder;
     }
 
-    private List<RemoteBackupFileDescriptor> listFiles(String accessToken, String folderId) throws IOException, InterruptedException {
-        String query = "'" + folderId + "' in parents and trashed=false";
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(buildUri(
-                        "https://www.googleapis.com/drive/v3/files",
-                        "supportsAllDrives", "true",
-                        "includeItemsFromAllDrives", "true",
-                        "fields", "files(id,name,size,createdTime,modifiedTime,mimeType)",
-                        "orderBy", "createdTime desc",
-                        "pageSize", "100",
-                        "q", query
-                ))
-                .header("Authorization", "Bearer " + accessToken)
-                .GET()
-                .build();
+    private List<DriveFolder> findAllAppFolders(String accessToken) throws IOException, InterruptedException {
+        String query = "mimeType='application/vnd.google-apps.folder' and name='"
+                + APP_FOLDER_NAME
+                + "' and trashed=false";
 
-        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() < 200 || response.statusCode() >= 300) {
-            boolean retryable = response.statusCode() >= 500 || response.statusCode() == 429;
-            throw new RemoteBackupException(
-                    buildGoogleApiMessage("Google Drive no pudo listar los backups remotos.", response.body()),
-                    retryable
-            );
-        }
+        List<DriveFolder> folders = new ArrayList<>();
+        String pageToken = null;
 
-        JsonNode root = objectMapper.readTree(response.body());
-        List<RemoteBackupFileDescriptor> files = new ArrayList<>();
-        for (JsonNode fileNode : root.path("files")) {
-            String name = fileNode.path("name").asText("");
-            if (!isSupportedBackupFile(name)) {
-                continue;
+        do {
+            URI uri = pageToken == null || pageToken.isBlank()
+                    ? buildUri(
+                            "https://www.googleapis.com/drive/v3/files",
+                            "supportsAllDrives", "true",
+                            "includeItemsFromAllDrives", "true",
+                            "fields", "nextPageToken,files(id,name,createdTime,modifiedTime,mimeType)",
+                            "orderBy", "createdTime desc",
+                            "pageSize", "100",
+                            "q", query)
+                    : buildUri(
+                            "https://www.googleapis.com/drive/v3/files",
+                            "supportsAllDrives", "true",
+                            "includeItemsFromAllDrives", "true",
+                            "fields", "nextPageToken,files(id,name,createdTime,modifiedTime,mimeType)",
+                            "orderBy", "createdTime desc",
+                            "pageSize", "100",
+                            "pageToken", pageToken,
+                            "q", query);
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(uri)
+                    .header("Authorization", "Bearer " + accessToken)
+                    .GET()
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                boolean retryable = response.statusCode() >= 500 || response.statusCode() == 429;
+
+                throw new RemoteBackupException(
+                        buildGoogleApiMessage("Google Drive no pudo buscar la carpeta de backups.", response.body()),
+                        retryable);
             }
-            files.add(new RemoteBackupFileDescriptor(
-                    fileNode.path("id").asText(),
-                    name,
-                    fileNode.path("size").asLong(0L),
-                    fileNode.path("createdTime").asText(null),
-                    fileNode.path("modifiedTime").asText(null)
-            ));
+
+            JsonNode root = objectMapper.readTree(response.body());
+
+            for (JsonNode folderNode : root.path("files")) {
+                String mimeType = folderNode.path("mimeType").asText();
+
+                if (!"application/vnd.google-apps.folder".equals(mimeType)) {
+                    continue;
+                }
+
+                folders.add(new DriveFolder(
+                        folderNode.path("id").asText(),
+                        folderNode.path("name").asText(APP_FOLDER_NAME)));
+            }
+
+            pageToken = root.path("nextPageToken").asText(null);
+        } while (pageToken != null && !pageToken.isBlank());
+
+        return folders;
+    }
+
+    private List<RemoteBackupFileDescriptor> listFilesFromFolders(
+            String accessToken,
+            List<DriveFolder> folders) throws IOException, InterruptedException {
+        Map<String, RemoteBackupFileDescriptor> uniqueFiles = new LinkedHashMap<>();
+
+        for (DriveFolder folder : folders) {
+            for (RemoteBackupFileDescriptor file : listFiles(accessToken, folder.id())) {
+                uniqueFiles.putIfAbsent(file.fileId(), file);
+            }
         }
 
-        files.sort(Comparator.comparing(RemoteBackupFileDescriptor::createdAt,
+        List<RemoteBackupFileDescriptor> files = new ArrayList<>(uniqueFiles.values());
+
+        files.sort(Comparator.comparing(
+                RemoteBackupFileDescriptor::createdAt,
                 Comparator.nullsLast(Comparator.reverseOrder())));
+
+        return files;
+    }
+
+    private List<RemoteBackupFileDescriptor> listFiles(String accessToken, String folderId)
+            throws IOException, InterruptedException {
+        String query = "'" + folderId + "' in parents and trashed=false";
+
+        List<RemoteBackupFileDescriptor> files = new ArrayList<>();
+        String pageToken = null;
+
+        do {
+            URI uri = pageToken == null || pageToken.isBlank()
+                    ? buildUri(
+                            "https://www.googleapis.com/drive/v3/files",
+                            "supportsAllDrives", "true",
+                            "includeItemsFromAllDrives", "true",
+                            "fields", "nextPageToken,files(id,name,size,createdTime,modifiedTime,mimeType)",
+                            "orderBy", "createdTime desc",
+                            "pageSize", "100",
+                            "q", query)
+                    : buildUri(
+                            "https://www.googleapis.com/drive/v3/files",
+                            "supportsAllDrives", "true",
+                            "includeItemsFromAllDrives", "true",
+                            "fields", "nextPageToken,files(id,name,size,createdTime,modifiedTime,mimeType)",
+                            "orderBy", "createdTime desc",
+                            "pageSize", "100",
+                            "pageToken", pageToken,
+                            "q", query);
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(uri)
+                    .header("Authorization", "Bearer " + accessToken)
+                    .GET()
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                boolean retryable = response.statusCode() >= 500 || response.statusCode() == 429;
+
+                throw new RemoteBackupException(
+                        buildGoogleApiMessage("Google Drive no pudo listar los backups remotos.", response.body()),
+                        retryable);
+            }
+
+            JsonNode root = objectMapper.readTree(response.body());
+
+            for (JsonNode fileNode : root.path("files")) {
+                String name = fileNode.path("name").asText("");
+
+                if (!isSupportedBackupFile(name)) {
+                    continue;
+                }
+
+                files.add(new RemoteBackupFileDescriptor(
+                        fileNode.path("id").asText(),
+                        name,
+                        fileNode.path("size").asLong(0L),
+                        fileNode.path("createdTime").asText(null),
+                        fileNode.path("modifiedTime").asText(null)));
+            }
+
+            pageToken = root.path("nextPageToken").asText(null);
+        } while (pageToken != null && !pageToken.isBlank());
+
+        files.sort(Comparator.comparing(
+                RemoteBackupFileDescriptor::createdAt,
+                Comparator.nullsLast(Comparator.reverseOrder())));
+
         return files;
     }
 
     private void persistFolderIfChanged(BackupSettings settings, DriveFolder folder) {
         boolean changed = !folder.id().equals(settings.getGoogleDriveFolderId())
                 || !folder.name().equals(settings.getGoogleDriveFolderName());
+
         if (!changed) {
             return;
         }
 
         settings.setGoogleDriveFolderId(folder.id());
         settings.setGoogleDriveFolderName(folder.name());
+
         backupSettingsRepository.save(settings);
     }
 
@@ -428,8 +602,10 @@ public class GoogleDriveBackupStorageService implements RemoteBackupStorageServi
                 .build();
 
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
             boolean retryable = response.statusCode() >= 500 || response.statusCode() == 429;
+
             throw new RemoteBackupException(
                     buildGoogleApiMessage("Google Drive rechazo la validacion de la carpeta.", response.body()),
                     retryable);
@@ -437,9 +613,11 @@ public class GoogleDriveBackupStorageService implements RemoteBackupStorageServi
 
         JsonNode folderNode = objectMapper.readTree(response.body());
         String mimeType = folderNode.path("mimeType").asText();
+
         if (!"application/vnd.google-apps.folder".equals(mimeType)) {
             throw new RemoteBackupException("El recurso configurado en Google Drive no es una carpeta.", false);
         }
+
         return folderNode;
     }
 
@@ -452,78 +630,144 @@ public class GoogleDriveBackupStorageService implements RemoteBackupStorageServi
                 .build();
 
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
             boolean retryable = response.statusCode() >= 500 || response.statusCode() == 429;
+
             throw new RemoteBackupException(
                     buildGoogleApiMessage("Google Drive no pudo leer el archivo remoto seleccionado.", response.body()),
-                    retryable
-            );
+                    retryable);
         }
 
         return objectMapper.readTree(response.body());
     }
 
-    private void verifyFileBelongsToFolder(JsonNode fileNode, String folderId) {
+    private void verifyFileBelongsToAnyBackupFolder(JsonNode fileNode, List<DriveFolder> folders) {
         JsonNode parents = fileNode.path("parents");
+
         for (JsonNode parent : parents) {
-            if (folderId.equals(parent.asText())) {
-                return;
+            String parentId = parent.asText();
+
+            for (DriveFolder folder : folders) {
+                if (folder.id().equals(parentId)) {
+                    return;
+                }
             }
         }
-        throw new RemoteBackupException("El archivo remoto seleccionado no pertenece a la carpeta de backups de esta app.", false);
+
+        throw new RemoteBackupException(
+                "El archivo remoto seleccionado no pertenece a ninguna carpeta de backups de esta app.",
+                false);
     }
 
     private DriveFolder createFolder(String accessToken) throws IOException, InterruptedException {
         String metadataJson = objectMapper.writeValueAsString(Map.of(
                 "name", APP_FOLDER_NAME,
-                "mimeType", "application/vnd.google-apps.folder"
-        ));
+                "mimeType", "application/vnd.google-apps.folder"));
 
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("https://www.googleapis.com/drive/v3/files?supportsAllDrives=true&fields=id,name,mimeType"))
+                .uri(URI.create(
+                        "https://www.googleapis.com/drive/v3/files?supportsAllDrives=true&fields=id,name,mimeType"))
                 .header("Authorization", "Bearer " + accessToken)
                 .header("Content-Type", MediaType.APPLICATION_JSON_VALUE)
                 .POST(HttpRequest.BodyPublishers.ofString(metadataJson))
                 .build();
 
         HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
             boolean retryable = response.statusCode() >= 500 || response.statusCode() == 429;
-            throw new RemoteBackupException(buildGoogleApiMessage("Google Drive no pudo crear la carpeta de backups.", response.body()), retryable);
+
+            throw new RemoteBackupException(
+                    buildGoogleApiMessage("Google Drive no pudo crear la carpeta de backups.", response.body()),
+                    retryable);
         }
 
         JsonNode folderNode = objectMapper.readTree(response.body());
+
         return new DriveFolder(
                 folderNode.path("id").asText(),
-                folderNode.path("name").asText(APP_FOLDER_NAME)
-        );
+                folderNode.path("name").asText(APP_FOLDER_NAME));
     }
 
-    private String uploadFile(Path file, String accessToken, String folderId) throws IOException, InterruptedException {
-        String boundary = "backup-" + UUID.randomUUID();
-        String metadataJson = objectMapper.writeValueAsString(Map.of(
-                "name", file.getFileName().toString(),
-                "parents", new String[]{ folderId }
-        ));
-
-        byte[] fileBytes = java.nio.file.Files.readAllBytes(file);
-        byte[] body = buildMultipartBody(boundary, metadataJson, fileBytes);
-
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true"))
-                .header("Authorization", "Bearer " + accessToken)
-                .header("Content-Type", "multipart/related; boundary=" + boundary)
-                .POST(HttpRequest.BodyPublishers.ofByteArray(body))
-                .build();
-
-        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() < 200 || response.statusCode() >= 300) {
-            boolean retryable = response.statusCode() >= 500 || response.statusCode() == 429;
-            throw new RemoteBackupException(buildGoogleApiMessage("Google Drive rechazo la subida.", response.body()), retryable);
+    private String uploadFile(Path file, String accessToken, String folderId)
+            throws IOException, InterruptedException {
+        if (file == null || !java.nio.file.Files.exists(file)) {
+            throw new RemoteBackupException("No existe el archivo local que se quiere subir a Google Drive.", false);
         }
 
-        JsonNode driveResponse = objectMapper.readTree(response.body());
+        long fileSize = java.nio.file.Files.size(file);
+
+        if (fileSize <= 0) {
+            throw new RemoteBackupException(
+                    "El archivo de backup esta vacio y no puede subirse a Google Drive.",
+                    false);
+        }
+
+        String metadataJson = objectMapper.writeValueAsString(Map.of(
+                "name", file.getFileName().toString(),
+                "parents", new String[] { folderId }));
+
+        HttpRequest startSessionRequest = HttpRequest.newBuilder()
+                .uri(buildUri(
+                        "https://www.googleapis.com/upload/drive/v3/files",
+                        "uploadType", "resumable",
+                        "supportsAllDrives", "true",
+                        "fields", "id,name"))
+                .header("Authorization", "Bearer " + accessToken)
+                .header("Content-Type", MediaType.APPLICATION_JSON_VALUE + "; charset=UTF-8")
+                .header("X-Upload-Content-Type", "application/octet-stream")
+                .header("X-Upload-Content-Length", String.valueOf(fileSize))
+                .POST(HttpRequest.BodyPublishers.ofString(metadataJson, StandardCharsets.UTF_8))
+                .build();
+
+        HttpResponse<String> startSessionResponse = httpClient.send(
+                startSessionRequest,
+                HttpResponse.BodyHandlers.ofString());
+
+        if (startSessionResponse.statusCode() < 200 || startSessionResponse.statusCode() >= 300) {
+            boolean retryable = startSessionResponse.statusCode() >= 500
+                    || startSessionResponse.statusCode() == 429;
+
+            throw new RemoteBackupException(
+                    buildGoogleApiMessage(
+                            "Google Drive rechazo el inicio de la subida resumible.",
+                            startSessionResponse.body()),
+                    retryable);
+        }
+
+        String uploadSessionUrl = startSessionResponse.headers()
+                .firstValue("Location")
+                .orElseThrow(() -> new RemoteBackupException(
+                        "Google Drive no devolvio la URL de subida resumible.",
+                        true));
+
+        HttpRequest uploadRequest = HttpRequest.newBuilder()
+                .uri(URI.create(uploadSessionUrl))
+                .header("Authorization", "Bearer " + accessToken)
+                .header("Content-Type", "application/octet-stream")
+                .PUT(HttpRequest.BodyPublishers.ofFile(file))
+                .build();
+
+        HttpResponse<String> uploadResponse = httpClient.send(
+                uploadRequest,
+                HttpResponse.BodyHandlers.ofString());
+
+        if (uploadResponse.statusCode() < 200 || uploadResponse.statusCode() >= 300) {
+            boolean retryable = uploadResponse.statusCode() >= 500
+                    || uploadResponse.statusCode() == 429
+                    || uploadResponse.statusCode() == 308;
+
+            throw new RemoteBackupException(
+                    buildGoogleApiMessage(
+                            "Google Drive rechazo la subida del archivo de backup.",
+                            uploadResponse.body()),
+                    retryable);
+        }
+
+        JsonNode driveResponse = objectMapper.readTree(uploadResponse.body());
         String fileId = driveResponse.path("id").asText();
+
         if (fileId.isBlank()) {
             throw new RemoteBackupException("Google Drive no devolvio el ID del archivo subido.", true);
         }
@@ -542,6 +786,7 @@ public class GoogleDriveBackupStorageService implements RemoteBackupStorageServi
         }
 
         StringBuilder builder = new StringBuilder(baseUrl);
+
         if (keyValues.length > 0) {
             builder.append('?');
         }
@@ -550,6 +795,7 @@ public class GoogleDriveBackupStorageService implements RemoteBackupStorageServi
             if (index > 0) {
                 builder.append('&');
             }
+
             builder.append(urlEncode(keyValues[index]))
                     .append('=')
                     .append(urlEncode(keyValues[index + 1]));
@@ -561,8 +807,7 @@ public class GoogleDriveBackupStorageService implements RemoteBackupStorageServi
             throw new RemoteBackupException(
                     "No se pudo preparar la consulta a Google Drive. Vuelve a intentarlo en unos segundos.",
                     ex,
-                    true
-            );
+                    true);
         }
     }
 
@@ -573,6 +818,7 @@ public class GoogleDriveBackupStorageService implements RemoteBackupStorageServi
 
         String normalized = value.replace("\\", "/");
         int index = normalized.lastIndexOf('/');
+
         return index >= 0 ? normalized.substring(index + 1) : normalized;
     }
 
@@ -583,46 +829,36 @@ public class GoogleDriveBackupStorageService implements RemoteBackupStorageServi
             }
         } catch (Exception ignored) {
         }
+
         return "";
-    }
-
-    private byte[] buildMultipartBody(String boundary, String metadataJson, byte[] fileBytes) {
-        byte[] firstPart = (
-                "--" + boundary + "\r\n"
-                        + "Content-Type: application/json; charset=UTF-8\r\n\r\n"
-                        + metadataJson + "\r\n"
-                        + "--" + boundary + "\r\n"
-                        + "Content-Type: application/octet-stream\r\n\r\n")
-                .getBytes(StandardCharsets.UTF_8);
-        byte[] endPart = ("\r\n--" + boundary + "--").getBytes(StandardCharsets.UTF_8);
-
-        byte[] body = new byte[firstPart.length + fileBytes.length + endPart.length];
-        System.arraycopy(firstPart, 0, body, 0, firstPart.length);
-        System.arraycopy(fileBytes, 0, body, firstPart.length, fileBytes.length);
-        System.arraycopy(endPart, 0, body, firstPart.length + fileBytes.length, endPart.length);
-        return body;
     }
 
     private String buildGoogleApiMessage(String prefix, String responseBody) {
         try {
             JsonNode root = objectMapper.readTree(responseBody);
+
             String error = root.path("error").asText();
             String errorDescription = root.path("error_description").asText();
             String reason = root.path("error").path("errors").path(0).path("reason").asText();
+
             if ("invalid_grant".equals(error)) {
                 return prefix + " La autorizacion expiro o fue revocada. Conecta Google Drive nuevamente.";
             }
+
             if ("invalid_request".equals(error) && !errorDescription.isBlank()) {
                 return prefix + " " + errorDescription;
             }
+
             if ("storageQuotaExceeded".equals(reason)) {
                 return prefix + " No hay espacio suficiente disponible en tu Google Drive personal.";
             }
 
             JsonNode messageNode = root.path("error").path("message");
+
             if (!messageNode.asText().isBlank()) {
                 return prefix + " " + messageNode.asText();
             }
+
             if (!error.isBlank()) {
                 return prefix + " " + error;
             }
@@ -633,30 +869,35 @@ public class GoogleDriveBackupStorageService implements RemoteBackupStorageServi
     }
 
     private String resolveRequiredClientSecret(String clientId) {
-        return backupSettingsRepository.findAll().stream().findFirst()
+        return backupSettingsRepository.findAll().stream()
+                .findFirst()
                 .map(BackupSettings::getGoogleOauthClientSecret)
                 .filter(secret -> secret != null && !secret.isBlank())
                 .orElseThrow(() -> new RemoteBackupException(
                         "Falta el Client Secret de Google OAuth para completar la conexion.",
-                        false
-                ));
+                        false));
     }
 
     private RemoteBackupException buildUnexpectedRemoteException(String fallbackMessage, Exception ex) {
         Throwable current = ex;
+
         while (current != null) {
             if (current instanceof UnknownHostException
                     || current instanceof ConnectException
                     || current instanceof HttpTimeoutException) {
-                return new RemoteBackupException("No hay conexion disponible para comunicarse con Google Drive.", ex, true);
+                return new RemoteBackupException(
+                        "No hay conexion disponible para comunicarse con Google Drive.",
+                        ex,
+                        true);
             }
+
             if (current instanceof IllegalArgumentException) {
                 return new RemoteBackupException(
                         "No se pudo preparar la solicitud a Google Drive. Vuelve a intentarlo.",
                         ex,
-                        true
-                );
+                        true);
             }
+
             current = current.getCause();
         }
 
@@ -678,13 +919,20 @@ public class GoogleDriveBackupStorageService implements RemoteBackupStorageServi
     private String randomUrlSafeToken(int byteLength) {
         byte[] bytes = new byte[byteLength];
         secureRandom.nextBytes(bytes);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+
+        return Base64.getUrlEncoder()
+                .withoutPadding()
+                .encodeToString(bytes);
     }
 
     private String sha256Base64Url(String value) {
         try {
-            byte[] digest = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.US_ASCII));
-            return Base64.getUrlEncoder().withoutPadding().encodeToString(digest);
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(value.getBytes(StandardCharsets.US_ASCII));
+
+            return Base64.getUrlEncoder()
+                    .withoutPadding()
+                    .encodeToString(digest);
         } catch (Exception ex) {
             throw new IllegalStateException("No se pudo generar el code_challenge para Google OAuth.", ex);
         }
@@ -695,6 +943,7 @@ public class GoogleDriveBackupStorageService implements RemoteBackupStorageServi
                 .replace("&", "&amp;")
                 .replace("<", "&lt;")
                 .replace(">", "&gt;");
+
         String status = success ? "success" : "error";
         String title = success ? "Google Drive conectado" : "No se pudo conectar Google Drive";
 
@@ -725,7 +974,8 @@ public class GoogleDriveBackupStorageService implements RemoteBackupStorageServi
                   </script>
                 </body>
                 </html>
-                """.formatted(title, title, escapedMessage, status, toJsonString(message));
+                """
+                .formatted(title, title, escapedMessage, status, toJsonString(message));
     }
 
     private String toJsonString(String value) {

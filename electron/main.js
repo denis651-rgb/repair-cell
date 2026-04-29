@@ -15,6 +15,7 @@ let isApplyingPendingRestore = false;
 const BACKEND_PORT = 8080;
 const BACKEND_HEALTH_URL = `http://127.0.0.1:${BACKEND_PORT}/actuator/health`;
 const BACKEND_START_TIMEOUT_MS = 120000;
+const BACKEND_ALLOWED_ORIGINS = 'http://localhost:5173,http://localhost:5174,http://localhost:3000,null';
 
 const gotTheLock = app.requestSingleInstanceLock();
 
@@ -151,6 +152,23 @@ function removePathIfExists(filePath) {
     fs.rmSync(filePath, { force: true, recursive: true });
   }
 }
+function cleanupSqliteSidecarFiles(dbPath) {
+  if (!dbPath) {
+    return;
+  }
+
+  [
+    `${dbPath}-wal`,
+    `${dbPath}-shm`,
+    `${dbPath}-journal`
+  ].forEach((sidecarPath) => {
+    try {
+      removePathIfExists(sidecarPath);
+    } catch (error) {
+      logElectron(`No se pudo eliminar archivo auxiliar SQLite ${sidecarPath}: ${error.message}`);
+    }
+  });
+}
 
 function isProcessAlive(pid) {
   if (!pid) {
@@ -237,14 +255,23 @@ function applyPendingRestoreIfNeeded() {
     }
 
     removePathIfExists(tempTargetPath);
+    removePathIfExists(rollbackPath);
+
+    // Importante para SQLite:
+    // antes de reemplazar repair-shop.db eliminamos archivos auxiliares viejos.
+    cleanupSqliteSidecarFiles(targetPath);
+
     fs.copyFileSync(sourcePath, tempTargetPath);
 
     if (fs.existsSync(targetPath)) {
-      removePathIfExists(rollbackPath);
       fs.renameSync(targetPath, rollbackPath);
     }
 
     fs.renameSync(tempTargetPath, targetPath);
+
+    // Limpieza defensiva después de restaurar, antes de reiniciar Spring Boot.
+    cleanupSqliteSidecarFiles(targetPath);
+
     removePathIfExists(rollbackPath);
     removePathIfExists(planPath);
 
@@ -264,12 +291,17 @@ function applyPendingRestoreIfNeeded() {
     const plan = readJsonFile(planPath);
 
     if (plan && plan.targetDatabasePath) {
+      const tempTargetPath = `${plan.targetDatabasePath}.restore-tmp`;
       const rollbackPath = `${plan.targetDatabasePath}.rollback`;
 
       try {
+        cleanupSqliteSidecarFiles(plan.targetDatabasePath);
+        removePathIfExists(tempTargetPath);
+
         if (fs.existsSync(rollbackPath)) {
           removePathIfExists(plan.targetDatabasePath);
           fs.renameSync(rollbackPath, plan.targetDatabasePath);
+          cleanupSqliteSidecarFiles(plan.targetDatabasePath);
         }
       } catch (rollbackError) {
         logElectron(`No se pudo revertir la restauracion fallida: ${rollbackError.message}`);
@@ -388,6 +420,7 @@ async function clearSessionAndGoToLogin() {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         localStorage.removeItem('auth');
+        localStorage.removeItem('usuarioActual');
         sessionStorage.clear();
 
         if (window.location.protocol === 'file:') {
@@ -430,6 +463,7 @@ function startBackend() {
   logElectron(`APP_STORAGE_DIR=${toPortablePath(appStoragePath)}`);
   logElectron(`DB_URL=jdbc:sqlite:${dbPath}`);
   logElectron(`APP_BACKUP_DIRECTORY=${backupPath}`);
+  logElectron(`APP_CORS_ALLOWED_ORIGINS=${BACKEND_ALLOWED_ORIGINS}`);
 
   const child = spawn(javaCommand, javaArgs, {
     cwd: path.dirname(jarPath),
@@ -441,7 +475,8 @@ function startBackend() {
       SERVER_PORT: String(BACKEND_PORT),
       APP_STORAGE_DIR: toPortablePath(appStoragePath),
       DB_URL: `jdbc:sqlite:${dbPath}`,
-      APP_BACKUP_DIRECTORY: backupPath
+      APP_BACKUP_DIRECTORY: backupPath,
+      APP_CORS_ALLOWED_ORIGINS: BACKEND_ALLOWED_ORIGINS
     }
   });
 

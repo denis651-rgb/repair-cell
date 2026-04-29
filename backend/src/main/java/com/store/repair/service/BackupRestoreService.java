@@ -56,8 +56,7 @@ public class BackupRestoreService {
             "backup_records",
             "ordenes_reparacion",
             "productos_inventario",
-            "ventas"
-    );
+            "ventas");
 
     private final DataSource dataSource;
     private final AuditoriaRepository auditoriaRepository;
@@ -102,7 +101,8 @@ public class BackupRestoreService {
         try {
             Files.createDirectories(sessionDir);
             file.transferTo(uploadedArtifact);
-            return validateStagedArtifact(sessionId, sessionDir, originalFileName, uploadedArtifact, file.getSize(), "LOCAL", originalFileName);
+            return validateStagedArtifact(sessionId, sessionDir, originalFileName, uploadedArtifact, file.getSize(),
+                    "LOCAL", originalFileName);
         } catch (BusinessException ex) {
             cleanupQuietly(sessionDir);
             throw ex;
@@ -143,8 +143,7 @@ public class BackupRestoreService {
                     downloadedBackup.downloadedPath(),
                     downloadedBackup.sizeBytes(),
                     "DRIVE",
-                    fileId
-            );
+                    fileId);
         } catch (BusinessException ex) {
             cleanupQuietly(sessionDir);
             throw ex;
@@ -159,13 +158,15 @@ public class BackupRestoreService {
 
     public RestoreExecutionResponse executePreparedRestore(String sessionId) {
         if (Files.exists(pendingRestorePlanPath)) {
-            throw new BusinessException("Ya hay una restauracion pendiente de aplicarse. Espera a que la app termine el proceso.");
+            throw new BusinessException(
+                    "Ya hay una restauracion pendiente de aplicarse. Espera a que la app termine el proceso.");
         }
 
         RestoreSession session = loadSession(sessionId);
         Path sqliteSource = Paths.get(session.sqliteArtifactPath());
         if (!Files.exists(sqliteSource)) {
-            throw new BusinessException("El archivo validado para restauracion ya no existe. Vuelve a seleccionar el backup.");
+            throw new BusinessException(
+                    "El archivo validado para restauracion ya no existe. Vuelve a seleccionar el backup.");
         }
 
         Path activeDbPath = resolveActiveDatabasePath();
@@ -185,13 +186,14 @@ public class BackupRestoreService {
                 session.sourceType(),
                 displaySource,
                 resolveCurrentUser(),
-                LocalDateTime.now().toString()
-        );
+                LocalDateTime.now().toString());
 
         try {
             Files.createDirectories(restoreRoot);
             objectMapper.writeValue(pendingRestorePlanPath.toFile(), plan);
-            registerAudit("DRIVE".equalsIgnoreCase(session.sourceType()) ? "RESTORE_DRIVE_PREPARED" : "RESTORE_LOCAL_PREPARED",
+            registerAudit(
+                    "DRIVE".equalsIgnoreCase(session.sourceType()) ? "RESTORE_DRIVE_PREPARED"
+                            : "RESTORE_LOCAL_PREPARED",
                     "backups",
                     "Restauracion " + ("DRIVE".equalsIgnoreCase(session.sourceType()) ? "desde Drive" : "local")
                             + " preparada desde " + session.originalFileName()
@@ -204,7 +206,8 @@ public class BackupRestoreService {
 
         return RestoreExecutionResponse.builder()
                 .accepted(true)
-                .message("La restauracion fue preparada. La app reiniciara el backend para aplicar el backup seleccionado.")
+                .message(
+                        "La restauracion fue preparada. La app reiniciara el backend para aplicar el backup seleccionado.")
                 .sessionId(sessionId)
                 .backupBeforeRestorePath(backupBeforeRestore.toString())
                 .restartRequired(true)
@@ -265,8 +268,7 @@ public class BackupRestoreService {
             Path uploadedArtifact,
             long sizeBytes,
             String sourceType,
-            String sourceReference
-    ) throws IOException {
+            String sourceReference) throws IOException {
         String extension = getSupportedExtension(originalFileName);
 
         Path sqliteArtifact;
@@ -293,8 +295,7 @@ public class BackupRestoreService {
                 detectedDatabaseFileName,
                 sourceType,
                 sourceReference,
-                LocalDateTime.now().toString()
-        );
+                LocalDateTime.now().toString());
         persistSession(sessionDir.resolve("session.json"), session);
 
         return RestoreLocalValidationResponse.builder()
@@ -304,7 +305,8 @@ public class BackupRestoreService {
                 .sizeBytes(sizeBytes)
                 .detectedDatabaseFileName(detectedDatabaseFileName)
                 .validatedAt(session.validatedAt())
-                .message("Backup validado correctamente. La aplicacion debera reiniciar el backend para aplicar la restauracion.")
+                .message(
+                        "Backup validado correctamente. La aplicacion debera reiniciar el backend para aplicar la restauracion.")
                 .build();
     }
 
@@ -377,7 +379,7 @@ public class BackupRestoreService {
     private void verifySqliteIntegrityAndSchema(Path sqlitePath) {
         String jdbcUrl = "jdbc:sqlite:" + sqlitePath.toAbsolutePath();
         try (Connection connection = java.sql.DriverManager.getConnection(jdbcUrl);
-             Statement statement = connection.createStatement()) {
+                Statement statement = connection.createStatement()) {
 
             String integrityResult;
             try (ResultSet resultSet = statement.executeQuery("PRAGMA integrity_check")) {
@@ -397,7 +399,9 @@ public class BackupRestoreService {
 
             for (String requiredTable : REQUIRED_TABLES) {
                 if (!existingTables.contains(requiredTable)) {
-                    throw new BusinessException("El backup no contiene la estructura minima requerida del sistema. Falta la tabla: " + requiredTable);
+                    throw new BusinessException(
+                            "El backup no contiene la estructura minima requerida del sistema. Falta la tabla: "
+                                    + requiredTable);
                 }
             }
         } catch (BusinessException ex) {
@@ -408,27 +412,78 @@ public class BackupRestoreService {
     }
 
     private Path createSafetyBackup(Path activeDbPath) {
-        Path backupDir = Paths.get(AppStoragePaths.resolveBackupDirectory());
+        Path configuredBackupDir = resolveConfiguredBackupDirectoryForSafetyBackup();
+        Path defaultBackupDir = Paths.get(AppStoragePaths.resolveBackupDirectory())
+                .toAbsolutePath()
+                .normalize();
+
         try {
-            Files.createDirectories(backupDir);
-            Path backupPath = backupDir.resolve("pre-restore-" + LocalDateTime.now().format(FORMATTER) + ".db");
-            String escapedPath = backupPath.toAbsolutePath().toString().replace("\\", "/").replace("'", "''");
+            return createSafetyBackupInDirectory(configuredBackupDir);
+        } catch (Exception configuredException) {
+            if (!configuredBackupDir.equals(defaultBackupDir)) {
+                log.warn(
+                        "No se pudo crear el backup previo en la carpeta configurada {}. Se intentara usar la carpeta por defecto {}.",
+                        configuredBackupDir,
+                        defaultBackupDir,
+                        configuredException);
 
-            try (Connection connection = dataSource.getConnection();
-                 Statement statement = connection.createStatement()) {
-                statement.execute("PRAGMA wal_checkpoint(FULL)");
-                statement.execute("VACUUM INTO '" + escapedPath + "'");
+                try {
+                    return createSafetyBackupInDirectory(defaultBackupDir);
+                } catch (Exception fallbackException) {
+                    log.error(
+                            "No se pudo crear el backup de seguridad previo a la restauracion ni en la carpeta configurada ni en la carpeta por defecto.",
+                            fallbackException);
+                    throw new BusinessException("No se pudo crear el backup de seguridad previo a la restauracion.");
+                }
             }
 
-            if (!Files.exists(backupPath) || Files.size(backupPath) <= 0) {
-                throw new BusinessException("No se pudo crear el backup de seguridad previo a la restauracion.");
-            }
-            return backupPath;
-        } catch (BusinessException ex) {
-            throw ex;
-        } catch (Exception ex) {
+            log.error("No se pudo crear el backup de seguridad previo a la restauracion en {}", configuredBackupDir,
+                    configuredException);
             throw new BusinessException("No se pudo crear el backup de seguridad previo a la restauracion.");
         }
+    }
+
+    private Path resolveConfiguredBackupDirectoryForSafetyBackup() {
+        Path defaultBackupDir = Paths.get(AppStoragePaths.resolveBackupDirectory())
+                .toAbsolutePath()
+                .normalize();
+
+        try {
+            return backupSettingsRepository.findAll().stream()
+                    .findFirst()
+                    .map(BackupSettings::getDirectory)
+                    .filter(directory -> directory != null && !directory.isBlank())
+                    .map(directory -> Paths.get(directory).toAbsolutePath().normalize())
+                    .orElse(defaultBackupDir);
+        } catch (Exception ex) {
+            log.warn("No se pudo leer backup_settings.directory. Se usara la carpeta de backups por defecto.", ex);
+            return defaultBackupDir;
+        }
+    }
+
+    private Path createSafetyBackupInDirectory(Path backupDir) throws Exception {
+        Files.createDirectories(backupDir);
+
+        Path backupPath = backupDir
+                .resolve("pre-restore-" + LocalDateTime.now().format(FORMATTER) + ".db")
+                .toAbsolutePath()
+                .normalize();
+
+        String escapedPath = backupPath.toString()
+                .replace("\\", "/")
+                .replace("'", "''");
+
+        try (Connection connection = dataSource.getConnection();
+                Statement statement = connection.createStatement()) {
+            statement.execute("PRAGMA wal_checkpoint(FULL)");
+            statement.execute("VACUUM INTO '" + escapedPath + "'");
+        }
+
+        if (!Files.exists(backupPath) || Files.size(backupPath) <= 0) {
+            throw new BusinessException("No se pudo crear el backup de seguridad previo a la restauracion.");
+        }
+
+        return backupPath;
     }
 
     private Path resolveActiveDatabasePath() {
@@ -522,8 +577,7 @@ public class BackupRestoreService {
             String detectedDatabaseFileName,
             String sourceType,
             String sourceReference,
-            String validatedAt
-    ) {
+            String validatedAt) {
     }
 
     private record PendingRestorePlan(
@@ -534,8 +588,7 @@ public class BackupRestoreService {
             String sourceType,
             String displaySource,
             String requestedBy,
-            String requestedAt
-    ) {
+            String requestedAt) {
     }
 
     private record RestoreResult(
@@ -543,7 +596,6 @@ public class BackupRestoreService {
             String message,
             String restoredAt,
             String restoredFrom,
-            String backupBeforeRestorePath
-    ) {
+            String backupBeforeRestorePath) {
     }
 }

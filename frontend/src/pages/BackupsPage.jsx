@@ -30,6 +30,7 @@ const initialSettings = {
   googleDriveFolderName: '',
   googleOauthClientId: '',
   googleOauthClientSecret: '',
+  googleOauthClientSecretConfigured: false,
   googleOauthConnected: false,
   googleOauthConnectedAt: null,
   googleDriveReady: false,
@@ -111,6 +112,7 @@ export default function BackupsPage() {
   const [lastRestoreResult, setLastRestoreResult] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const restoreNotificationKeyRef = useRef('');
+  const googleOAuthJsonInputRef = useRef(null);
 
   const pushNotification = (type, message, options = {}) => {
     if (!message) return;
@@ -168,6 +170,8 @@ export default function BackupsPage() {
       setSettings({
         ...initialSettings,
         ...settingsData,
+        googleOauthClientSecret: '',
+        googleOauthClientSecretConfigured: Boolean(settingsData?.googleOauthClientSecretConfigured),
         retentionDays: Number(settingsData?.retentionDays || 30),
       });
       setRecordsPage(backupsData || { content: [], totalPages: 0, number: 0 });
@@ -230,6 +234,10 @@ export default function BackupsPage() {
     pushNotification(lastRestoreResult.ok ? 'success' : 'error', lastRestoreResult.message, { duration: 9000 });
   }, [lastRestoreResult]);
 
+  const hasGoogleOauthSecret = Boolean(
+    settings.googleOauthClientSecret?.trim() || settings.googleOauthClientSecretConfigured
+  );
+
   const driveChecklist = useMemo(() => {
     return [
       {
@@ -242,7 +250,7 @@ export default function BackupsPage() {
       },
       {
         label: 'Client Secret configurado',
-        ready: Boolean(settings.googleOauthClientSecret?.trim()),
+        ready: hasGoogleOauthSecret,
       },
       {
         label: 'OAuth conectado',
@@ -253,13 +261,63 @@ export default function BackupsPage() {
         ready: Boolean(settings.googleDriveFolderId?.trim()),
       },
     ];
-  }, [settings.googleDriveEnabled, settings.googleOauthClientId, settings.googleOauthClientSecret, settings.googleOauthConnected, settings.googleDriveFolderId]);
+  }, [
+    settings.googleDriveEnabled,
+    settings.googleOauthClientId,
+    hasGoogleOauthSecret,
+    settings.googleOauthConnected,
+    settings.googleDriveFolderId,
+  ]);
 
   const handleChange = (field, value) => {
     setSettings((current) => ({
       ...current,
       [field]: value,
     }));
+  };
+
+  const handleImportGoogleOAuthJson = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+
+    if (!file) return;
+
+    try {
+      const rawContent = await file.text();
+      const parsed = JSON.parse(rawContent);
+      const oauthClient = parsed.installed || parsed.web || parsed;
+      const clientId = oauthClient?.client_id?.trim();
+      const clientSecret = oauthClient?.client_secret?.trim();
+
+      if (!clientId || !clientSecret) {
+        pushNotification(
+          'error',
+          'El JSON no parece ser una credencial OAuth válida. Debe contener installed.client_id e installed.client_secret.'
+        );
+        return;
+      }
+
+      setSettings((current) => ({
+        ...current,
+        googleDriveEnabled: true,
+        googleOauthClientId: clientId,
+        googleOauthClientSecret: clientSecret,
+        googleOauthClientSecretConfigured: true,
+        googleOauthConnected: false,
+        googleOauthConnectedAt: null,
+        googleDriveReady: false,
+        googleDriveFolderId: '',
+        googleDriveFolderName: '',
+      }));
+
+      setDriveTest(null);
+      pushNotification(
+        'success',
+        'JSON OAuth importado. Ahora guarda la configuración y luego presiona Conectar Google Drive.'
+      );
+    } catch {
+      pushNotification('error', 'No se pudo leer el JSON de Google. Verifica que el archivo sea válido.');
+    }
   };
 
   const buildSettingsPayload = () => ({
@@ -269,8 +327,9 @@ export default function BackupsPage() {
     zipEnabled: Boolean(settings.zipEnabled),
     retentionDays: Number(settings.retentionDays || 1),
     googleDriveEnabled: Boolean(settings.googleDriveEnabled),
-    googleOauthClientId: settings.googleOauthClientId,
-    googleOauthClientSecret: settings.googleOauthClientSecret,
+    googleOauthClientId: settings.googleOauthClientId || '',
+    // Si queda vacío, el backend conserva el secret ya guardado y no lo expone en pantalla.
+    googleOauthClientSecret: settings.googleOauthClientSecret || '',
   });
 
   const handleSaveSettings = async (event) => {
@@ -482,6 +541,14 @@ export default function BackupsPage() {
         ))}
       </div>
 
+      <input
+        ref={googleOAuthJsonInputRef}
+        type="file"
+        accept=".json,application/json"
+        onChange={handleImportGoogleOAuthJson}
+        style={{ display: 'none' }}
+      />
+
       <PageHeader
         title="Respaldos"
         subtitle="Administra backups automaticos, historial local y la conexion de Google Drive desde un solo lugar."
@@ -600,14 +667,23 @@ export default function BackupsPage() {
 
           <div className="backups-drive-note">
             <strong>Como funciona ahora</strong>
-            <p>Primero guardas el Client ID, luego conectas tu cuenta de Google y la app crea automaticamente la carpeta `TallerCelularBackups` en tu Drive.</p>
+            <p>Primero importa el JSON OAuth descargado desde Google Cloud o copia Client ID/Secret. Luego guarda, conecta tu cuenta de Google y la app crea automaticamente la carpeta `TallerCelularBackups` en tu Drive.</p>
           </div>
 
           <div className="backups-quick-actions">
             <button
               className="secondary"
+              type="button"
+              onClick={() => googleOAuthJsonInputRef.current?.click()}
+            >
+              <UploadCloud size={18} />
+              Importar JSON OAuth
+            </button>
+
+            <button
+              className="secondary"
               onClick={handleConnectDrive}
-              disabled={connectingDrive || !settings.googleDriveEnabled || !settings.googleOauthClientId?.trim() || !settings.googleOauthClientSecret?.trim()}
+              disabled={connectingDrive || !settings.googleDriveEnabled || !settings.googleOauthClientId?.trim() || !hasGoogleOauthSecret}
             >
               {connectingDrive ? <LoaderCircle size={18} className="backups-spin" /> : <Cloud size={18} />}
               Conectar Google Drive
@@ -636,6 +712,7 @@ export default function BackupsPage() {
             <strong>Estado actual</strong>
             <p><strong>Carpeta:</strong> {settings.googleDriveFolderName || 'Se creara automaticamente al conectar'}</p>
             <p><strong>Folder ID:</strong> {settings.googleDriveFolderId || 'Pendiente'}</p>
+            <p><strong>Client Secret:</strong> {hasGoogleOauthSecret ? 'Configurado' : 'Pendiente'}</p>
             <p><strong>Conectado:</strong> {settings.googleOauthConnected ? 'Si' : 'No'}</p>
             <p><strong>Ultima conexion:</strong> {settings.googleOauthConnectedAt ? formatDateTime(settings.googleOauthConnectedAt) : 'Sin conexion todavia'}</p>
           </div>
@@ -743,12 +820,14 @@ export default function BackupsPage() {
               <label className="field-span-2">
                 <span>Google OAuth Client Secret</span>
                 <input
+                  type="password"
                   value={settings.googleOauthClientSecret || ''}
                   onChange={(event) => handleChange('googleOauthClientSecret', event.target.value)}
-                  placeholder="GOCSPX-xxxxxxxxxxxxxxxxxxxx"
+                  placeholder={settings.googleOauthClientSecretConfigured ? 'Secret ya configurado. Escribe uno nuevo solo si vas a cambiarlo.' : 'GOCSPX-xxxxxxxxxxxxxxxxxxxx'}
                   disabled={!settings.googleDriveEnabled}
+                  autoComplete="off"
                 />
-                <small>Copialo desde tu cliente OAuth de tipo Escritorio en Google Cloud.</small>
+                <small>Por seguridad el backend no devuelve este valor. Si ya está configurado, puedes dejarlo vacío al guardar.</small>
               </label>
             </div>
 

@@ -132,7 +132,8 @@ public class BackupService {
     }
 
     public Page<BackupRecord> listBackups(int pagina, int tamano) {
-        return backupRecordRepository.findAllByOrderByGeneradoEnDesc(PageRequest.of(Math.max(pagina, 0), Math.max(tamano, 1)));
+        return backupRecordRepository
+                .findAllByOrderByGeneradoEnDesc(PageRequest.of(Math.max(pagina, 0), Math.max(tamano, 1)));
     }
 
     public BackupSettingsResponse getSettings() {
@@ -150,11 +151,13 @@ public class BackupService {
                 .googleDriveFolderName(settings.getGoogleDriveFolderName())
                 .googleServiceAccountKeyPath(settings.getGoogleServiceAccountKeyPath())
                 .googleOauthClientId(settings.getGoogleOauthClientId())
-                .googleOauthClientSecret(settings.getGoogleOauthClientSecret())
-                .googleOauthConnected(settings.getGoogleOauthRefreshToken() != null && !settings.getGoogleOauthRefreshToken().isBlank())
-                .googleOauthConnectedAt(settings.getGoogleOauthConnectedAt() == null ? null : settings.getGoogleOauthConnectedAt().toString())
+                .googleOauthClientSecretConfigured(hasText(settings.getGoogleOauthClientSecret()))
+                .googleOauthConnected(hasText(settings.getGoogleOauthRefreshToken()))
+                .googleOauthConnectedAt(settings.getGoogleOauthConnectedAt() == null ? null
+                        : settings.getGoogleOauthConnectedAt().toString())
                 .googleDriveReady(isGoogleDriveReady(settings))
-                .lastAutomaticBackupAt(settings.getLastAutomaticBackupAt() == null ? null : settings.getLastAutomaticBackupAt().toString())
+                .lastAutomaticBackupAt(settings.getLastAutomaticBackupAt() == null ? null
+                        : settings.getLastAutomaticBackupAt().toString())
                 .nextAutomaticBackupAt(nextAutomaticBackupAt == null ? null : nextAutomaticBackupAt.toString())
                 .build();
     }
@@ -171,19 +174,10 @@ public class BackupService {
         settings.setRetentionDays(request.getRetentionDays());
         settings.setGoogleDriveEnabled(request.isGoogleDriveEnabled());
 
-        String nextOauthClientId = safeTrim(request.getGoogleOauthClientId());
-        String nextOauthClientSecret = safeTrim(request.getGoogleOauthClientSecret());
-        boolean oauthClientChanged = !safeEquals(settings.getGoogleOauthClientId(), nextOauthClientId);
-        boolean oauthClientSecretChanged = !safeEquals(settings.getGoogleOauthClientSecret(), nextOauthClientSecret);
-        settings.setGoogleOauthClientId(nextOauthClientId);
-        settings.setGoogleOauthClientSecret(nextOauthClientSecret);
-        settings.setGoogleServiceAccountKeyPath(null);
+        GoogleOauthChange oauthChange = applyGoogleOauthCredentials(settings, request, false);
 
-        if (!request.isGoogleDriveEnabled() || oauthClientChanged || oauthClientSecretChanged) {
-            settings.setGoogleOauthRefreshToken(null);
-            settings.setGoogleOauthConnectedAt(null);
-            settings.setGoogleDriveFolderId(null);
-            settings.setGoogleDriveFolderName(null);
+        if (!request.isGoogleDriveEnabled() || oauthChange.clientIdChanged() || oauthChange.clientSecretChanged()) {
+            clearGoogleDriveConnection(settings);
         }
 
         backupSettingsRepository.save(settings);
@@ -217,7 +211,8 @@ public class BackupService {
         }
 
         int retried = 0;
-        for (BackupRecord record : backupRecordRepository.findTop20ByEstadoOrderByGeneradoEnAsc(BackupEstado.PENDING_UPLOAD)) {
+        for (BackupRecord record : backupRecordRepository
+                .findTop20ByEstadoOrderByGeneradoEnAsc(BackupEstado.PENDING_UPLOAD)) {
             Path file = Paths.get(record.getRutaLocal());
             if (!Files.exists(file)) {
                 record.setEstado(BackupEstado.FAILED_UPLOAD);
@@ -253,7 +248,7 @@ public class BackupService {
         String normalizedDirectory = validateAndNormalizeDirectory(request.getDirectory());
         validateRequest(request);
 
-        if (request.getGoogleOauthClientId() == null || request.getGoogleOauthClientId().isBlank()) {
+        if (!hasText(request.getGoogleOauthClientId())) {
             throw new BusinessException("Debes indicar el Client ID de Google OAuth.");
         }
 
@@ -263,20 +258,11 @@ public class BackupService {
         settings.setDirectory(normalizedDirectory);
         settings.setZipEnabled(request.isZipEnabled());
         settings.setRetentionDays(request.getRetentionDays());
-        settings.setGoogleDriveEnabled(request.isGoogleDriveEnabled());
+        settings.setGoogleDriveEnabled(true);
 
-        String nextOauthClientId = safeTrim(request.getGoogleOauthClientId());
-        String nextOauthClientSecret = safeTrim(request.getGoogleOauthClientSecret());
-        boolean oauthClientChanged = !safeEquals(settings.getGoogleOauthClientId(), nextOauthClientId);
-        boolean oauthClientSecretChanged = !safeEquals(settings.getGoogleOauthClientSecret(), nextOauthClientSecret);
-        settings.setGoogleOauthClientId(nextOauthClientId);
-        settings.setGoogleOauthClientSecret(nextOauthClientSecret);
-        settings.setGoogleServiceAccountKeyPath(null);
-        if (oauthClientChanged || oauthClientSecretChanged) {
-            settings.setGoogleOauthRefreshToken(null);
-            settings.setGoogleOauthConnectedAt(null);
-            settings.setGoogleDriveFolderId(null);
-            settings.setGoogleDriveFolderName(null);
+        GoogleOauthChange oauthChange = applyGoogleOauthCredentials(settings, request, true);
+        if (oauthChange.clientIdChanged() || oauthChange.clientSecretChanged()) {
+            clearGoogleDriveConnection(settings);
         }
 
         backupSettingsRepository.save(settings);
@@ -392,7 +378,7 @@ public class BackupService {
         String sql = "VACUUM INTO '" + escapedPath + "'";
 
         try (Connection connection = dataSource.getConnection();
-             Statement statement = connection.createStatement()) {
+                Statement statement = connection.createStatement()) {
 
             statement.execute("PRAGMA wal_checkpoint(FULL)");
             statement.execute(sql);
@@ -406,7 +392,7 @@ public class BackupService {
         Path zipPath = Paths.get(sourceFile.toString().replaceAll("\\.db$", ".zip"));
 
         try (OutputStream fos = Files.newOutputStream(zipPath);
-             ZipOutputStream zos = new ZipOutputStream(fos)) {
+                ZipOutputStream zos = new ZipOutputStream(fos)) {
 
             ZipEntry zipEntry = new ZipEntry(sourceFile.getFileName().toString());
             zos.putNextEntry(zipEntry);
@@ -455,14 +441,70 @@ public class BackupService {
     }
 
     private String safeTrim(String value) {
-        return value == null ? null : value.trim();
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     private boolean safeEquals(String left, String right) {
-        if (left == null) {
-            return right == null;
+        String normalizedLeft = safeTrim(left);
+        String normalizedRight = safeTrim(right);
+        if (normalizedLeft == null) {
+            return normalizedRight == null;
         }
-        return left.equals(right);
+        return normalizedLeft.equals(normalizedRight);
+    }
+
+    private GoogleOauthChange applyGoogleOauthCredentials(
+            BackupSettings settings,
+            BackupSettingsRequest request,
+            boolean requireSecretForConnection) {
+        String currentClientId = safeTrim(settings.getGoogleOauthClientId());
+        String currentClientSecret = safeTrim(settings.getGoogleOauthClientSecret());
+        String nextClientId = safeTrim(request.getGoogleOauthClientId());
+        String requestedClientSecret = safeTrim(request.getGoogleOauthClientSecret());
+
+        boolean clientIdChanged = !safeEquals(currentClientId, nextClientId);
+        boolean clientSecretProvided = hasText(requestedClientSecret);
+
+        if (request.isGoogleDriveEnabled() || requireSecretForConnection) {
+            if (!hasText(nextClientId)) {
+                throw new BusinessException("Debes indicar el Client ID de Google OAuth.");
+            }
+
+            if (requireSecretForConnection && !clientSecretProvided && !hasText(currentClientSecret)) {
+                throw new BusinessException(
+                        "Debes indicar o importar el Client Secret de Google OAuth antes de conectar Drive.");
+            }
+
+            if (clientIdChanged && !clientSecretProvided) {
+                throw new BusinessException(
+                        "Cambiaste el Client ID. Por seguridad, vuelve a importar o escribir también el Client Secret del mismo JSON de Google.");
+            }
+        }
+
+        boolean clientSecretChanged = clientSecretProvided && !safeEquals(currentClientSecret, requestedClientSecret);
+
+        settings.setGoogleOauthClientId(nextClientId);
+        if (clientSecretProvided) {
+            settings.setGoogleOauthClientSecret(requestedClientSecret);
+        }
+        settings.setGoogleServiceAccountKeyPath(null);
+
+        return new GoogleOauthChange(clientIdChanged, clientSecretChanged);
+    }
+
+    private void clearGoogleDriveConnection(BackupSettings settings) {
+        settings.setGoogleOauthRefreshToken(null);
+        settings.setGoogleOauthConnectedAt(null);
+        settings.setGoogleDriveFolderId(null);
+        settings.setGoogleDriveFolderName(null);
     }
 
     private void markRemoteUploadFailure(BackupRecord record, RemoteBackupException ex) {
@@ -474,7 +516,8 @@ public class BackupService {
         record.setEstado(ex.isRetryable() && !exhausted ? BackupEstado.PENDING_UPLOAD : BackupEstado.FAILED_UPLOAD);
 
         if (ex.isRetryable() && exhausted) {
-            record.setMensaje(ex.getMessage() + " Se alcanzo el maximo de " + MAX_REMOTE_UPLOAD_ATTEMPTS + " intentos automaticos.");
+            record.setMensaje(ex.getMessage() + " Se alcanzo el maximo de " + MAX_REMOTE_UPLOAD_ATTEMPTS
+                    + " intentos automaticos.");
             return;
         }
 
@@ -539,12 +582,9 @@ public class BackupService {
 
     private boolean isGoogleDriveReady(BackupSettings settings) {
         return Boolean.TRUE.equals(settings.getGoogleDriveEnabled())
-                && settings.getGoogleOauthClientId() != null
-                && !settings.getGoogleOauthClientId().isBlank()
-                && settings.getGoogleOauthClientSecret() != null
-                && !settings.getGoogleOauthClientSecret().isBlank()
-                && settings.getGoogleOauthRefreshToken() != null
-                && !settings.getGoogleOauthRefreshToken().isBlank();
+                && hasText(settings.getGoogleOauthClientId())
+                && hasText(settings.getGoogleOauthClientSecret())
+                && hasText(settings.getGoogleOauthRefreshToken());
     }
 
     private LocalDateTime resolveNextAutomaticBackupAt(BackupSettings settings) {
@@ -561,5 +601,8 @@ public class BackupService {
         } catch (Exception ex) {
             return null;
         }
+    }
+
+    private record GoogleOauthChange(boolean clientIdChanged, boolean clientSecretChanged) {
     }
 }
