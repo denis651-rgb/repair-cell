@@ -259,6 +259,34 @@ class BackupServiceTest {
         assertEquals("demo-client-secret", settings.getGoogleOauthClientSecret());
     }
 
+    @Test
+    void startGoogleDriveOAuth_doesNotRequireLocalBackupDirectoryWritable() throws IOException {
+        when(googleDriveBackupStorageService.startAuthorization(any(BackupSettings.class)))
+                .thenReturn(GoogleOAuthStartResponse.builder()
+                        .authUrl("https://accounts.google.com/o/oauth2/v2/auth?demo")
+                        .state("demo-state")
+                        .build());
+
+        Path blockedBackupPath = tempDir.resolve("backup-path-owned-by-another-process");
+        Files.writeString(blockedBackupPath, "not a directory");
+
+        BackupSettingsRequest request = new BackupSettingsRequest();
+        request.setEnabled(true);
+        request.setCron("0 0 1 * * *");
+        request.setDirectory(blockedBackupPath.toString());
+        request.setZipEnabled(true);
+        request.setRetentionDays(10);
+        request.setGoogleDriveEnabled(true);
+        request.setGoogleOauthClientId("desktop-client-id.apps.googleusercontent.com");
+        request.setGoogleOauthClientSecret("demo-client-secret");
+
+        GoogleOAuthStartResponse response = backupService.startGoogleDriveOAuth(request);
+
+        assertEquals("demo-state", response.getState());
+        assertEquals(tempDir.resolve("backups").toString(), settings.getDirectory());
+        assertEquals("desktop-client-id.apps.googleusercontent.com", settings.getGoogleOauthClientId());
+    }
+
     private DataSource createSqliteDataSource(Path dbFile) throws Exception {
         DriverManagerDataSource dataSource = new DriverManagerDataSource();
         dataSource.setDriverClassName("org.sqlite.JDBC");

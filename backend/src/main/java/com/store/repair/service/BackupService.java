@@ -245,19 +245,13 @@ public class BackupService {
     }
 
     public GoogleOAuthStartResponse startGoogleDriveOAuth(BackupSettingsRequest request) {
-        String normalizedDirectory = validateAndNormalizeDirectory(request.getDirectory());
-        validateRequest(request);
+        validateGoogleOAuthStartRequest(request);
 
         if (!hasText(request.getGoogleOauthClientId())) {
             throw new BusinessException("Debes indicar el Client ID de Google OAuth.");
         }
 
         BackupSettings settings = getSettingsEntity();
-        settings.setEnabled(request.isEnabled());
-        settings.setCron(request.getCron().trim());
-        settings.setDirectory(normalizedDirectory);
-        settings.setZipEnabled(request.isZipEnabled());
-        settings.setRetentionDays(request.getRetentionDays());
         settings.setGoogleDriveEnabled(true);
 
         GoogleOauthChange oauthChange = applyGoogleOauthCredentials(settings, request, true);
@@ -366,6 +360,20 @@ public class BackupService {
 
         if (request.getDirectory() == null || request.getDirectory().isBlank()) {
             throw new BusinessException("La carpeta local es obligatoria");
+        }
+
+        if (request.getRetentionDays() < 1) {
+            throw new BusinessException("La retencion minima es de 1 dia");
+        }
+    }
+
+    private void validateGoogleOAuthStartRequest(BackupSettingsRequest request) {
+        if (request.getCron() != null && !request.getCron().isBlank()) {
+            try {
+                CronExpression.parse(request.getCron().trim());
+            } catch (IllegalArgumentException ex) {
+                throw new BusinessException("La expresion cron no es valida");
+            }
         }
 
         if (request.getRetentionDays() < 1) {
