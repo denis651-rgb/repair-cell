@@ -6,6 +6,7 @@ import com.store.repair.dto.RentabilidadReporteResponse;
 import com.store.repair.dto.ReporteClienteGlobalResponse;
 import com.store.repair.dto.ReporteClienteResponse;
 import com.store.repair.dto.ReporteResumenResponse;
+import com.store.repair.dto.ReporteVentaRepuestoHorarioResponse;
 import com.store.repair.dto.ResumenGlobalResponse;
 import com.store.repair.dto.SerieDiariaResponse;
 import com.store.repair.dto.SerieFinancieraDiariaResponse;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 
@@ -72,6 +74,15 @@ public class ReporteControlador {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate inicio,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fin) {
         return reporteServicio.obtenerFinancieroPorFecha(inicio, fin);
+    }
+
+    @GetMapping("/ventas-repuestos-horario")
+    public List<ReporteVentaRepuestoHorarioResponse> obtenerVentasRepuestosHorario(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate inicio,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fin,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.TIME) LocalTime horaInicio,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.TIME) LocalTime horaFin) {
+        return reporteServicio.obtenerVentasRepuestosHorario(inicio, fin, horaInicio, horaFin);
     }
 
     @GetMapping("/clientes-global")

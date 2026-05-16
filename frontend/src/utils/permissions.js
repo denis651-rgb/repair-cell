@@ -1,4 +1,4 @@
-const FALLBACK_ROUTE = '/reparaciones';
+const FALLBACK_ROUTE = '/sin-permiso';
 
 const PERMISSION_ROUTE_PRIORITY = [
   { permission: 'DASHBOARD_VIEW', path: '/dashboard' },
@@ -44,7 +44,7 @@ export function hasAnyPermission(user, permissions = []) {
 }
 
 export function getDefaultRouteForUser(user) {
-  if (!user) return FALLBACK_ROUTE;
+  if (!user) return '/login';
 
   const match = PERMISSION_ROUTE_PRIORITY.find((item) => hasPermission(user, item.permission));
   return match?.path || FALLBACK_ROUTE;

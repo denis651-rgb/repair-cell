@@ -35,7 +35,7 @@ const initialForm = {
   partes: [],
 };
 
-const initialPart = { productoId: '', varianteId: '', nombreParte: '', cantidad: 1, tipoFuente: 'TIENDA' };
+const initialPart = { varianteId: '', nombreParte: '', cantidad: 1, tipoFuente: 'TIENDA' };
 const initialQuickClientForm = { nombreCompleto: '', telefono: '' };
 const initialQuickDeviceForm = { marca: '', modelo: '', imeiSerie: '' };
 const estados = ['RECIBIDO', 'EN_DIAGNOSTICO', 'EN_REPARACION', 'LISTO', 'ENTREGADO', 'CANCELADO'];
@@ -278,7 +278,7 @@ export default function RepairOrdersPage() {
   }, [selectedClient?.id]);
 
   const addPart = () => {
-    if (!selectedPart.productoId && !selectedPart.varianteId && !selectedPart.nombreParte.trim()) return;
+    if (!selectedPart.varianteId && !selectedPart.nombreParte.trim()) return;
 
     setForm((current) => ({
       ...current,
@@ -287,10 +287,7 @@ export default function RepairOrdersPage() {
         {
           ...selectedPart,
           cantidad: Number(selectedPart.cantidad || 1),
-
-          // Si hay varianteId, NO mandamos productoId.
-          // Evita error: Producto no encontrado: ID_PRODUCTO_BASE
-          productoId: selectedPart.varianteId ? null : selectedPart.productoId || null,
+          productoId: null,
           varianteId: selectedPart.varianteId || null,
         },
       ],
@@ -458,9 +455,7 @@ export default function RepairOrdersPage() {
         diasGarantia: Number(form.diasGarantia || 0),
         partes: form.partes.map((part) => ({
           ...part,
-
-          // Si la parte viene del inventario operativo, se procesa por varianteId.
-          productoId: part.varianteId ? null : part.productoId ? Number(part.productoId) : null,
+          productoId: null,
           varianteId: part.varianteId ? Number(part.varianteId) : null,
         })),
       },

@@ -8,6 +8,7 @@ import com.store.repair.domain.Proveedor;
 import com.store.repair.dto.CerrarLoteManualRequest;
 import com.store.repair.dto.LoteInventarioHistorialResponse;
 import com.store.repair.dto.LoteInventarioRequest;
+import com.store.repair.dto.LoteVentaOptionResponse;
 import com.store.repair.repository.CompraRepository;
 import com.store.repair.repository.LoteInventarioRepository;
 import com.store.repair.repository.VentaDetalleLoteRepository;
@@ -58,6 +59,13 @@ public class LoteInventarioService {
 
     public LoteInventarioHistorialResponse findDetalleHistorialById(Long id) {
         return toHistorialResponse(findById(id));
+    }
+
+    public List<LoteVentaOptionResponse> listarOpcionesVenta(Long varianteId) {
+        productoVarianteService.findById(varianteId);
+        return repository.findOpcionesVentaByVarianteId(varianteId).stream()
+                .map(this::toVentaOptionResponse)
+                .toList();
     }
 
     public String sugerirCodigoProveedor(Long proveedorId) {
@@ -132,6 +140,13 @@ public class LoteInventarioService {
             throw new BusinessException("El costo unitario no puede ser negativo.");
         }
 
+        Double precioVentaUnitario = request.getPrecioVentaUnitario() != null
+                ? request.getPrecioVentaUnitario()
+                : (varianteDestino.getPrecioVentaSugerido() == null ? 0D : varianteDestino.getPrecioVentaSugerido());
+        if (precioVentaUnitario < 0) {
+            throw new BusinessException("El precio de venta unitario no puede ser negativo.");
+        }
+
         String motivoCierre = SanitizadorTexto.limpiar(request.getMotivoCierre());
         boolean loteSeCierraPorEdicion = Boolean.FALSE.equals(request.getActivo());
         if (loteSeCierraPorEdicion && cantidadDisponible > 0 && motivoCierre == null) {
@@ -153,6 +168,7 @@ public class LoteInventarioService {
         destino.setCantidadInicial(cantidadInicial);
         destino.setCantidadDisponible(cantidadDisponible);
         destino.setCostoUnitario(costoUnitario);
+        destino.setPrecioVentaUnitario(precioVentaUnitario);
         destino.setSubtotalCompra(
                 request.getSubtotalCompra() != null
                         ? request.getSubtotalCompra()
@@ -264,6 +280,7 @@ public class LoteInventarioService {
                 .fechaIngreso(lote.getFechaIngreso())
                 .fechaCierre(lote.getFechaCierre())
                 .costoUnitario(lote.getCostoUnitario())
+                .precioVentaUnitario(resolverPrecioVentaLote(lote))
                 .subtotalCompra(lote.getSubtotalCompra())
                 .cantidadInicial(cantidadInicial)
                 .cantidadVendida(cantidadVendida)
@@ -352,6 +369,33 @@ public class LoteInventarioService {
 
     private double redondearDosDecimales(double valor) {
         return Math.round(valor * 100D) / 100D;
+    }
+
+    private Double resolverPrecioVentaLote(LoteInventario lote) {
+        if (lote.getPrecioVentaUnitario() != null && lote.getPrecioVentaUnitario() > 0) {
+            return lote.getPrecioVentaUnitario();
+        }
+        ProductoVariante variante = lote.getVariante();
+        return variante == null || variante.getPrecioVentaSugerido() == null
+                ? 0D
+                : variante.getPrecioVentaSugerido();
+    }
+
+    private LoteVentaOptionResponse toVentaOptionResponse(LoteInventario lote) {
+        double costo = lote.getCostoUnitario() == null ? 0D : lote.getCostoUnitario();
+        double precioVenta = resolverPrecioVentaLote(lote);
+        return LoteVentaOptionResponse.builder()
+                .id(lote.getId())
+                .varianteId(lote.getVariante() == null ? null : lote.getVariante().getId())
+                .codigoLote(lote.getCodigoLote())
+                .codigoProveedor(lote.getCodigoProveedor())
+                .fechaIngreso(lote.getFechaIngreso())
+                .cantidadDisponible(lote.getCantidadDisponible() == null ? 0 : lote.getCantidadDisponible())
+                .costoUnitario(costo)
+                .precioVentaUnitario(precioVenta)
+                .gananciaUnitaria(redondearDosDecimales(precioVenta - costo))
+                .proveedorNombre(lote.getProveedor() == null ? null : lote.getProveedor().getNombreComercial())
+                .build();
     }
 
     private boolean contieneTexto(String valor, String filtro) {

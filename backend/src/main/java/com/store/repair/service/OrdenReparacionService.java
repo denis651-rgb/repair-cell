@@ -10,7 +10,7 @@ import com.store.repair.domain.ParteOrdenReparacion;
 import com.store.repair.domain.ProductoInventario;
 import com.store.repair.domain.ProductoVariante;
 import com.store.repair.domain.TipoFuenteParte;
-import com.store.repair.domain.TipoMovimientoStock;
+
 import com.store.repair.domain.LoteInventario;
 import com.store.repair.dto.OrdenReparacionRequest;
 import com.store.repair.dto.ParteOrdenReparacionRequest;
@@ -38,7 +38,7 @@ public class OrdenReparacionService {
     private final OrdenReparacionRepository repository;
     private final ClienteService clienteService;
     private final DispositivoService dispositivoService;
-    private final ProductoInventarioService productoInventarioService;
+
     private final ProductoVarianteService productoVarianteService;
     private final LoteInventarioRepository loteInventarioRepository;
     private final AccountingService accountingService;
@@ -144,71 +144,75 @@ public class OrdenReparacionService {
         }
 
         for (ParteOrdenReparacionRequest parteRequest : partesRequest) {
-            ProductoInventario producto = null;
-            ProductoVariante variante = null;
             if (parteRequest.getProductoId() != null) {
-                producto = productoInventarioService.findById(parteRequest.getProductoId());
+                throw new BusinessException(
+                        "El inventario viejo ya no se usa. Para repuestos de tienda debes enviar varianteId del catalogo nuevo.");
             }
+
+            ProductoVariante variante = null;
+            Integer cantidad = parteRequest.getCantidad() == null ? 1 : parteRequest.getCantidad();
+            TipoFuenteParte tipoFuente = parteRequest.getTipoFuente() == null
+                    ? TipoFuenteParte.TIENDA
+                    : parteRequest.getTipoFuente();
+
+            if (tipoFuente == TipoFuenteParte.TIENDA && parteRequest.getVarianteId() == null) {
+                throw new BusinessException(
+                        "Las partes de tienda deben indicar una variante del inventario por lotes.");
+            }
+
             if (parteRequest.getVarianteId() != null) {
                 variante = productoVarianteService.findById(parteRequest.getVarianteId());
             }
 
             Double costoUnitario = parteRequest.getCostoUnitario();
             Double precioUnitario = parteRequest.getPrecioUnitario();
-            Integer cantidad = parteRequest.getCantidad() == null ? 1 : parteRequest.getCantidad();
-            TipoFuenteParte tipoFuente = parteRequest.getTipoFuente() == null ? TipoFuenteParte.TIENDA : parteRequest.getTipoFuente();
 
             if (variante != null && tipoFuente == TipoFuenteParte.TIENDA) {
-                costoUnitario = costoUnitario == null ? resolverCostoPromedioConsumoVariante(variante, cantidad, orden.getNumeroOrden()) : costoUnitario;
-                precioUnitario = precioUnitario == null ? (variante.getPrecioVentaSugerido() == null ? 0D : variante.getPrecioVentaSugerido()) : precioUnitario;
+                costoUnitario = costoUnitario == null
+                        ? resolverCostoPromedioConsumoVariante(variante, cantidad, orden.getNumeroOrden())
+                        : costoUnitario;
+
+                precioUnitario = precioUnitario == null
+                        ? (variante.getPrecioVentaSugerido() == null ? 0D : variante.getPrecioVentaSugerido())
+                        : precioUnitario;
             }
+
+            String nombreParteLimpio = SanitizadorTexto.limpiar(parteRequest.getNombreParte());
 
             ParteOrdenReparacion parte = ParteOrdenReparacion.builder()
                     .ordenReparacion(orden)
-                    .producto(producto)
+                    .producto(null)
                     .variante(variante)
-                    .nombreParte(
-                            SanitizadorTexto.limpiar(parteRequest.getNombreParte()) != null
-                                    ? SanitizadorTexto.limpiar(parteRequest.getNombreParte())
-                                    : resolverNombreParte(producto, variante))
+                    .nombreParte(nombreParteLimpio != null ? nombreParteLimpio : resolverNombreParte(variante))
                     .cantidad(cantidad)
-                    .costoUnitario(
-                            costoUnitario != null
-                                    ? costoUnitario
-                                    : (producto != null ? producto.getCostoUnitario() : 0D))
-                    .precioUnitario(
-                            precioUnitario != null
-                                    ? precioUnitario
-                                    : (producto != null ? producto.getPrecioVenta() : 0D))
+                    .costoUnitario(costoUnitario != null ? costoUnitario : 0D)
+                    .precioUnitario(precioUnitario != null ? precioUnitario : 0D)
                     .tipoFuente(tipoFuente)
                     .notas(SanitizadorTexto.limpiar(parteRequest.getNotas()))
                     .build();
 
             orden.getPartes().add(parte);
-
-            if (producto != null && parte.getTipoFuente() == TipoFuenteParte.TIENDA) {
-                productoInventarioService.adjustStock(
-                        producto.getId(),
-                        parte.getCantidad(),
-                        TipoMovimientoStock.SALIDA,
-                        "Salida por orden " + orden.getNumeroOrden(),
-                        "ORDEN_REPARACION",
-                        orden.getId());
-            }
         }
     }
 
-    private String resolverNombreParte(ProductoInventario producto, ProductoVariante variante) {
-        if (producto != null) {
-            return producto.getNombre();
-        }
+    private String resolverNombreParte(ProductoVariante variante) {
         if (variante != null && variante.getProductoBase() != null) {
             String calidad = SanitizadorTexto.limpiar(variante.getCalidad());
+            String tipoPresentacion = SanitizadorTexto.limpiar(variante.getTipoPresentacion());
+
+            StringBuilder nombre = new StringBuilder(variante.getProductoBase().getNombreBase());
+
             if (calidad != null) {
-                return variante.getProductoBase().getNombreBase() + " " + calidad;
+                nombre.append(" ").append(calidad);
             }
-            return variante.getProductoBase().getNombreBase();
+
+            if (tipoPresentacion != null) {
+                nombre.append(" ").append(tipoPresentacion);
+            }
+
+            return nombre.toString();
         }
+
         return "Repuesto";
     }
 

@@ -2,8 +2,12 @@ package com.store.repair.service;
 
 import com.store.repair.config.SanitizadorTexto;
 import com.store.repair.domain.CuentaPorCobrar;
+import com.store.repair.domain.DevolucionVenta;
+import com.store.repair.domain.DevolucionVentaDetalle;
+import com.store.repair.domain.DevolucionVentaDetalleLote;
 import com.store.repair.domain.EntradaContable;
 import com.store.repair.domain.EstadoCuentaPorCobrar;
+import com.store.repair.domain.EstadoLoteInventario;
 import com.store.repair.domain.EstadoVenta;
 import com.store.repair.domain.LoteInventario;
 import com.store.repair.domain.ProductoBase;
@@ -15,10 +19,12 @@ import com.store.repair.domain.VentaDetalle;
 import com.store.repair.domain.VentaDetalleLote;
 import com.store.repair.dto.DevolucionVentaDetalleRequest;
 import com.store.repair.dto.DevolucionVentaRequest;
+import com.store.repair.dto.LoteVentaOptionResponse;
 import com.store.repair.dto.VentaListadoResponse;
 import com.store.repair.dto.VentaDetalleRegistroRequest;
 import com.store.repair.dto.VentaRegistroRequest;
 import com.store.repair.repository.CuentaPorCobrarRepository;
+import com.store.repair.repository.DevolucionVentaRepository;
 import com.store.repair.repository.EntradaContableRepository;
 import com.store.repair.repository.LoteInventarioRepository;
 import com.store.repair.repository.VentaRepository;
@@ -50,7 +56,16 @@ public class VentaService {
     private final AccountingService accountingService;
     private final EntradaContableRepository entradaContableRepository;
     private final CuentaPorCobrarRepository cuentaPorCobrarRepository;
+    private final DevolucionVentaRepository devolucionVentaRepository;
     private final ComprobanteService comprobanteService;
+
+    @Transactional(readOnly = true)
+    public List<LoteVentaOptionResponse> listarLotesDisponiblesParaVenta(Long varianteId) {
+        varianteService.findById(varianteId);
+        return loteRepository.findOpcionesVentaByVarianteId(varianteId).stream()
+                .map(this::toLoteVentaOptionResponse)
+                .toList();
+    }
 
     @Transactional(readOnly = true)
     public Page<VentaListadoResponse> findPage(String busqueda, int pagina, int tamano) {
@@ -88,6 +103,12 @@ public class VentaService {
                 .orElseThrow(() -> new ResourceNotFoundException("Venta no encontrada: " + id));
     }
 
+    @Transactional(readOnly = true)
+    public List<DevolucionVenta> listarDevoluciones(Long ventaId) {
+        findById(ventaId);
+        return devolucionVentaRepository.findByVentaIdOrderByFechaDevolucionDescIdDesc(ventaId);
+    }
+
     @Transactional
     @CacheEvict(value = {
             "reportes_resumen",
@@ -120,9 +141,12 @@ public class VentaService {
         for (VentaDetalleRegistroRequest detalleSolicitud : detallesNormalizados) {
             ProductoVariante variante = varianteService.findById(detalleSolicitud.getVarianteId());
             ProductoBase productoBase = variante.getProductoBase();
+            LoteInventario loteSeleccionado = detalleSolicitud.getLoteId() == null
+                    ? null
+                    : obtenerLoteSeleccionado(variante, detalleSolicitud.getLoteId(), detalleSolicitud.getCantidad());
             double precioLista = detalleSolicitud.getPrecioListaUnitario() != null
                     ? detalleSolicitud.getPrecioListaUnitario()
-                    : (variante.getPrecioVentaSugerido() == null ? 0D : variante.getPrecioVentaSugerido());
+                    : resolverPrecioLista(variante, loteSeleccionado);
             double precioVenta = detalleSolicitud.getPrecioVentaUnitario() != null
                     ? detalleSolicitud.getPrecioVentaUnitario()
                     : precioLista;
@@ -148,7 +172,9 @@ public class VentaService {
                     .detallesLote(new ArrayList<>())
                     .build();
 
-            List<VentaDetalleLote> consumos = consumirLotesFifo(variante, detalle, detalleSolicitud.getCantidad(), precioVenta);
+            List<VentaDetalleLote> consumos = loteSeleccionado == null
+                    ? consumirLotesFifo(variante, detalle, detalleSolicitud.getCantidad(), precioVenta)
+                    : consumirLoteSeleccionado(loteSeleccionado, detalle, detalleSolicitud.getCantidad(), precioVenta);
             detalle.replaceDetallesLote(consumos);
             detallesGuardados.add(detalle);
             totalVenta += subtotal;
@@ -184,26 +210,61 @@ public class VentaService {
 
         List<DevolucionVentaDetalleRequest> detallesNormalizados = normalizarDetallesDevolucion(venta, request);
         double montoDevueltoEnOperacion = 0D;
+        LocalDate fechaDevolucion = request.getFechaDevolucion() == null ? LocalDate.now() : request.getFechaDevolucion();
+        String motivoDevolucion = SanitizadorTexto.limpiar(request.getMotivoDevolucion());
+        DevolucionVenta devolucion = DevolucionVenta.builder()
+                .venta(venta)
+                .fechaDevolucion(fechaDevolucion)
+                .motivoDevolucion(motivoDevolucion == null ? "Sin motivo registrado" : motivoDevolucion)
+                .tipoPagoVenta(venta.getTipoPago())
+                .detalles(new ArrayList<>())
+                .build();
 
         for (DevolucionVentaDetalleRequest detalleSolicitud : detallesNormalizados) {
             VentaDetalle detalle = buscarDetalleVenta(venta, detalleSolicitud.getVentaDetalleId());
             int cantidadYaDevuelta = detalle.getCantidadDevuelta() == null ? 0 : detalle.getCantidadDevuelta();
+            double subtotalDevolucion = redondear(detalleSolicitud.getCantidad() * detalle.getPrecioVentaUnitario());
 
             detalle.setCantidadDevuelta(cantidadYaDevuelta + detalleSolicitud.getCantidad());
-            montoDevueltoEnOperacion += detalleSolicitud.getCantidad() * detalle.getPrecioVentaUnitario();
-            restaurarLotesPorDevolucion(detalle, detalleSolicitud.getCantidad());
+            montoDevueltoEnOperacion += subtotalDevolucion;
+
+            DevolucionVentaDetalle detalleDevolucion = DevolucionVentaDetalle.builder()
+                    .ventaDetalle(detalle)
+                    .cantidad(detalleSolicitud.getCantidad())
+                    .precioVentaUnitario(detalle.getPrecioVentaUnitario())
+                    .subtotal(subtotalDevolucion)
+                    .detallesLote(new ArrayList<>())
+                    .build();
+            detalleDevolucion.replaceDetallesLote(
+                    restaurarLotesPorDevolucion(detalle, detalleSolicitud.getCantidad()));
+            devolucion.addDetalle(detalleDevolucion);
         }
 
         venta.setEstado(estaVentaTotalmenteDevuelta(venta) ? EstadoVenta.DEVUELTA : EstadoVenta.PARCIALMENTE_DEVUELTA);
-        venta.setFechaDevolucion(request.getFechaDevolucion() == null ? LocalDate.now() : request.getFechaDevolucion());
-        venta.setMotivoDevolucion(SanitizadorTexto.limpiar(request.getMotivoDevolucion()));
+        venta.setFechaDevolucion(fechaDevolucion);
+        venta.setMotivoDevolucion(motivoDevolucion);
         Venta ventaActualizada = repository.save(venta);
+        double montoAplicadoCuentaPorCobrar = 0D;
+        double montoReembolsado = 0D;
 
         if (ventaActualizada.getTipoPago() == TipoPagoVenta.CONTADO) {
+            montoReembolsado = redondear(montoDevueltoEnOperacion);
             registrarSalidaPorDevolucion(ventaActualizada, calcularTotalDevuelto(ventaActualizada));
         } else {
-            ajustarCuentaPorCobrarPorDevolucion(ventaActualizada, montoDevueltoEnOperacion);
+            AjusteCreditoDevolucion ajuste = ajustarCuentaPorCobrarPorDevolucion(ventaActualizada, montoDevueltoEnOperacion);
+            montoAplicadoCuentaPorCobrar = ajuste.montoAplicadoCuentaPorCobrar();
+            montoReembolsado = ajuste.montoReembolsado();
+            if (montoReembolsado > 0) {
+                registrarSalidaPorDevolucion(
+                        ventaActualizada,
+                        calcularTotalReembolsadoPorDevoluciones(ventaActualizada.getId()) + montoReembolsado);
+            }
         }
+
+        devolucion.setMontoTotal(redondear(montoDevueltoEnOperacion));
+        devolucion.setMontoAplicadoCuentaPorCobrar(montoAplicadoCuentaPorCobrar);
+        devolucion.setMontoReembolsado(montoReembolsado);
+        devolucionVentaRepository.save(devolucion);
 
         return findById(ventaId);
     }
@@ -213,14 +274,15 @@ public class VentaService {
             return List.of();
         }
 
-        Map<Long, VentaDetalleRegistroRequest> detallesConsolidados = new LinkedHashMap<>();
+        Map<String, VentaDetalleRegistroRequest> detallesConsolidados = new LinkedHashMap<>();
 
         for (VentaDetalleRegistroRequest detalle : detallesOriginales) {
             validarDetalleVenta(detalle);
 
-            VentaDetalleRegistroRequest existente = detallesConsolidados.get(detalle.getVarianteId());
+            String llave = construirLlaveDetalleVenta(detalle);
+            VentaDetalleRegistroRequest existente = detallesConsolidados.get(llave);
             if (existente == null) {
-                detallesConsolidados.put(detalle.getVarianteId(), clonarDetalle(detalle));
+                detallesConsolidados.put(llave, clonarDetalle(detalle));
                 continue;
             }
 
@@ -234,8 +296,11 @@ public class VentaService {
         }
 
         for (VentaDetalleRegistroRequest detalleConsolidado : detallesConsolidados.values()) {
-            int stockDisponible = obtenerStockTotalDisponible(detalleConsolidado.getVarianteId());
             ProductoVariante variante = varianteService.findById(detalleConsolidado.getVarianteId());
+            int stockDisponible = detalleConsolidado.getLoteId() == null
+                    ? obtenerStockTotalDisponible(detalleConsolidado.getVarianteId())
+                    : obtenerLoteSeleccionado(variante, detalleConsolidado.getLoteId(), detalleConsolidado.getCantidad())
+                            .getCantidadDisponible();
             if (detalleConsolidado.getCantidad() > stockDisponible) {
                 throw new BusinessException(
                         "Stock insuficiente para " + variante.getCodigoVariante() + ". Disponible: " + stockDisponible
@@ -299,15 +364,27 @@ public class VentaService {
         if (detalle.getPrecioVentaUnitario() != null && detalle.getPrecioVentaUnitario() < 0) {
             throw new BusinessException("El precio real de venta no puede ser negativo");
         }
+
+        if (detalle.getPrecioListaUnitario() != null && detalle.getPrecioListaUnitario() < 0) {
+            throw new BusinessException("El precio de lista no puede ser negativo");
+        }
     }
 
     private VentaDetalleRegistroRequest clonarDetalle(VentaDetalleRegistroRequest origen) {
         VentaDetalleRegistroRequest copia = new VentaDetalleRegistroRequest();
         copia.setVarianteId(origen.getVarianteId());
+        copia.setLoteId(origen.getLoteId());
         copia.setCantidad(origen.getCantidad());
         copia.setPrecioListaUnitario(origen.getPrecioListaUnitario());
         copia.setPrecioVentaUnitario(origen.getPrecioVentaUnitario());
         return copia;
+    }
+
+    private String construirLlaveDetalleVenta(VentaDetalleRegistroRequest detalle) {
+        return detalle.getVarianteId()
+                + "|" + (detalle.getLoteId() == null ? "FIFO" : detalle.getLoteId())
+                + "|" + detalle.getPrecioListaUnitario()
+                + "|" + detalle.getPrecioVentaUnitario();
     }
 
     private VentaDetalle buscarDetalleVenta(Venta venta, Long detalleId) {
@@ -315,6 +392,74 @@ public class VentaService {
                 .filter(detalle -> detalle.getId().equals(detalleId))
                 .findFirst()
                 .orElseThrow(() -> new BusinessException("Uno de los items no pertenece a la venta seleccionada"));
+    }
+
+    private LoteInventario obtenerLoteSeleccionado(ProductoVariante variante, Long loteId, int cantidadSolicitada) {
+        LoteInventario lote = loteRepository.findById(loteId)
+                .orElseThrow(() -> new ResourceNotFoundException("Lote no encontrado: " + loteId));
+
+        if (lote.getVariante() == null || !lote.getVariante().getId().equals(variante.getId())) {
+            throw new BusinessException(
+                    "El lote " + lote.getCodigoLote()
+                            + " no pertenece a la variante " + variante.getCodigoVariante() + ".");
+        }
+
+        if (!Boolean.TRUE.equals(lote.getActivo())
+                || !Boolean.TRUE.equals(lote.getVisibleEnVentas())
+                || lote.getEstado() != EstadoLoteInventario.ACTIVO) {
+            throw new BusinessException("El lote " + lote.getCodigoLote() + " no esta disponible para ventas.");
+        }
+
+        int disponible = lote.getCantidadDisponible() == null ? 0 : lote.getCantidadDisponible();
+        if (cantidadSolicitada > disponible) {
+            throw new BusinessException(
+                    "Stock insuficiente en el lote " + lote.getCodigoLote() + ". Disponible: " + disponible
+                            + ", solicitado: " + cantidadSolicitada);
+        }
+
+        return lote;
+    }
+
+    private double resolverPrecioLista(ProductoVariante variante, LoteInventario loteSeleccionado) {
+        if (loteSeleccionado != null && loteSeleccionado.getPrecioVentaUnitario() != null
+                && loteSeleccionado.getPrecioVentaUnitario() > 0) {
+            return loteSeleccionado.getPrecioVentaUnitario();
+        }
+        if (variante == null) {
+            return 0D;
+        }
+        return variante.getPrecioVentaSugerido() == null ? 0D : variante.getPrecioVentaSugerido();
+    }
+
+    private List<VentaDetalleLote> consumirLoteSeleccionado(
+            LoteInventario lote,
+            VentaDetalle detalle,
+            int cantidadSolicitada,
+            double precioVentaUnitario) {
+        int disponible = lote.getCantidadDisponible() == null ? 0 : lote.getCantidadDisponible();
+        if (cantidadSolicitada > disponible) {
+            throw new BusinessException(
+                    "Stock insuficiente en el lote " + lote.getCodigoLote() + ". Disponible: " + disponible
+                            + ", solicitado: " + cantidadSolicitada);
+        }
+
+        lote.setCantidadDisponible(disponible - cantidadSolicitada);
+        actualizarEstadoLoteTrasMovimiento(lote);
+        loteRepository.save(lote);
+
+        double costoUnitario = lote.getCostoUnitario() == null ? 0D : lote.getCostoUnitario();
+        double costoTotal = redondear(costoUnitario * cantidadSolicitada);
+        double gananciaBruta = redondear((precioVentaUnitario - costoUnitario) * cantidadSolicitada);
+
+        return List.of(VentaDetalleLote.builder()
+                .ventaDetalle(detalle)
+                .lote(lote)
+                .cantidad(cantidadSolicitada)
+                .cantidadDevuelta(0)
+                .costoUnitarioAplicado(costoUnitario)
+                .costoTotal(costoTotal)
+                .gananciaBruta(gananciaBruta)
+                .build());
     }
 
     private List<VentaDetalleLote> consumirLotesFifo(ProductoVariante variante, VentaDetalle detalle, int cantidadSolicitada, double precioVentaUnitario) {
@@ -368,8 +513,9 @@ public class VentaService {
         return consumos;
     }
 
-    private void restaurarLotesPorDevolucion(VentaDetalle detalle, int cantidadADevolver) {
+    private List<DevolucionVentaDetalleLote> restaurarLotesPorDevolucion(VentaDetalle detalle, int cantidadADevolver) {
         int restante = cantidadADevolver;
+        List<DevolucionVentaDetalleLote> detallesLoteDevolucion = new ArrayList<>();
 
         for (VentaDetalleLote detalleLote : detalle.getDetallesLote()) {
             if (restante <= 0) {
@@ -403,12 +549,25 @@ public class VentaService {
             lote.setMotivoCierre(null);
             loteRepository.save(lote);
 
+            double costoUnitario = detalleLote.getCostoUnitarioAplicado() == null ? 0D : detalleLote.getCostoUnitarioAplicado();
+            double precioVentaUnitario = detalle.getPrecioVentaUnitario() == null ? 0D : detalle.getPrecioVentaUnitario();
+            detallesLoteDevolucion.add(DevolucionVentaDetalleLote.builder()
+                    .ventaDetalleLote(detalleLote)
+                    .lote(lote)
+                    .cantidad(cantidadRestituida)
+                    .costoUnitarioAplicado(costoUnitario)
+                    .costoTotal(redondear(costoUnitario * cantidadRestituida))
+                    .gananciaRevertida(redondear((precioVentaUnitario - costoUnitario) * cantidadRestituida))
+                    .build());
+
             restante -= cantidadRestituida;
         }
 
         if (restante > 0) {
             throw new BusinessException("No se pudo restituir toda la devolucion a los lotes originales.");
         }
+
+        return detallesLoteDevolucion;
     }
 
     private int obtenerStockTotalDisponible(Long varianteId) {
@@ -444,21 +603,18 @@ public class VentaService {
         cuentaPorCobrarRepository.save(cuenta);
     }
 
-    private void ajustarCuentaPorCobrarPorDevolucion(Venta venta, double montoDevuelto) {
-        cuentaPorCobrarRepository.findByVentaId(venta.getId()).ifPresent(cuenta -> {
+    private AjusteCreditoDevolucion ajustarCuentaPorCobrarPorDevolucion(Venta venta, double montoDevuelto) {
+        return cuentaPorCobrarRepository.findByVentaId(venta.getId()).map(cuenta -> {
             double montoOriginalActual = cuenta.getMontoOriginal() == null ? 0D : cuenta.getMontoOriginal();
             double saldoPendienteActual = cuenta.getSaldoPendiente() == null ? 0D : cuenta.getSaldoPendiente();
-
-            if (montoDevuelto > saldoPendienteActual) {
-                throw new BusinessException(
-                        "La devolucion supera el saldo pendiente del credito. Registra primero un ajuste financiero.");
-            }
+            double montoAplicadoCuentaPorCobrar = redondear(Math.min(montoDevuelto, saldoPendienteActual));
+            double montoReembolsado = redondear(Math.max(montoDevuelto - saldoPendienteActual, 0D));
 
             double montoOriginalNuevo = Math.max(montoOriginalActual - montoDevuelto, 0D);
-            double saldoPendienteNuevo = Math.max(saldoPendienteActual - montoDevuelto, 0D);
+            double saldoPendienteNuevo = Math.max(saldoPendienteActual - montoAplicadoCuentaPorCobrar, 0D);
 
-            cuenta.setMontoOriginal(montoOriginalNuevo);
-            cuenta.setSaldoPendiente(saldoPendienteNuevo);
+            cuenta.setMontoOriginal(redondear(montoOriginalNuevo));
+            cuenta.setSaldoPendiente(redondear(saldoPendienteNuevo));
 
             if (montoOriginalNuevo <= 0) {
                 cuenta.setEstado(EstadoCuentaPorCobrar.ANULADA);
@@ -471,7 +627,8 @@ public class VentaService {
             }
 
             cuentaPorCobrarRepository.save(cuenta);
-        });
+            return new AjusteCreditoDevolucion(montoAplicadoCuentaPorCobrar, montoReembolsado);
+        }).orElseGet(() -> new AjusteCreditoDevolucion(0D, redondear(montoDevuelto)));
     }
 
     private void registrarEntradaPorVenta(Venta venta) {
@@ -521,8 +678,33 @@ public class VentaService {
                 .sum());
     }
 
+    private double calcularTotalReembolsadoPorDevoluciones(Long ventaId) {
+        return redondear(devolucionVentaRepository.findByVentaIdOrderByFechaDevolucionDescIdDesc(ventaId).stream()
+                .mapToDouble(devolucion -> devolucion.getMontoReembolsado() == null ? 0D : devolucion.getMontoReembolsado())
+                .sum());
+    }
+
     private String referenciaVenta(Venta venta) {
         return venta.getNumeroComprobante() != null ? venta.getNumeroComprobante() : ("#" + venta.getId());
+    }
+
+    private LoteVentaOptionResponse toLoteVentaOptionResponse(LoteInventario lote) {
+        double costo = lote.getCostoUnitario() == null ? 0D : lote.getCostoUnitario();
+        double precioVenta = lote.getPrecioVentaUnitario() != null && lote.getPrecioVentaUnitario() > 0
+                ? lote.getPrecioVentaUnitario()
+                : resolverPrecioLista(lote.getVariante(), lote);
+        return LoteVentaOptionResponse.builder()
+                .id(lote.getId())
+                .varianteId(lote.getVariante() == null ? null : lote.getVariante().getId())
+                .codigoLote(lote.getCodigoLote())
+                .codigoProveedor(lote.getCodigoProveedor())
+                .fechaIngreso(lote.getFechaIngreso())
+                .cantidadDisponible(lote.getCantidadDisponible() == null ? 0 : lote.getCantidadDisponible())
+                .costoUnitario(costo)
+                .precioVentaUnitario(precioVenta)
+                .gananciaUnitaria(redondear(precioVenta - costo))
+                .proveedorNombre(lote.getProveedor() == null ? null : lote.getProveedor().getNombreComercial())
+                .build();
     }
 
     private double redondear(double valor) {
@@ -532,5 +714,8 @@ public class VentaService {
     private String obtenerNumeroComprobante(String numeroRecibido) {
         String numeroNormalizado = SanitizadorTexto.limpiar(numeroRecibido);
         return numeroNormalizado != null ? numeroNormalizado : comprobanteService.generarNumeroComprobante();
+    }
+
+    private record AjusteCreditoDevolucion(double montoAplicadoCuentaPorCobrar, double montoReembolsado) {
     }
 }

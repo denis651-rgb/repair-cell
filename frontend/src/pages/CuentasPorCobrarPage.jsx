@@ -31,6 +31,16 @@ const getReceivableStateTone = (estado) => {
   }
 };
 
+const obtenerProductosCuenta = (cuenta) => cuenta?.venta?.detalles || [];
+
+const describirProductoCuenta = (detalle) =>
+  [
+    detalle.nombreProducto,
+    detalle.modelo,
+    detalle.calidad,
+    detalle.tipoPresentacion,
+  ].filter(Boolean).join(' - ') || 'Producto sin detalle';
+
 export default function CuentasPorCobrarPage() {
   const [cuentasPage, setCuentasPage] = useState(paginaVacia);
   const [busqueda, setBusqueda] = useState('');
@@ -84,6 +94,10 @@ export default function CuentasPorCobrarPage() {
   const guardarAbono = async (event) => {
     event.preventDefault();
     if (!cuentaSeleccionada) return;
+    if (!String(abonoForm.observaciones || '').trim()) {
+      setError('La observacion del abono es obligatoria. Indica si se pago por QR, efectivo u otro medio.');
+      return;
+    }
 
     try {
       await api.post(`/cuentas-por-cobrar/${cuentaSeleccionada.id}/abonos`, {
@@ -155,11 +169,30 @@ export default function CuentasPorCobrarPage() {
                     <span>Saldo: Bs {currency.format(Number(cuenta.saldoPendiente || 0))}</span>
                   </div>
 
+                  <div className="receivable-products">
+                    <strong>Productos vendidos</strong>
+                    {obtenerProductosCuenta(cuenta).length > 0 ? (
+                      obtenerProductosCuenta(cuenta).map((detalle) => (
+                        <div key={detalle.id} className="receivable-product-row">
+                          <span>{describirProductoCuenta(detalle)}</span>
+                          <small>
+                            {detalle.cantidad} x Bs {currency.format(Number(detalle.precioVentaUnitario || 0))}
+                            {' = '}
+                            Bs {currency.format(Number(detalle.subtotal || 0))}
+                          </small>
+                        </div>
+                      ))
+                    ) : (
+                      <p>No se encontro el detalle de productos de esta venta.</p>
+                    )}
+                  </div>
+
                   {cuenta.abonos?.length > 0 && (
                     <div className="receivable-payments">
                       {cuenta.abonos.slice(0, 3).map((abono) => (
                         <span key={abono.id} className="purchase-item-chip">
                           Abono {abono.fechaAbono} • Bs {currency.format(Number(abono.monto || 0))}
+                          {abono.observaciones ? ` - ${abono.observaciones}` : ''}
                         </span>
                       ))}
                     </div>
@@ -213,7 +246,12 @@ export default function CuentasPorCobrarPage() {
           </label>
           <label>
             <span>Observaciones</span>
-            <textarea value={abonoForm.observaciones} onChange={(event) => setAbonoForm((actual) => ({ ...actual, observaciones: event.target.value }))} />
+            <textarea
+              value={abonoForm.observaciones}
+              onChange={(event) => setAbonoForm((actual) => ({ ...actual, observaciones: event.target.value }))}
+              placeholder="Ejemplo: QR Banco Union, efectivo, transferencia..."
+              required
+            />
           </label>
           <div className="modal-actions-row">
             <button type="button" className="secondary" onClick={() => setModalAbonoOpen(false)}>Cancelar</button>

@@ -30,6 +30,7 @@ public class LoteInventarioHistorialResponse {
     private LocalDate fechaIngreso;
     private LocalDateTime fechaCierre;
     private Double costoUnitario;
+    private Double precioVentaUnitario;
     private Double subtotalCompra;
     private Integer cantidadInicial;
     private Integer cantidadVendida;

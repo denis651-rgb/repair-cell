@@ -17,7 +17,6 @@ import {
 import Modal from '../common/Modal';
 
 const initialPart = {
-  productoId: '',
   varianteId: '',
   nombreParte: '',
   cantidad: 1,
@@ -190,11 +189,7 @@ export default function RepairOrderModal({
     setSelectedPart({
       ...selectedPart,
 
-      // No enviamos productoId porque este producto viene del inventario operativo.
-      // El backend debe procesarlo por varianteId.
-      productoId: '',
       varianteId: String(product.varianteId || product.id || ''),
-
       nombreParte: selectedPart.nombreParte || nombreParte,
       tipoFuente: 'TIENDA',
     });
@@ -209,7 +204,6 @@ export default function RepairOrderModal({
     setShowCategoryFilters(false);
     setSelectedPart({
       ...selectedPart,
-      productoId: '',
       varianteId: '',
     });
   };
@@ -611,7 +605,7 @@ export default function RepairOrderModal({
           <div className="repair-soft-panel">
             <div className="repair-parts-builder">
               <label className="repair-field">
-                <span className="repair-field-label">Producto inventario</span>
+                <span className="repair-field-label">Repuesto del inventario por lotes</span>
                 <div className="repair-search-box repair-search-box--product">
                   <Search size={14} />
                   <input
@@ -628,7 +622,7 @@ export default function RepairOrderModal({
                   >
                     <Funnel size={14} />
                   </button>
-                  {(productQuery || selectedPart.productoId || selectedPart.varianteId || selectedCategory) && (
+                  {(productQuery || selectedPart.varianteId || selectedCategory) && (
                     <button
                       type="button"
                       className="repair-search-clear"
@@ -671,7 +665,7 @@ export default function RepairOrderModal({
                       <button
                         type="button"
                         key={product.varianteId || product.id}
-                        className={`repair-product-list-item ${String(selectedPart.varianteId || selectedPart.productoId) === String(product.varianteId || product.id) ? 'active' : ''}`}
+                        className={`repair-product-list-item ${String(selectedPart.varianteId) === String(product.varianteId || product.id) ? 'active' : ''}`}
                         onClick={() => handleSelectProduct(product)}
                       >
                         <span className="repair-product-list-main">
@@ -778,7 +772,7 @@ export default function RepairOrderModal({
                 </div>
               ) : (
                 form.partes.map((part, index) => (
-                  <div className="repair-parts-row" key={`${part.productoId || part.nombreParte}-${index}`}>
+                  <div className="repair-parts-row" key={`${part.varianteId || part.nombreParte}-${index}`}>
                     <span>{part.nombreParte || `Producto #${part.productoId}`}</span>
                     <span>{part.cantidad}</span>
                     <span>{part.tipoFuente}</span>

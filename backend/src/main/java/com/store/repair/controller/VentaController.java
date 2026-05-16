@@ -1,15 +1,21 @@
 package com.store.repair.controller;
 
 import com.store.repair.domain.Venta;
+import com.store.repair.domain.CuentaPorCobrar;
+import com.store.repair.domain.DevolucionVenta;
 import com.store.repair.dto.DevolucionVentaRequest;
+import com.store.repair.dto.LoteVentaOptionResponse;
 import com.store.repair.dto.VentaListadoResponse;
 import com.store.repair.dto.VentaRegistroRequest;
+import com.store.repair.service.CuentaPorCobrarService;
 import com.store.repair.service.VentaService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/ventas")
@@ -18,6 +24,7 @@ import org.springframework.web.bind.annotation.*;
 public class VentaController {
 
     private final VentaService service;
+    private final CuentaPorCobrarService cuentaPorCobrarService;
 
     @GetMapping("/paginado")
     public Page<VentaListadoResponse> findPage(
@@ -25,6 +32,21 @@ public class VentaController {
             @RequestParam(defaultValue = "0") int pagina,
             @RequestParam(defaultValue = "8") int tamano) {
         return service.findPage(busqueda, pagina, tamano);
+    }
+
+    @GetMapping("/lotes-disponibles")
+    public List<LoteVentaOptionResponse> lotesDisponibles(@RequestParam Long varianteId) {
+        return service.listarLotesDisponiblesParaVenta(varianteId);
+    }
+
+    @GetMapping("/{id}/cuenta-por-cobrar")
+    public CuentaPorCobrar findCuentaPorCobrar(@PathVariable Long id) {
+        return cuentaPorCobrarService.findByVentaId(id);
+    }
+
+    @GetMapping("/{id}/devoluciones")
+    public List<DevolucionVenta> findDevoluciones(@PathVariable Long id) {
+        return service.listarDevoluciones(id);
     }
 
     @GetMapping("/{id}")

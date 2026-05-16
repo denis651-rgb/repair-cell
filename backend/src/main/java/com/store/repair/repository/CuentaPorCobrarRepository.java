@@ -15,7 +15,7 @@ import java.util.Optional;
 public interface CuentaPorCobrarRepository extends JpaRepository<CuentaPorCobrar, Long> {
 
     @Override
-    @EntityGraph(attributePaths = { "cliente", "venta", "abonos" })
+    @EntityGraph(attributePaths = { "cliente", "venta", "venta.detalles", "venta.detalles.variante", "venta.detalles.variante.productoBase" })
     Optional<CuentaPorCobrar> findById(Long id);
 
     @EntityGraph(attributePaths = { "cliente", "venta", "abonos" })

@@ -220,6 +220,7 @@ public class CompraService {
         request.setCantidadInicial(detalleSolicitud.getCantidad());
         request.setCantidadDisponible(detalleSolicitud.getCantidad());
         request.setCostoUnitario(detalleSolicitud.getPrecioCompraUnitario());
+        request.setPrecioVentaUnitario(detalleSolicitud.getPrecioVentaUnitario());
         request.setSubtotalCompra(subtotal);
         request.setCompraId(compra.getId());
         request.setActivo(Boolean.TRUE);

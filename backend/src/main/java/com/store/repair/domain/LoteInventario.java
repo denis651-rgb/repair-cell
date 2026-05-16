@@ -58,6 +58,11 @@ public class LoteInventario extends EntidadBase {
     @Column(name = "costo_unitario", nullable = false)
     private Double costoUnitario;
 
+    @NotNull(message = "El precio de venta unitario es obligatorio")
+    @Min(value = 0, message = "El precio de venta unitario no puede ser negativo")
+    @Column(name = "precio_venta_unitario", nullable = false, columnDefinition = "REAL NOT NULL DEFAULT 0")
+    private Double precioVentaUnitario;
+
     @NotNull(message = "El subtotal de compra es obligatorio")
     @Min(value = 0, message = "El subtotal no puede ser negativo")
     @Column(name = "subtotal_compra", nullable = false)

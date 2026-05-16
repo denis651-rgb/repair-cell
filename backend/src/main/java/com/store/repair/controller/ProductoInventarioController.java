@@ -14,6 +14,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 import java.util.List;
 
@@ -22,6 +23,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Validated
 @PreAuthorize("hasAuthority('PERM_INVENTARIO_VIEW')")
+@ConditionalOnProperty(name = "app.inventory.legacy.enabled", havingValue = "true")
 public class ProductoInventarioController {
 
     private final ProductoInventarioService service;

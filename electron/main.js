@@ -17,6 +17,7 @@ const BACKEND_PORT = 8080;
 const BACKEND_HEALTH_URL = `http://127.0.0.1:${BACKEND_PORT}/actuator/health`;
 const BACKEND_START_TIMEOUT_MS = 120000;
 const BACKEND_ALLOWED_ORIGINS = 'http://localhost:5173,http://localhost:5174,http://localhost:3000,null';
+const DATABASE_FILE_NAME = 'repair-shop.db';
 
 const gotTheLock = app.requestSingleInstanceLock();
 
@@ -467,7 +468,7 @@ function startBackend() {
   ensureAppDirectories();
 
   const appStoragePath = getAppStoragePath();
-  const dbPath = toPortablePath(path.join(appStoragePath, 'data', 'repair-shop.db'));
+  const dbPath = toPortablePath(path.join(appStoragePath, 'data', DATABASE_FILE_NAME));
   const backupPath = toPortablePath(path.join(appStoragePath, 'backups'));
   const javaCommand = getJavaCommand();
   const javaArgs = ['-jar', jarPath];
@@ -488,6 +489,7 @@ function startBackend() {
       SERVER_PORT: String(BACKEND_PORT),
       APP_STORAGE_DIR: toPortablePath(appStoragePath),
       DB_URL: `jdbc:sqlite:${dbPath}`,
+      APP_DB_PATH: dbPath,
       APP_BACKUP_DIRECTORY: backupPath,
       APP_CORS_ALLOWED_ORIGINS: BACKEND_ALLOWED_ORIGINS
     }

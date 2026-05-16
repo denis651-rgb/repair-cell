@@ -1,6 +1,7 @@
 package com.store.repair.dto;
 
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
@@ -15,5 +16,6 @@ public class AbonoCuentaPorCobrarRequest {
 
     private LocalDate fechaAbono;
 
+    @NotBlank(message = "La observacion del abono es obligatoria")
     private String observaciones;
 }

@@ -37,6 +37,9 @@ public class LoteInventarioRequest {
     @Min(value = 0, message = "El costo unitario no puede ser negativo")
     private Double costoUnitario;
 
+    @Min(value = 0, message = "El precio de venta unitario no puede ser negativo")
+    private Double precioVentaUnitario;
+
     private Double subtotalCompra;
     private Long compraId;
     private Boolean activo;
