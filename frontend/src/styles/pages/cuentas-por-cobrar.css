@@ -73,6 +73,46 @@
   margin-top: 12px;
 }
 
+.receivable-products {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid rgba(15, 118, 110, 0.12);
+  border-radius: 14px;
+  background: rgba(240, 253, 250, 0.56);
+}
+
+.receivable-products > strong {
+  color: #0f766e;
+  font-size: 13px;
+}
+
+.receivable-products p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.receivable-product-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(15, 118, 110, 0.1);
+}
+
+.receivable-product-row span {
+  font-weight: 800;
+}
+
+.receivable-product-row small {
+  color: var(--muted);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 .receivable-state-pill {
   display: inline-flex;
   align-items: center;
@@ -149,6 +189,15 @@
 :root[data-theme='dark'] .receivable-card-header p,
 :root[data-theme='dark'] .receivable-card-grid {
   color: var(--muted);
+}
+
+:root[data-theme='dark'] .receivable-products {
+  background: rgba(15, 118, 110, 0.1);
+  border-color: rgba(94, 234, 212, 0.12);
+}
+
+:root[data-theme='dark'] .receivable-products > strong {
+  color: #99f6e4;
 }
 
 :root[data-theme='dark'] .receivable-state-pill.is-pending {

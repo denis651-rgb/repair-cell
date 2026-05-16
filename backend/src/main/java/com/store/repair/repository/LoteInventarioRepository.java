@@ -98,4 +98,15 @@ public interface LoteInventarioRepository extends JpaRepository<LoteInventario, 
             order by li.fechaIngreso asc, li.id asc
             """)
     List<LoteInventario> findConsumiblesFifoByVarianteId(@Param("varianteId") Long varianteId);
+
+    @Query("""
+            select li from LoteInventario li
+            where li.variante.id = :varianteId
+              and li.activo = true
+              and li.visibleEnVentas = true
+              and li.estado = com.store.repair.domain.EstadoLoteInventario.ACTIVO
+              and coalesce(li.cantidadDisponible, 0) > 0
+            order by coalesce(li.precioVentaUnitario, 0) desc, li.fechaIngreso desc, li.id desc
+            """)
+    List<LoteInventario> findOpcionesVentaByVarianteId(@Param("varianteId") Long varianteId);
 }

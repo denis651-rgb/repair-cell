@@ -5,8 +5,15 @@ export default function PermissionRoute({ permission, children }) {
   const location = useLocation();
   const user = getCurrentUser();
 
-  if (!user || !hasPermission(user, permission)) {
-    return <Navigate to={getDefaultRouteForUser(user)} replace state={{ from: location.pathname }} />;
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (!hasPermission(user, permission)) {
+    const defaultRoute = getDefaultRouteForUser(user);
+    const targetRoute = defaultRoute && defaultRoute !== location.pathname ? defaultRoute : '/sin-permiso';
+
+    return <Navigate to={targetRoute} replace state={{ from: location.pathname }} />;
   }
 
   return children;

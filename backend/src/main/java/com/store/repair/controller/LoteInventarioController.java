@@ -6,6 +6,7 @@ import com.store.repair.dto.CerrarLoteManualRequest;
 import com.store.repair.dto.CodigoSugeridoResponse;
 import com.store.repair.dto.LoteInventarioHistorialResponse;
 import com.store.repair.dto.LoteInventarioRequest;
+import com.store.repair.dto.LoteVentaOptionResponse;
 import com.store.repair.service.LoteInventarioService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +44,11 @@ public class LoteInventarioController {
     @GetMapping("/sugerir-codigo-proveedor")
     public CodigoSugeridoResponse sugerirCodigoProveedor(@RequestParam Long proveedorId) {
         return new CodigoSugeridoResponse(service.sugerirCodigoProveedor(proveedorId));
+    }
+
+    @GetMapping("/venta-opciones")
+    public List<LoteVentaOptionResponse> opcionesVenta(@RequestParam Long varianteId) {
+        return service.listarOpcionesVenta(varianteId);
     }
 
     @GetMapping("/{id}/detalle")

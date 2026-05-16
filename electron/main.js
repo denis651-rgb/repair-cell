@@ -11,11 +11,13 @@ let ownsBackendProcess = false;
 let backendLogPath = '';
 let electronLogPath = '';
 let isApplyingPendingRestore = false;
+let isClearingSessionForClose = false;
 
 const BACKEND_PORT = 8080;
 const BACKEND_HEALTH_URL = `http://127.0.0.1:${BACKEND_PORT}/actuator/health`;
 const BACKEND_START_TIMEOUT_MS = 120000;
 const BACKEND_ALLOWED_ORIGINS = 'http://localhost:5173,http://localhost:5174,http://localhost:3000,null';
+const DATABASE_FILE_NAME = 'repair-shop.db';
 
 const gotTheLock = app.requestSingleInstanceLock();
 
@@ -48,6 +50,10 @@ function getFrontendEntry() {
     return path.join(__dirname, '..', 'frontend', 'dist', 'index.html');
   }
   return 'http://localhost:5173';
+}
+
+function getAppIconPath() {
+  return path.join(__dirname, 'assets', 'icon.png');
 }
 
 function getBundledJavaPath() {
@@ -409,7 +415,7 @@ function waitForBackendReady(timeoutMs = BACKEND_START_TIMEOUT_MS) {
   });
 }
 
-async function clearSessionAndGoToLogin() {
+async function clearRendererSession({ navigateToLogin = false, reload = false } = {}) {
   if (!mainWindow || mainWindow.isDestroyed()) {
     return;
   }
@@ -423,20 +429,28 @@ async function clearSessionAndGoToLogin() {
         localStorage.removeItem('usuarioActual');
         sessionStorage.clear();
 
-        if (window.location.protocol === 'file:') {
-          window.location.hash = '#/login';
-        } else {
-          window.location.href = '/login';
+        if (${navigateToLogin ? 'true' : 'false'}) {
+          if (window.location.protocol === 'file:') {
+            window.location.hash = '#/login';
+          } else {
+            window.location.href = '/login';
+          }
         }
       } catch (error) {
-        console.error('No se pudo limpiar la sesion despues de restaurar', error);
+        console.error('No se pudo limpiar la sesion local', error);
       }
     `);
 
-    mainWindow.webContents.reloadIgnoringCache();
+    if (reload && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.reloadIgnoringCache();
+    }
   } catch (error) {
-    logElectron(`No se pudo enviar al login despues de restaurar: ${error.message}`);
+    logElectron(`No se pudo limpiar la sesion local: ${error.message}`);
   }
+}
+
+async function clearSessionAndGoToLogin() {
+  await clearRendererSession({ navigateToLogin: true, reload: true });
 }
 
 function startBackend() {
@@ -454,7 +468,7 @@ function startBackend() {
   ensureAppDirectories();
 
   const appStoragePath = getAppStoragePath();
-  const dbPath = toPortablePath(path.join(appStoragePath, 'data', 'repair-shop.db'));
+  const dbPath = toPortablePath(path.join(appStoragePath, 'data', DATABASE_FILE_NAME));
   const backupPath = toPortablePath(path.join(appStoragePath, 'backups'));
   const javaCommand = getJavaCommand();
   const javaArgs = ['-jar', jarPath];
@@ -475,6 +489,7 @@ function startBackend() {
       SERVER_PORT: String(BACKEND_PORT),
       APP_STORAGE_DIR: toPortablePath(appStoragePath),
       DB_URL: `jdbc:sqlite:${dbPath}`,
+      APP_DB_PATH: dbPath,
       APP_BACKUP_DIRECTORY: backupPath,
       APP_CORS_ALLOWED_ORIGINS: BACKEND_ALLOWED_ORIGINS
     }
@@ -579,6 +594,7 @@ function createWindow() {
     height: 920,
     minWidth: 1180,
     minHeight: 760,
+    icon: getAppIconPath(),
     autoHideMenuBar: true,
     backgroundColor: '#f4f7fb',
     webPreferences: {
@@ -587,8 +603,27 @@ function createWindow() {
     }
   });
 
+  mainWindow.on('close', async (event) => {
+    if (isClearingSessionForClose) {
+      return;
+    }
+
+    event.preventDefault();
+    isClearingSessionForClose = true;
+
+    try {
+      await clearRendererSession();
+      logElectron('Sesion local limpiada al cerrar la ventana.');
+    } finally {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.destroy();
+      }
+    }
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
+    isClearingSessionForClose = false;
   });
 
   const frontendEntry = getFrontendEntry();
@@ -643,11 +678,9 @@ async function bootstrapApplication() {
 
     const window = createWindow();
 
-    if (restoredAtStartup) {
-      window.webContents.once('did-finish-load', () => {
-        clearSessionAndGoToLogin();
-      });
-    }
+    window.webContents.once('did-finish-load', () => {
+      clearSessionAndGoToLogin();
+    });
   } catch (error) {
     logElectron(`Fallo al abrir la aplicacion: ${error.stack || error.message}`);
 

@@ -41,6 +41,7 @@ const ESTADO_COLORS = ['#0f766e', '#dc2626', '#f59e0b', '#2563eb', '#7c3aed', '#
 const REPORTS_TABLE_PAGE_SIZE = 8;
 const BLOQUES_INICIALES = {
   financiero: null,
+  ventasHorario: null,
   clientes: null,
   panelGlobal: null,
   panelOperativo: null,
@@ -89,6 +90,11 @@ function paginarFilas(lista = [], pagina = 0, tamano = REPORTS_TABLE_PAGE_SIZE) 
   };
 }
 
+function formatHora(valor) {
+  if (!valor) return 'Sin hora';
+  return String(valor).slice(0, 5);
+}
+
 function ReportsTablePagination({ datos, pagina, onChange, etiqueta = 'registros' }) {
   if (!datos.total || datos.total <= REPORTS_TABLE_PAGE_SIZE) return null;
 
@@ -121,7 +127,9 @@ function ReportsTablePagination({ datos, pagina, onChange, etiqueta = 'registros
 
 export default function ReportesPage() {
   const [rango, setRango] = useState({ inicio: hace7, fin: hoy });
+  const [rangoHoras, setRangoHoras] = useState({ horaInicio: '', horaFin: '' });
   const [serieFinanciera, setSerieFinanciera] = useState([]);
+  const [ventasRepuestosHorario, setVentasRepuestosHorario] = useState([]);
   const [clientesGlobales, setClientesGlobales] = useState([]);
   const [panelGlobal, setPanelGlobal] = useState(null);
   const [panelOperativo, setPanelOperativo] = useState(null);
@@ -142,8 +150,14 @@ export default function ReportesPage() {
   const [paginaRentabilidadBase, setPaginaRentabilidadBase] = useState(0);
   const [paginaClientesGlobales, setPaginaClientesGlobales] = useState(0);
   const [paginaStockCritico, setPaginaStockCritico] = useState(0);
+  const [paginaVentasHorario, setPaginaVentasHorario] = useState(0);
 
-  const cargarTodo = async (inicio = rango.inicio, fin = rango.fin) => {
+  const cargarTodo = async (
+    inicio = rango.inicio,
+    fin = rango.fin,
+    horaInicio = rangoHoras.horaInicio,
+    horaFin = rangoHoras.horaFin,
+  ) => {
     setLoading(true);
     setError('');
     setBloquesError(BLOQUES_INICIALES);
@@ -154,6 +168,17 @@ export default function ReportesPage() {
         endpoint: '/reportes/financiero-por-fecha',
         params: { inicio, fin },
         request: api.get('/reportes/financiero-por-fecha', { inicio, fin }),
+      },
+      {
+        key: 'ventasHorario',
+        endpoint: '/reportes/ventas-repuestos-horario',
+        params: { inicio, fin, horaInicio: horaInicio || undefined, horaFin: horaFin || undefined },
+        request: api.get('/reportes/ventas-repuestos-horario', {
+          inicio,
+          fin,
+          horaInicio: horaInicio || undefined,
+          horaFin: horaFin || undefined,
+        }),
       },
       {
         key: 'clientes',
@@ -207,6 +232,7 @@ export default function ReportesPage() {
       if (resultado.status === 'fulfilled') {
         const valor = resultado.value;
         if (solicitud.key === 'financiero') setSerieFinanciera(valor || []);
+        if (solicitud.key === 'ventasHorario') setVentasRepuestosHorario(valor || []);
         if (solicitud.key === 'clientes') setClientesGlobales(valor || []);
         if (solicitud.key === 'panelGlobal') setPanelGlobal(valor || null);
         if (solicitud.key === 'panelOperativo') setPanelOperativo(valor || null);
@@ -223,6 +249,7 @@ export default function ReportesPage() {
       );
 
       if (solicitud.key === 'financiero') setSerieFinanciera([]);
+      if (solicitud.key === 'ventasHorario') setVentasRepuestosHorario([]);
       if (solicitud.key === 'clientes') setClientesGlobales([]);
       if (solicitud.key === 'panelGlobal') setPanelGlobal(null);
       if (solicitud.key === 'panelOperativo') setPanelOperativo(null);
@@ -352,9 +379,15 @@ export default function ReportesPage() {
     [panelGlobal?.productosStockBajo, paginaStockCritico],
   );
 
+  const ventasHorarioPaginadas = useMemo(
+    () => paginarFilas(ventasRepuestosHorario, paginaVentasHorario),
+    [ventasRepuestosHorario, paginaVentasHorario],
+  );
+
   const exportarExcel = () => {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(serieFinanciera), 'Financiero');
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(ventasRepuestosHorario), 'Ventas por hora');
     XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(clientesGlobales), 'Clientes global');
     XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(panelGlobal?.productosStockBajo || []), 'Stock critico');
     XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(estadosOperativos), 'Estados orden');
@@ -372,7 +405,7 @@ export default function ReportesPage() {
         subtitle="Separamos la lectura financiera, comercial y operativa para que los reportes cuenten una historia clara y util del taller."
       >
         <div className="reports-header-actions">
-          <button className="secondary reports-ghost-button" onClick={() => cargarTodo(rango.inicio, rango.fin)}>
+          <button className="secondary reports-ghost-button" onClick={() => cargarTodo(rango.inicio, rango.fin, rangoHoras.horaInicio, rangoHoras.horaFin)}>
             <CalendarDays size={18} />
             Actualizar
           </button>
@@ -420,9 +453,34 @@ export default function ReportesPage() {
             <span>Fin</span>
             <input type="date" value={rango.fin} onChange={(event) => setRango({ ...rango, fin: event.target.value })} />
           </label>
-          <button onClick={() => cargarTodo(rango.inicio, rango.fin)}>
+          <button onClick={() => cargarTodo(rango.inicio, rango.fin, rangoHoras.horaInicio, rangoHoras.horaFin)}>
             <Download size={18} />
             Generar reporte
+          </button>
+        </div>
+        <div className="reports-filter-grid reports-filter-grid-secondary">
+          <label>
+            <span>Hora inicio ventas</span>
+            <input
+              type="time"
+              value={rangoHoras.horaInicio}
+              onChange={(event) => setRangoHoras((actual) => ({ ...actual, horaInicio: event.target.value }))}
+            />
+          </label>
+          <label>
+            <span>Hora fin ventas</span>
+            <input
+              type="time"
+              value={rangoHoras.horaFin}
+              onChange={(event) => setRangoHoras((actual) => ({ ...actual, horaFin: event.target.value }))}
+            />
+          </label>
+          <button
+            type="button"
+            className="secondary reports-ghost-button"
+            onClick={() => setRangoHoras({ horaInicio: '', horaFin: '' })}
+          >
+            Limpiar horas
           </button>
         </div>
         <div className="reports-filter-grid reports-filter-grid-secondary">
@@ -749,6 +807,63 @@ export default function ReportesPage() {
             <span className="reports-kpi-label">Dias reportados</span>
             <strong className="reports-kpi-value">{serieFinanciera.length}</strong>
             <p>Fechas incluidas en el rango actual</p>
+          </article>
+        </section>
+
+        <section className="reports-grid-1">
+          <article className="card reports-table-card">
+            <div className="reports-table-header">
+              <div>
+                <h3>Ventas de repuestos por hora</h3>
+                <p>Lista ordenada por fecha y hora de registro de la venta.</p>
+              </div>
+              <span className="chip">{ventasRepuestosHorario.length} lineas</span>
+            </div>
+            <div className="responsive-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Hora</th>
+                    <th>Fecha</th>
+                    <th>Cliente / comprobante</th>
+                    <th>Repuesto</th>
+                    <th>Cant.</th>
+                    <th>P. unit.</th>
+                    <th>Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ventasHorarioPaginadas.filas.map((fila) => (
+                    <tr key={`${fila.ventaId}-${fila.detalleId}`}>
+                      <td><strong>{formatHora(fila.horaVenta)}</strong></td>
+                      <td>{fila.fechaVenta}</td>
+                      <td>
+                        <strong>{fila.cliente || 'Sin cliente'}</strong>
+                        <div>{fila.numeroComprobante || `Venta #${fila.ventaId}`}</div>
+                      </td>
+                      <td>
+                        <strong>{fila.nombreProducto || fila.codigoVariante || 'Repuesto'}</strong>
+                        <div>{[fila.marca, fila.modelo, fila.calidad, fila.tipoPresentacion].filter(Boolean).join(' · ')}</div>
+                      </td>
+                      <td>{fila.cantidad}</td>
+                      <td>{money.format(Number(fila.precioUnitario || 0))}</td>
+                      <td>{money.format(Number(fila.subtotal || 0))}</td>
+                    </tr>
+                  ))}
+                  {ventasHorarioPaginadas.total === 0 && (
+                    <tr>
+                      <td colSpan="7" className="table-empty-cell">No hay ventas de repuestos en este rango horario.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <ReportsTablePagination
+              datos={ventasHorarioPaginadas}
+              pagina={paginaVentasHorario}
+              onChange={setPaginaVentasHorario}
+              etiqueta="lineas"
+            />
           </article>
         </section>
 

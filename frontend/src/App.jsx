@@ -14,7 +14,7 @@ import CuentasPorCobrarPage from './pages/CuentasPorCobrarPage';
 import AccountingPage from './pages/AccountingPage';
 import ReportesPage from './pages/ReportesPage';
 import BackupsPage from './pages/BackupsPage';
-
+import AccessDeniedPage from './pages/AccessDeniedPage';
 import LoginPage from './pages/LoginPage';
 import { clearStoredSession, getCurrentUser, getDefaultRouteForUser } from './utils/permissions';
 
@@ -39,22 +39,79 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+
       <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
         <Route index element={<HomeRedirect />} />
-        <Route path="dashboard" element={<PermissionRoute permission="DASHBOARD_VIEW"><DashboardPage /></PermissionRoute>} />
-        <Route path="clientes" element={<CustomersPage />} />
-        <Route path="dispositivos" element={<DevicesPage />} />
-        <Route path="reparaciones" element={<RepairOrdersPage />} />
-        <Route path="tickets/:id" element={<TicketPage />} />
-        <Route path="inventario" element={<InventoryPage />} />
-        <Route path="proveedores" element={<ProveedoresPage />} />
-        <Route path="compras" element={<ComprasPage />} />
-        <Route path="ventas" element={<VentasPage />} />
-        <Route path="cuentas-por-cobrar" element={<CuentasPorCobrarPage />} />
-        <Route path="contabilidad" element={<PermissionRoute permission="CONTABILIDAD_VIEW"><AccountingPage /></PermissionRoute>} />
-        <Route path="reportes" element={<PermissionRoute permission="REPORTES_VIEW"><ReportesPage /></PermissionRoute>} />
-        <Route path="respaldos" element={<PermissionRoute permission="BACKUPS_VIEW"><BackupsPage /></PermissionRoute>} />
+
+        <Route
+          path="dashboard"
+          element={<PermissionRoute permission="DASHBOARD_VIEW"><DashboardPage /></PermissionRoute>}
+        />
+
+        <Route
+          path="clientes"
+          element={<PermissionRoute permission="CLIENTES_VIEW"><CustomersPage /></PermissionRoute>}
+        />
+
+        <Route
+          path="dispositivos"
+          element={<PermissionRoute permission="DISPOSITIVOS_VIEW"><DevicesPage /></PermissionRoute>}
+        />
+
+        <Route
+          path="reparaciones"
+          element={<PermissionRoute permission="REPARACIONES_VIEW"><RepairOrdersPage /></PermissionRoute>}
+        />
+
+        <Route
+          path="tickets/:id"
+          element={<PermissionRoute permission="REPARACIONES_VIEW"><TicketPage /></PermissionRoute>}
+        />
+
+        <Route
+          path="inventario"
+          element={<PermissionRoute permission="INVENTARIO_VIEW"><InventoryPage /></PermissionRoute>}
+        />
+
+        <Route
+          path="proveedores"
+          element={<PermissionRoute permission="PROVEEDORES_VIEW"><ProveedoresPage /></PermissionRoute>}
+        />
+
+        <Route
+          path="compras"
+          element={<PermissionRoute permission="COMPRAS_VIEW"><ComprasPage /></PermissionRoute>}
+        />
+
+        <Route
+          path="ventas"
+          element={<PermissionRoute permission="VENTAS_VIEW"><VentasPage /></PermissionRoute>}
+        />
+
+        <Route
+          path="cuentas-por-cobrar"
+          element={<PermissionRoute permission="CUENTAS_POR_COBRAR_VIEW"><CuentasPorCobrarPage /></PermissionRoute>}
+        />
+
+        <Route
+          path="contabilidad"
+          element={<PermissionRoute permission="CONTABILIDAD_VIEW"><AccountingPage /></PermissionRoute>}
+        />
+
+        <Route
+          path="reportes"
+          element={<PermissionRoute permission="REPORTES_VIEW"><ReportesPage /></PermissionRoute>}
+        />
+
+        <Route
+          path="respaldos"
+          element={<PermissionRoute permission="BACKUPS_VIEW"><BackupsPage /></PermissionRoute>}
+        />
+
+        <Route path="sin-permiso" element={<AccessDeniedPage />} />
       </Route>
+
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

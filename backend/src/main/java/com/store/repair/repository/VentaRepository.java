@@ -46,6 +46,11 @@ public interface VentaRepository extends JpaRepository<Venta, Long> {
             """)
     Page<VentaListadoResponse> search(@Param("busqueda") String busqueda, Pageable pageable);
 
+    @EntityGraph(attributePaths = { "cliente", "detalles", "detalles.variante", "detalles.variante.productoBase" })
+    java.util.List<Venta> findByFechaVentaBetweenOrderByFechaVentaAscCreadoEnAscIdAsc(
+            java.time.LocalDate fechaInicio,
+            java.time.LocalDate fechaFin);
+
     @Query("""
             select (count(v) > 0) from Venta v
             join v.detalles d

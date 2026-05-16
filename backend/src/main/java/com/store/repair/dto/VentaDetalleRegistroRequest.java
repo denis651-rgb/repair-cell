@@ -9,6 +9,7 @@ public class VentaDetalleRegistroRequest {
 
     @NotNull(message = "La variante es obligatoria")
     private Long varianteId;
+    private Long loteId;
 
     @NotNull(message = "La cantidad es obligatoria")
     @Min(value = 1, message = "La cantidad debe ser mayor a cero")

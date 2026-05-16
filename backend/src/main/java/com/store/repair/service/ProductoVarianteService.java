@@ -470,6 +470,7 @@ public class ProductoVarianteService {
                     .fechaIngreso(lote.getFechaIngreso())
                     .fechaCierre(lote.getFechaCierre())
                     .costoUnitario(lote.getCostoUnitario())
+                    .precioVentaUnitario(resolverPrecioVentaLote(lote))
                     .subtotalCompra(lote.getSubtotalCompra())
                     .cantidadInicial(cantidadInicial)
                     .cantidadVendida(Math.max(cantidadInicial - cantidadRestante, 0))
@@ -480,6 +481,16 @@ public class ProductoVarianteService {
                     .compraId(lote.getCompraId())
                     .motivoCierre(lote.getMotivoCierre())
                     .build();
+        }
+
+        private static Double resolverPrecioVentaLote(LoteInventario lote) {
+            if (lote.getPrecioVentaUnitario() != null && lote.getPrecioVentaUnitario() > 0) {
+                return lote.getPrecioVentaUnitario();
+            }
+            ProductoVariante variante = lote.getVariante();
+            return variante == null || variante.getPrecioVentaSugerido() == null
+                    ? 0D
+                    : variante.getPrecioVentaSugerido();
         }
     }
 }

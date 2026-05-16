@@ -6,6 +6,7 @@ import com.store.repair.domain.EstadoReparacion;
 import com.store.repair.domain.OrdenReparacion;
 import com.store.repair.domain.TipoEntrada;
 import com.store.repair.domain.Venta;
+import com.store.repair.domain.VentaDetalle;
 import com.store.repair.dto.ClienteMontoAcumuladoDto;
 import com.store.repair.dto.InventarioOperativoVarianteResponse;
 import com.store.repair.dto.PanelResumenResponse;
@@ -21,6 +22,7 @@ import com.store.repair.dto.ReporteClienteGlobalResponse;
 import com.store.repair.dto.ReporteClienteResponse;
 import com.store.repair.dto.ReporteEstadoResponse;
 import com.store.repair.dto.ReporteResumenResponse;
+import com.store.repair.dto.ReporteVentaRepuestoHorarioResponse;
 import com.store.repair.dto.ResumenGlobalResponse;
 import com.store.repair.dto.SerieDiariaResponse;
 import com.store.repair.dto.SerieFinancieraDiariaResponse;
@@ -38,6 +40,7 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -252,6 +255,30 @@ public class ReporteServicio {
                         entry.getValue().ventas,
                         entry.getValue().compras,
                         entry.getValue().reparaciones))
+                .toList();
+    }
+
+    public List<ReporteVentaRepuestoHorarioResponse> obtenerVentasRepuestosHorario(
+            LocalDate inicio,
+            LocalDate fin,
+            LocalTime horaInicio,
+            LocalTime horaFin) {
+        LocalDate fechaInicio = resolverFechaInicio(inicio);
+        LocalDate fechaFin = resolverFechaFin(fin);
+        validarRangoFechas(fechaInicio, fechaFin);
+        validarRangoHoras(horaInicio, horaFin);
+
+        return ventaRepositorio.findByFechaVentaBetweenOrderByFechaVentaAscCreadoEnAscIdAsc(fechaInicio, fechaFin)
+                .stream()
+                .filter(venta -> estaDentroDelRangoHorario(venta, horaInicio, horaFin))
+                .flatMap(venta -> venta.getDetalles().stream()
+                        .filter(detalle -> detalle.getVariante() != null)
+                        .map(detalle -> toVentaRepuestoHorarioResponse(venta, detalle)))
+                .sorted(Comparator
+                        .comparing(ReporteVentaRepuestoHorarioResponse::getFechaVenta)
+                        .thenComparing(ReporteVentaRepuestoHorarioResponse::getHoraVenta)
+                        .thenComparing(ReporteVentaRepuestoHorarioResponse::getVentaId)
+                        .thenComparing(ReporteVentaRepuestoHorarioResponse::getDetalleId))
                 .toList();
     }
 
@@ -492,6 +519,46 @@ public class ReporteServicio {
         if (fechaFin.isBefore(fechaInicio)) {
             throw new BusinessException("La fecha fin no puede ser menor a la fecha inicio");
         }
+    }
+
+    private void validarRangoHoras(LocalTime horaInicio, LocalTime horaFin) {
+        if (horaInicio != null && horaFin != null && horaFin.isBefore(horaInicio)) {
+            throw new BusinessException("La hora fin no puede ser menor a la hora inicio");
+        }
+    }
+
+    private boolean estaDentroDelRangoHorario(Venta venta, LocalTime horaInicio, LocalTime horaFin) {
+        if (horaInicio == null && horaFin == null) {
+            return true;
+        }
+        LocalTime horaVenta = venta.getCreadoEn() == null ? LocalTime.MIN : venta.getCreadoEn().toLocalTime();
+        if (horaInicio != null && horaVenta.isBefore(horaInicio)) {
+            return false;
+        }
+        return horaFin == null || !horaVenta.isAfter(horaFin);
+    }
+
+    private ReporteVentaRepuestoHorarioResponse toVentaRepuestoHorarioResponse(Venta venta, VentaDetalle detalle) {
+        var variante = detalle.getVariante();
+        var productoBase = variante == null ? null : variante.getProductoBase();
+        return ReporteVentaRepuestoHorarioResponse.builder()
+                .ventaId(venta.getId())
+                .detalleId(detalle.getId())
+                .fechaVenta(venta.getFechaVenta())
+                .horaVenta(venta.getCreadoEn() == null ? LocalTime.MIN : venta.getCreadoEn().toLocalTime().withNano(0))
+                .registradoEn(venta.getCreadoEn())
+                .numeroComprobante(venta.getNumeroComprobante())
+                .cliente(venta.getCliente() == null ? null : venta.getCliente().getNombreCompleto())
+                .codigoVariante(variante == null ? null : variante.getCodigoVariante())
+                .nombreProducto(detalle.getNombreProducto())
+                .marca(detalle.getMarca())
+                .modelo(productoBase == null ? null : productoBase.getModelo())
+                .calidad(detalle.getCalidad())
+                .tipoPresentacion(detalle.getTipoPresentacion())
+                .cantidad(detalle.getCantidad() == null ? 0 : detalle.getCantidad())
+                .precioUnitario(valorSeguro(detalle.getPrecioVentaUnitario()))
+                .subtotal(valorSeguro(detalle.getSubtotal()))
+                .build();
     }
 
     private double valorSeguro(Double valor) {

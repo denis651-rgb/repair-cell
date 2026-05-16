@@ -60,6 +60,7 @@ const loteInicial = {
   cantidadInicial: 0,
   cantidadDisponible: 0,
   costoUnitario: 0,
+  precioVentaUnitario: 0,
   subtotalCompra: '',
   compraId: '',
   activo: true,
@@ -142,6 +143,10 @@ function formatFecha(valor) {
     return valor.replace('T', ' ').slice(0, 16);
   }
   return valor;
+}
+
+function precioVentaLote(lote, fallback = 0) {
+  return Number(lote?.precioVentaUnitario || lote?.variante?.precioVentaSugerido || fallback || 0);
 }
 
 function normalizarCompatibilidades(compatibilidades = []) {
@@ -666,6 +671,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
       cantidadInicial: lote.cantidadInicial ?? 0,
       cantidadDisponible: lote.cantidadDisponible ?? 0,
       costoUnitario: lote.costoUnitario ?? 0,
+      precioVentaUnitario: lote.precioVentaUnitario ?? lote.variante?.precioVentaSugerido ?? 0,
       subtotalCompra: lote.subtotalCompra ?? '',
       compraId: lote.compraId ?? '',
       activo: lote.activo ?? true,
@@ -763,6 +769,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
         cantidadInicial: Number(loteForm.cantidadInicial || 0),
         cantidadDisponible: Number(loteForm.cantidadDisponible || 0),
         costoUnitario: Number(loteForm.costoUnitario || 0),
+        precioVentaUnitario: Number(loteForm.precioVentaUnitario || 0),
         subtotalCompra: loteForm.subtotalCompra === '' ? null : Number(loteForm.subtotalCompra),
         compraId: loteForm.compraId === '' ? null : Number(loteForm.compraId),
       };
@@ -1094,6 +1101,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                                 <th>Ingreso</th>
                                 <th>Disponible</th>
                                 <th>Costo</th>
+                                <th>Venta</th>
                                 <th>Visible</th>
                               </tr>
                             </thead>
@@ -1108,6 +1116,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                                   <td>{lote.fechaIngreso}</td>
                                   <td>{lote.cantidadRestante} / {lote.cantidadInicial}</td>
                                   <td>Bs {currency.format(Number(lote.costoUnitario || 0))}</td>
+                                  <td>Bs {currency.format(precioVentaLote(lote, detalleOperativo?.precioVentaSugerido))}</td>
                                   <td>{lote.visibleEnVentas ? 'Si' : 'No'}</td>
                                 </tr>
                               ))}
@@ -1171,6 +1180,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                             <th>Ingreso</th>
                             <th>Cierre</th>
                             <th>Costo</th>
+                            <th>Venta</th>
                             <th>Inicial</th>
                             <th>Vendida</th>
                             <th>Restante</th>
@@ -1192,6 +1202,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                               <td>{lote.fechaIngreso}</td>
                               <td>{formatFecha(lote.fechaCierre)}</td>
                               <td>Bs {currency.format(Number(lote.costoUnitario || 0))}</td>
+                              <td>Bs {currency.format(precioVentaLote(lote, detalleOperativo?.precioVentaSugerido))}</td>
                               <td>{lote.cantidadInicial || 0}</td>
                               <td>{lote.cantidadVendida || 0}</td>
                               <td>{lote.cantidadRestante || 0}</td>
@@ -1507,6 +1518,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                             <th>Ingreso</th>
                             <th>Disponible</th>
                             <th>Costo</th>
+                            <th>Venta</th>
                             <th>Estado</th>
                             <th>Accion</th>
                           </tr>
@@ -1521,6 +1533,7 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                               <td>{lote.fechaIngreso}</td>
                               <td>{lote.cantidadDisponible} / {lote.cantidadInicial}</td>
                               <td>Bs {currency.format(Number(lote.costoUnitario || 0))}</td>
+                              <td>Bs {currency.format(precioVentaLote(lote, varianteSeleccionada?.precioVentaSugerido))}</td>
                               <td>{lote.estado}</td>
                               <td>
                                 <div className="inventory-inline-actions">
@@ -1928,6 +1941,17 @@ export default function CatalogoBaseManager({ categorias, marcas, onOpenCategori
                 step="0.01"
                 value={loteForm.costoUnitario}
                 onChange={(event) => setLoteForm((actual) => ({ ...actual, costoUnitario: event.target.value }))}
+                required
+              />
+            </label>
+            <label>
+              <span>Precio venta lote</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={loteForm.precioVentaUnitario}
+                onChange={(event) => setLoteForm((actual) => ({ ...actual, precioVentaUnitario: event.target.value }))}
                 required
               />
             </label>

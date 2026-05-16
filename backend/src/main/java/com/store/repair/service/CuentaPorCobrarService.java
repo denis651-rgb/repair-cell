@@ -23,6 +23,7 @@ public class CuentaPorCobrarService {
     private final AbonoCuentaPorCobrarRepository abonoRepository;
     private final AccountingService accountingService;
 
+    @Transactional(readOnly = true)
     public Page<CuentaPorCobrar> findPage(String busqueda, EstadoCuentaPorCobrar estado, int pagina, int tamano) {
         Page<CuentaPorCobrar> page = repository.search(
                 busqueda == null ? "" : busqueda.trim(),
@@ -34,9 +35,17 @@ public class CuentaPorCobrarService {
                 page.getTotalElements());
     }
 
+    @Transactional(readOnly = true)
     public CuentaPorCobrar findById(Long id) {
-        return repository.findById(id)
+        CuentaPorCobrar cuenta = repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Cuenta por cobrar no encontrada: " + id));
+        inicializarAbonos(cuenta);
+        return cuenta;
+    }
+
+    @Transactional(readOnly = true)
+    public CuentaPorCobrar findByVentaId(Long ventaId) {
+        return repository.findByVentaId(ventaId).orElse(null);
     }
 
     @Transactional
@@ -66,11 +75,16 @@ public class CuentaPorCobrarService {
             throw new BusinessException("El abono no puede superar el saldo pendiente");
         }
 
+        String observaciones = SanitizadorTexto.limpiar(request.getObservaciones());
+        if (observaciones == null) {
+            throw new BusinessException("La observacion del abono es obligatoria. Indica si se pago por QR, efectivo u otro medio.");
+        }
+
         AbonoCuentaPorCobrar abono = AbonoCuentaPorCobrar.builder()
                 .cuentaPorCobrar(cuenta)
                 .fechaAbono(request.getFechaAbono() == null ? LocalDate.now() : request.getFechaAbono())
                 .monto(request.getMonto())
-                .observaciones(SanitizadorTexto.limpiar(request.getObservaciones()))
+                .observaciones(observaciones)
                 .build();
 
         abono = abonoRepository.save(abono);
@@ -104,5 +118,11 @@ public class CuentaPorCobrarService {
 
     private String referenciaVenta(Venta venta) {
         return venta.getNumeroComprobante() != null ? venta.getNumeroComprobante() : ("#" + venta.getId());
+    }
+
+    private void inicializarAbonos(CuentaPorCobrar cuenta) {
+        if (cuenta != null && cuenta.getAbonos() != null) {
+            cuenta.getAbonos().size();
+        }
     }
 }

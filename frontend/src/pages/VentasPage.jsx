@@ -15,6 +15,7 @@ const detalleInicial = {
   marcaId: '',
   productoBaseId: '',
   varianteId: '',
+  loteId: '',
   cantidad: 1,
   precioVentaUnitario: '',
 };
@@ -58,6 +59,27 @@ function getPaymentTone(tipoPago) {
   return tipoPago === 'CREDITO' ? 'is-credit' : 'is-cash';
 }
 
+function observacionesVentaConAbonos(venta, cuentaCredito, formatter) {
+  const observaciones = [];
+  const observacionVenta = String(venta?.observaciones || '').trim();
+  if (observacionVenta) {
+    observaciones.push(observacionVenta);
+  }
+
+  const abonos = cuentaCredito?.abonos || [];
+  if (abonos.length > 0) {
+    observaciones.push(
+      ...abonos.map((abono) => {
+        const monto = formatter(Number(abono.monto || 0));
+        const detalle = String(abono.observaciones || '').trim() || 'Sin observacion';
+        return `Abono ${abono.fechaAbono}: ${monto} - ${detalle}`;
+      }),
+    );
+  }
+
+  return observaciones.length ? observaciones : ['Sin observaciones registradas.'];
+}
+
 export default function VentasPage() {
   const [ventasPage, setVentasPage] = useState(paginaVacia);
   const [clientes, setClientes] = useState([]);
@@ -75,9 +97,14 @@ export default function VentasPage() {
   const [detalleForm, setDetalleForm] = useState(detalleInicial);
   const [detallesVenta, setDetallesVenta] = useState([]);
   const [clienteRapidoForm, setClienteRapidoForm] = useState(clienteRapidoInicial);
+  const [busquedaClienteVenta, setBusquedaClienteVenta] = useState('');
   const [busquedaVarianteVenta, setBusquedaVarianteVenta] = useState('');
+  const [lotesVenta, setLotesVenta] = useState([]);
+  const [cargandoLotesVenta, setCargandoLotesVenta] = useState(false);
   const [ventaSeleccionada, setVentaSeleccionada] = useState(null);
   const [detalleVentaSeleccionada, setDetalleVentaSeleccionada] = useState(null);
+  const [cuentaDetalleVenta, setCuentaDetalleVenta] = useState(null);
+  const [devolucionesDetalleVenta, setDevolucionesDetalleVenta] = useState([]);
   const [devolucionForm, setDevolucionForm] = useState(devolucionInicial);
   const [detallesDevolucion, setDetallesDevolucion] = useState([]);
   const [error, setError] = useState(null);
@@ -160,58 +187,77 @@ export default function VentasPage() {
     [variantes, detalleForm.varianteId],
   );
 
+  const loteSeleccionado = useMemo(
+    () => lotesVenta.find((item) => String(item.id) === String(detalleForm.loteId)),
+    [lotesVenta, detalleForm.loteId],
+  );
+
   const normalizarTextoBusqueda = (valor) =>
-  String(valor || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim();
+    String(valor || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
 
-const productosBaseFiltradosVenta = useMemo(() => {
-  const termino = normalizarTextoBusqueda(busquedaVarianteVenta);
+  const productosBaseFiltradosVenta = useMemo(() => {
+    const termino = normalizarTextoBusqueda(busquedaVarianteVenta);
 
-  return productosBase.filter((productoBase) => {
-    const coincideCategoria =
-      !detalleForm.categoriaId || String(productoBase.categoria?.id) === String(detalleForm.categoriaId);
+    return productosBase.filter((productoBase) => {
+      const coincideCategoria =
+        !detalleForm.categoriaId || String(productoBase.categoria?.id) === String(detalleForm.categoriaId);
 
-    const coincideMarca =
-      !detalleForm.marcaId || String(productoBase.marca?.id) === String(detalleForm.marcaId);
+      const coincideMarca =
+        !detalleForm.marcaId || String(productoBase.marca?.id) === String(detalleForm.marcaId);
 
-    const variantesDelProductoBase = variantes.filter(
-      (variante) => String(variante.productoBase?.id) === String(productoBase.id),
-    );
+      const variantesDelProductoBase = variantes.filter(
+        (variante) => String(variante.productoBase?.id) === String(productoBase.id),
+      );
 
-    const compatibilidadesActivas = (productoBase.compatibilidades || []).filter(
-      (compatibilidad) => compatibilidad.activa ?? true,
-    );
+      const compatibilidadesActivas = (productoBase.compatibilidades || []).filter(
+        (compatibilidad) => compatibilidad.activa ?? true,
+      );
 
-    const coincideTexto =
-      !termino ||
+      const coincideTexto =
+        !termino ||
+        [
+          productoBase.codigoBase,
+          productoBase.nombreBase,
+          productoBase.modelo,
+          productoBase.descripcion,
+          productoBase.categoria?.nombre,
+          productoBase.marca?.nombre,
+
+          ...compatibilidadesActivas.flatMap((compatibilidad) => [
+            compatibilidad.marcaCompatible,
+            compatibilidad.modeloCompatible,
+            compatibilidad.codigoReferencia,
+            compatibilidad.nota,
+          ]),
+
+          ...variantesDelProductoBase.flatMap((variante) => [
+            variante.codigoVariante,
+            variante.calidad,
+            variante.tipoPresentacion,
+          ]),
+        ].some((valor) => normalizarTextoBusqueda(valor).includes(termino));
+
+      return coincideCategoria && coincideMarca && coincideTexto;
+    });
+  }, [productosBase, detalleForm.categoriaId, detalleForm.marcaId, busquedaVarianteVenta, variantes]);
+
+  const clientesFiltradosVenta = useMemo(() => {
+    const termino = normalizarTextoBusqueda(busquedaClienteVenta);
+    if (!termino) return clientes;
+
+    return clientes.filter((cliente) =>
       [
-        productoBase.codigoBase,
-        productoBase.nombreBase,
-        productoBase.modelo,
-        productoBase.descripcion,
-        productoBase.categoria?.nombre,
-        productoBase.marca?.nombre,
-
-        ...compatibilidadesActivas.flatMap((compatibilidad) => [
-          compatibilidad.marcaCompatible,
-          compatibilidad.modeloCompatible,
-          compatibilidad.codigoReferencia,
-          compatibilidad.nota,
-        ]),
-
-        ...variantesDelProductoBase.flatMap((variante) => [
-          variante.codigoVariante,
-          variante.calidad,
-          variante.tipoPresentacion,
-        ]),
-      ].some((valor) => normalizarTextoBusqueda(valor).includes(termino));
-
-    return coincideCategoria && coincideMarca && coincideTexto;
-  });
-}, [productosBase, detalleForm.categoriaId, detalleForm.marcaId, busquedaVarianteVenta, variantes]);
+        cliente.nombreCompleto,
+        cliente.telefono,
+        cliente.email,
+        cliente.direccion,
+      ].some((valor) => normalizarTextoBusqueda(valor).includes(termino)),
+    );
+  }, [clientes, busquedaClienteVenta]);
 
   const variantesDisponibles = useMemo(
     () =>
@@ -242,6 +288,11 @@ const productosBaseFiltradosVenta = useMemo(() => {
       .filter((detalle) => String(detalle.varianteId) === String(varianteId))
       .reduce((total, detalle) => total + Number(detalle.cantidad || 0), 0);
 
+  const cantidadReservadaLote = (loteId) =>
+    detallesVenta
+      .filter((detalle) => String(detalle.loteId) === String(loteId))
+      .reduce((total, detalle) => total + Number(detalle.cantidad || 0), 0);
+
   useEffect(() => {
     if (!productoBaseSeleccionado) return;
     setDetalleForm((actual) => ({
@@ -252,15 +303,56 @@ const productosBaseFiltradosVenta = useMemo(() => {
   }, [productoBaseSeleccionado]);
 
   useEffect(() => {
-    if (!varianteSeleccionada) return;
+    if (!varianteSeleccionada) {
+      setLotesVenta([]);
+      return;
+    }
     setDetalleForm((actual) => ({
       ...actual,
       productoBaseId: varianteSeleccionada.productoBase?.id
         ? String(varianteSeleccionada.productoBase.id)
         : actual.productoBaseId,
+      loteId: '',
       precioVentaUnitario: varianteSeleccionada.precioVentaSugerido || '',
     }));
+
+    let cancelado = false;
+    setCargandoLotesVenta(true);
+    api.get('/catalogo/lotes/venta-opciones', { varianteId: Number(varianteSeleccionada.id) })
+      .then((respuesta) => {
+        if (cancelado) return;
+        const lotes = respuesta || [];
+        setLotesVenta(lotes);
+        const loteDefault = lotes[0];
+        if (loteDefault) {
+          setDetalleForm((actual) => ({
+            ...actual,
+            loteId: String(loteDefault.id),
+            precioVentaUnitario: loteDefault.precioVentaUnitario ?? actual.precioVentaUnitario,
+          }));
+        }
+      })
+      .catch((err) => {
+        if (cancelado) return;
+        setLotesVenta([]);
+        setError(crearErrorVisualVenta('No se pudieron cargar los lotes disponibles.', err));
+      })
+      .finally(() => {
+        if (!cancelado) setCargandoLotesVenta(false);
+      });
+
+    return () => {
+      cancelado = true;
+    };
   }, [varianteSeleccionada]);
+
+  useEffect(() => {
+    if (!loteSeleccionado) return;
+    setDetalleForm((actual) => ({
+      ...actual,
+      precioVentaUnitario: loteSeleccionado.precioVentaUnitario ?? actual.precioVentaUnitario,
+    }));
+  }, [loteSeleccionado]);
 
   const totalVenta = useMemo(
     () => detallesVenta.reduce((sum, detalle) => sum + (detalle.cantidad * detalle.precioVentaUnitario), 0),
@@ -271,6 +363,7 @@ const productosBaseFiltradosVenta = useMemo(() => {
     setVentaForm(crearVentaInicial());
     setDetalleForm(detalleInicial);
     setDetallesVenta([]);
+    setBusquedaClienteVenta('');
     setBusquedaVarianteVenta('');
     setClienteRapidoForm(clienteRapidoInicial);
     setModalVentaOpen(true);
@@ -296,6 +389,7 @@ const productosBaseFiltradosVenta = useMemo(() => {
 
       setClientes((actual) => [clienteCreado, ...actual]);
       setVentaForm((actual) => ({ ...actual, clienteId: String(clienteCreado.id) }));
+      setBusquedaClienteVenta(clienteCreado.nombreCompleto || '');
       setClienteRapidoForm(clienteRapidoInicial);
       setModalClienteRapidoOpen(false);
       setError(null);
@@ -316,8 +410,12 @@ const productosBaseFiltradosVenta = useMemo(() => {
     }
 
     const cantidadNueva = Number(detalleForm.cantidad || 0);
-    const cantidadAcumulada = cantidadReservadaVariante(detalleForm.varianteId);
-    const stockDisponible = Number(varianteSeleccionada.stockDisponibleTotal || 0);
+    const cantidadAcumulada = loteSeleccionado
+      ? cantidadReservadaLote(detalleForm.loteId)
+      : cantidadReservadaVariante(detalleForm.varianteId);
+    const stockDisponible = loteSeleccionado
+      ? Number(loteSeleccionado.cantidadDisponible || 0)
+      : Number(varianteSeleccionada.stockDisponibleTotal || 0);
 
     if (cantidadNueva <= 0) {
       setError({
@@ -330,12 +428,12 @@ const productosBaseFiltradosVenta = useMemo(() => {
     if (cantidadNueva + cantidadAcumulada > stockDisponible) {
       setError({
         titulo: 'Stock insuficiente.',
-        detalle: `${varianteSeleccionada.calidad || 'La variante'} tiene ${stockDisponible} unidades disponibles y ya reservaste ${cantidadAcumulada} en esta venta.`,
+        detalle: `${loteSeleccionado?.codigoLote || varianteSeleccionada.calidad || 'La variante'} tiene ${stockDisponible} unidades disponibles y ya reservaste ${cantidadAcumulada} en esta venta.`,
       });
       return;
     }
 
-    const precioLista = Number(varianteSeleccionada.precioVentaSugerido || 0);
+    const precioLista = Number(loteSeleccionado?.precioVentaUnitario ?? varianteSeleccionada.precioVentaSugerido ?? 0);
     const precioReal = Number(detalleForm.precioVentaUnitario || precioLista);
 
     if (precioReal < 0) {
@@ -354,6 +452,10 @@ const productosBaseFiltradosVenta = useMemo(() => {
       marca: productoBaseSeleccionado.marca?.nombre || '',
       calidad: varianteSeleccionada.calidad || '',
       tipoPresentacion: varianteSeleccionada.tipoPresentacion || '',
+      loteId: loteSeleccionado?.id ? Number(loteSeleccionado.id) : null,
+      codigoLote: loteSeleccionado?.codigoLote || '',
+      codigoProveedor: loteSeleccionado?.codigoProveedor || '',
+      costoUnitario: Number(loteSeleccionado?.costoUnitario || 0),
       stockDisponible,
       cantidad: cantidadNueva,
       precioListaUnitario: precioLista,
@@ -362,7 +464,10 @@ const productosBaseFiltradosVenta = useMemo(() => {
 
     setDetallesVenta((actual) => {
       const indiceExistente = actual.findIndex(
-        (detalle) => String(detalle.varianteId) === String(detalleNuevo.varianteId),
+        (detalle) =>
+          String(detalle.varianteId) === String(detalleNuevo.varianteId)
+          && String(detalle.loteId || '') === String(detalleNuevo.loteId || '')
+          && Number(detalle.precioVentaUnitario || 0) === Number(detalleNuevo.precioVentaUnitario || 0),
       );
 
       if (indiceExistente === -1) {
@@ -406,6 +511,7 @@ const productosBaseFiltradosVenta = useMemo(() => {
         clienteId: Number(ventaForm.clienteId),
         detalles: detallesVenta.map((detalle) => ({
           varianteId: detalle.varianteId,
+          loteId: detalle.loteId || null,
           cantidad: detalle.cantidad,
           precioListaUnitario: detalle.precioListaUnitario,
           precioVentaUnitario: detalle.precioVentaUnitario,
@@ -416,6 +522,7 @@ const productosBaseFiltradosVenta = useMemo(() => {
       setVentaForm(crearVentaInicial());
       setDetalleForm(detalleInicial);
       setDetallesVenta([]);
+      setBusquedaClienteVenta('');
       setBusquedaVarianteVenta('');
       await Promise.all([cargarCatalogos(), cargarVentas(0)]);
       setPagina(0);
@@ -480,7 +587,12 @@ const productosBaseFiltradosVenta = useMemo(() => {
     setCargandoDetalleVenta(true);
     try {
       const detalleVenta = await api.get(`/ventas/${venta.id}`);
+      const cuentaCredito = await api.get(`/ventas/${venta.id}/cuenta-por-cobrar`).catch(() => null);
+      const devoluciones = await api.get(`/ventas/${venta.id}/devoluciones`).catch(() => []);
+
       setDetalleVentaSeleccionada(detalleVenta);
+      setCuentaDetalleVenta(cuentaCredito || null);
+      setDevolucionesDetalleVenta(devoluciones || []);
       setModalDetalleVentaOpen(true);
     } catch (err) {
       setError(crearErrorVisualVenta('No se pudo cargar el detalle de la venta.', err));
@@ -629,12 +741,20 @@ const productosBaseFiltradosVenta = useMemo(() => {
         open={modalVentaOpen}
         onClose={() => setModalVentaOpen(false)}
         title="Registrar venta"
-        subtitle="El sistema consume FIFO desde los lotes activos y guarda precio lista, precio real, costo y ganancia."
+        subtitle="Selecciona el lote/precio disponible para conservar costo, precio historico y ganancia real."
         size="xl"
       >
         <form className="entity-form purchases-form" onSubmit={guardarVenta}>
           <div className="form-grid two-columns">
             <div className="sale-client-field">
+              <label>
+                <span>Buscar cliente</span>
+                <input
+                  value={busquedaClienteVenta}
+                  onChange={(event) => setBusquedaClienteVenta(event.target.value)}
+                  placeholder="Nombre, telefono, correo o direccion"
+                />
+              </label>
               <label>
                 <span>Cliente</span>
                 <select
@@ -642,8 +762,10 @@ const productosBaseFiltradosVenta = useMemo(() => {
                   onChange={(event) => setVentaForm((actual) => ({ ...actual, clienteId: event.target.value }))}
                   required
                 >
-                  <option value="">Selecciona un cliente</option>
-                  {clientes.map((cliente) => (
+                  <option value="">
+                    {clientesFiltradosVenta.length ? 'Selecciona un cliente' : 'Sin coincidencias'}
+                  </option>
+                  {clientesFiltradosVenta.map((cliente) => (
                     <option key={cliente.id} value={cliente.id}>
                       {cliente.nombreCompleto} - {cliente.telefono}
                     </option>
@@ -702,7 +824,7 @@ const productosBaseFiltradosVenta = useMemo(() => {
                 <h3>Detalle de la venta</h3>
                 <p>Solo puedes vender variantes con stock disponible en lotes activos.</p>
                 <p className="sale-helper-text">
-                  El precio sugerido viene de la variante; el precio real es editable por cada linea.
+                  Por defecto se selecciona el lote con mayor precio disponible; puedes elegir un precio anterior.
                 </p>
               </div>
               <span className="chip">{detallesVenta.length} items</span>
@@ -712,16 +834,16 @@ const productosBaseFiltradosVenta = useMemo(() => {
               <label>
                 <span>Buscar en catalogo</span>
                 <input
-  value={busquedaVarianteVenta}
-  onChange={(event) => setBusquedaVarianteVenta(event.target.value)}
-  placeholder="Filtra por nombre, modelo, compatibilidad, calidad o marca"
-/>
+                  value={busquedaVarianteVenta}
+                  onChange={(event) => setBusquedaVarianteVenta(event.target.value)}
+                  placeholder="Filtra por nombre, modelo, compatibilidad, calidad o marca"
+                />
               </label>
               <label>
                 <span>Categoria</span>
                 <select
                   value={detalleForm.categoriaId}
-                  onChange={(event) => setDetalleForm((actual) => ({ ...actual, categoriaId: event.target.value, productoBaseId: '', varianteId: '' }))}
+                  onChange={(event) => setDetalleForm((actual) => ({ ...actual, categoriaId: event.target.value, productoBaseId: '', varianteId: '', loteId: '' }))}
                 >
                   <option value="">Todas las categorias</option>
                   {categorias.map((categoria) => (
@@ -735,7 +857,7 @@ const productosBaseFiltradosVenta = useMemo(() => {
                 <span>Marca</span>
                 <select
                   value={detalleForm.marcaId}
-                  onChange={(event) => setDetalleForm((actual) => ({ ...actual, marcaId: event.target.value, productoBaseId: '', varianteId: '' }))}
+                  onChange={(event) => setDetalleForm((actual) => ({ ...actual, marcaId: event.target.value, productoBaseId: '', varianteId: '', loteId: '' }))}
                 >
                   <option value="">Todas las marcas</option>
                   {marcas.map((marca) => (
@@ -749,7 +871,7 @@ const productosBaseFiltradosVenta = useMemo(() => {
                 <span>Producto base</span>
                 <select
                   value={detalleForm.productoBaseId}
-                  onChange={(event) => setDetalleForm((actual) => ({ ...actual, productoBaseId: event.target.value, varianteId: '' }))}
+                  onChange={(event) => setDetalleForm((actual) => ({ ...actual, productoBaseId: event.target.value, varianteId: '', loteId: '' }))}
                 >
                   <option value="">Selecciona un producto base</option>
                   {productosBaseFiltradosVenta.map((productoBase) => (
@@ -785,7 +907,7 @@ const productosBaseFiltradosVenta = useMemo(() => {
                 <span>Variante</span>
                 <select
                   value={detalleForm.varianteId}
-                  onChange={(event) => setDetalleForm((actual) => ({ ...actual, varianteId: event.target.value }))}
+                  onChange={(event) => setDetalleForm((actual) => ({ ...actual, varianteId: event.target.value, loteId: '' }))}
                 >
                   <option value="">Selecciona una variante</option>
                   {variantesDisponibles.map((variante) => (
@@ -796,12 +918,29 @@ const productosBaseFiltradosVenta = useMemo(() => {
                 </select>
               </label>
               <label>
-                <span>Precio sugerido</span>
-                <input value={varianteSeleccionada?.precioVentaSugerido || ''} readOnly />
+                <span>Lote / precio disponible</span>
+                <select
+                  value={detalleForm.loteId}
+                  onChange={(event) => setDetalleForm((actual) => ({ ...actual, loteId: event.target.value }))}
+                  disabled={!varianteSeleccionada || cargandoLotesVenta || lotesVenta.length === 0}
+                >
+                  <option value="">
+                    {cargandoLotesVenta ? 'Cargando lotes...' : 'Sin lote seleccionado'}
+                  </option>
+                  {lotesVenta.map((lote) => (
+                    <option key={lote.id} value={lote.id}>
+                      {lote.codigoLote} - Bs {currency.format(Number(lote.precioVentaUnitario || 0))} - disp. {lote.cantidadDisponible}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>Precio lista lote</span>
+                <input value={loteSeleccionado?.precioVentaUnitario ?? varianteSeleccionada?.precioVentaSugerido ?? ''} readOnly />
               </label>
               <label>
                 <span>Stock disponible</span>
-                <input value={varianteSeleccionada?.stockDisponibleTotal || ''} readOnly />
+                <input value={loteSeleccionado?.cantidadDisponible ?? varianteSeleccionada?.stockDisponibleTotal ?? ''} readOnly />
               </label>
               <label>
                 <span>Cantidad</span>
@@ -841,6 +980,7 @@ const productosBaseFiltradosVenta = useMemo(() => {
                   <thead>
                     <tr>
                       <th>Base / Variante</th>
+                      <th>Lote</th>
                       <th>Cantidad</th>
                       <th>P. lista</th>
                       <th>P. real</th>
@@ -852,6 +992,10 @@ const productosBaseFiltradosVenta = useMemo(() => {
                     {detallesVenta.map((detalle, index) => (
                       <tr key={`${detalle.varianteId}-${index}`}>
                         <td>{detalle.productoNombre} - {detalle.modelo || 'Sin modelo'} - {detalle.calidad || 'Sin calidad'} - {detalle.tipoPresentacion || 'Sin presentacion'}</td>
+                        <td>
+                          {detalle.codigoLote || 'FIFO'}
+                          {detalle.codigoProveedor ? <div className="sale-line-muted">{detalle.codigoProveedor}</div> : null}
+                        </td>
                         <td>{detalle.cantidad}</td>
                         <td>Bs {currency.format(detalle.precioListaUnitario)}</td>
                         <td>Bs {currency.format(detalle.precioVentaUnitario)}</td>
@@ -872,7 +1016,7 @@ const productosBaseFiltradosVenta = useMemo(() => {
           <div className="purchase-total-strip">
             <div>
               <strong>Total de venta</strong>
-              <p>El backend distribuye automaticamente el stock entre lotes activos en orden FIFO.</p>
+              <p>Si eliges lote, se descuenta ese lote exacto; sin lote, el backend mantiene FIFO.</p>
             </div>
             <span>Bs {currency.format(totalVenta)}</span>
           </div>
@@ -918,7 +1062,11 @@ const productosBaseFiltradosVenta = useMemo(() => {
 
       <Modal
         open={modalDetalleVentaOpen}
-        onClose={() => setModalDetalleVentaOpen(false)}
+        onClose={() => {
+          setModalDetalleVentaOpen(false);
+          setCuentaDetalleVenta(null);
+          setDevolucionesDetalleVenta([]);
+        }}
         title="Comprobante de venta"
         subtitle="Detalle completo de la venta registrada."
         size="xl"
@@ -990,10 +1138,58 @@ const productosBaseFiltradosVenta = useMemo(() => {
                 </table>
               </div>
 
+              {cuentaDetalleVenta?.abonos?.length > 0 && (
+                <div className="sale-receipt-payments">
+                  <div className="section-title-row">
+                    <h3>Abonos registrados</h3>
+                    <span className="chip">Saldo {money.format(Number(cuentaDetalleVenta.saldoPendiente || 0))}</span>
+                  </div>
+                  <div className="sale-payment-history">
+                    {cuentaDetalleVenta.abonos.map((abono) => (
+                      <div key={abono.id} className="sale-payment-history-row">
+                        <span>{abono.fechaAbono}</span>
+                        <strong>{money.format(Number(abono.monto || 0))}</strong>
+                        <p>{abono.observaciones || 'Sin observaciones'}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {devolucionesDetalleVenta.length > 0 && (
+                <div className="sale-receipt-payments">
+                  <div className="section-title-row">
+                    <h3>Devoluciones registradas</h3>
+                    <span className="chip">{devolucionesDetalleVenta.length} devoluciones</span>
+                  </div>
+
+                  <div className="sale-payment-history">
+                    {devolucionesDetalleVenta.map((devolucion) => (
+                      <div key={devolucion.id} className="sale-payment-history-row">
+                        <span>{devolucion.fechaDevolucion}</span>
+                        <strong>{money.format(Number(devolucion.montoTotal || 0))}</strong>
+                        <p>
+                          {devolucion.motivoDevolucion || 'Sin motivo'}
+                          {Number(devolucion.montoReembolsado || 0) > 0
+                            ? ` · Reembolso: ${money.format(Number(devolucion.montoReembolsado || 0))}`
+                            : ''}
+                          {Number(devolucion.montoAplicadoCuentaPorCobrar || 0) > 0
+                            ? ` · Aplicado a crédito: ${money.format(Number(devolucion.montoAplicadoCuentaPorCobrar || 0))}`
+                            : ''}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="sale-receipt-total">
                 <div>
                   <strong>Observaciones</strong>
-                  <p>{detalleVentaSeleccionada.observaciones || 'Sin observaciones registradas.'}</p>
+                  <div className="sale-receipt-observations">
+                    {observacionesVentaConAbonos(detalleVentaSeleccionada, cuentaDetalleVenta, money.format).map((observacion, index) => (
+                      <p key={`${observacion}-${index}`}>{observacion}</p>
+                    ))}
+                  </div>
                 </div>
                 <span>{money.format(Number(detalleVentaSeleccionada.total || 0))}</span>
               </div>

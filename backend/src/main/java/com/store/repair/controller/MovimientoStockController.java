@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 import java.util.List;
 
@@ -14,6 +15,7 @@ import java.util.List;
 @RequestMapping("/api/inventario/movimientos")
 @RequiredArgsConstructor
 @PreAuthorize("hasAuthority('PERM_INVENTARIO_VIEW')")
+@ConditionalOnProperty(name = "app.inventory.legacy.enabled", havingValue = "true")
 public class MovimientoStockController {
 
     private final MovimientoInventarioService service;

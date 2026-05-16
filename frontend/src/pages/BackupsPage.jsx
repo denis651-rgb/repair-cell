@@ -284,10 +284,27 @@ export default function BackupsPage() {
 
     try {
       const rawContent = await file.text();
-      const parsed = JSON.parse(rawContent);
+      let parsed;
+      try {
+        parsed = JSON.parse(rawContent);
+      } catch {
+        pushNotification(
+          'error',
+          'JSON OAuth invalido. Verifica que sea el archivo descargado desde Google Cloud y que no este danado.'
+        );
+        return;
+      }
       const oauthClient = parsed.installed || parsed.web || parsed;
       const clientId = oauthClient?.client_id?.trim();
       const clientSecret = oauthClient?.client_secret?.trim();
+
+      if (!clientId || !clientSecret) {
+        pushNotification(
+          'error',
+          'JSON OAuth invalido. Descarga una credencial OAuth de tipo Escritorio desde Google Cloud; debe incluir client_id y client_secret.'
+        );
+        return;
+      }
 
       if (!clientId || !clientSecret) {
         pushNotification(

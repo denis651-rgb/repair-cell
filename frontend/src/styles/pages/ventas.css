@@ -113,6 +113,61 @@
   font-weight: 600;
 }
 
+.sale-line-muted {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.sale-receipt-payments {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 16px;
+  border: 1px solid rgba(37, 99, 235, 0.14);
+  border-radius: 14px;
+  background: rgba(239, 246, 255, 0.72);
+}
+
+.sale-payment-history {
+  display: grid;
+  gap: 8px;
+}
+
+.sale-payment-history-row {
+  display: grid;
+  grid-template-columns: 110px 120px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 10px 0;
+  border-top: 1px solid rgba(37, 99, 235, 0.12);
+}
+
+.sale-payment-history-row span,
+.sale-payment-history-row strong {
+  font-weight: 800;
+}
+
+.sale-payment-history-row p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.sale-receipt-observations {
+  display: grid;
+  gap: 4px;
+}
+
+.sale-receipt-observations p {
+  margin: 0;
+}
+
+:root[data-theme='dark'] .sale-receipt-payments {
+  background: rgba(30, 64, 175, 0.18);
+  border-color: rgba(96, 165, 250, 0.16);
+}
+
 .sale-card-grid {
   margin-top: 12px;
   color: var(--muted);
@@ -147,7 +202,7 @@
 
 .sale-client-field {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 48px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 48px;
   gap: 10px;
   align-items: end;
 }
@@ -532,6 +587,55 @@
   border-color: rgba(45, 212, 191, 0.18);
 }
 
+:root[data-theme='dark'] .sales-page .entity-form input,
+:root[data-theme='dark'] .sales-page .entity-form select,
+:root[data-theme='dark'] .sales-page .entity-form textarea {
+  color: #f8fafc;
+  background: linear-gradient(180deg, rgba(30, 41, 59, 0.98), rgba(15, 23, 42, 0.98));
+  border-color: rgba(148, 163, 184, 0.28);
+  caret-color: #67e8f9;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+:root[data-theme='dark'] .sales-page .entity-form input[readonly],
+:root[data-theme='dark'] .sales-page .entity-form select:disabled,
+:root[data-theme='dark'] .sales-page .entity-form input:disabled,
+:root[data-theme='dark'] .sales-page .entity-form textarea:disabled {
+  color: #cbd5e1;
+  background: rgba(15, 23, 42, 0.74);
+  border-color: rgba(148, 163, 184, 0.2);
+  opacity: 1;
+}
+
+:root[data-theme='dark'] .sales-page .entity-form input::placeholder,
+:root[data-theme='dark'] .sales-page .entity-form textarea::placeholder {
+  color: #94a3b8;
+}
+
+:root[data-theme='dark'] .sales-page .entity-form input:focus,
+:root[data-theme='dark'] .sales-page .entity-form select:focus,
+:root[data-theme='dark'] .sales-page .entity-form textarea:focus {
+  border-color: rgba(125, 211, 252, 0.62);
+  box-shadow:
+    0 0 0 4px rgba(14, 165, 233, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+:root[data-theme='dark'] .sales-page .entity-form select option {
+  color: #f8fafc;
+  background: #111827;
+}
+
+:root[data-theme='dark'] .sales-page .entity-form label > span,
+:root[data-theme='dark'] .sales-page .sale-card-grid span {
+  color: #cbd5e1;
+}
+
+:root[data-theme='dark'] .sales-page .entity-form h3,
+:root[data-theme='dark'] .sales-page .empty-state {
+  color: #f8fafc;
+}
+
 :root[data-theme='dark'] .sale-payment-field select {
   background: linear-gradient(180deg, rgba(30, 41, 59, 0.96), rgba(15, 23, 42, 0.98));
   border-color: rgba(96, 165, 250, 0.24);
@@ -718,4 +822,62 @@
   .sale-receipt-actions {
     display: none !important;
   }
+}
+
+@media (max-width: 820px) {
+  .sale-client-field {
+    grid-template-columns: minmax(0, 1fr) 48px;
+  }
+
+  .sale-client-field label:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .sale-payment-history-row {
+    grid-template-columns: 1fr;
+  }
+}
+/* =========================================================
+   AJUSTE DARK MODE - MODELO PRINCIPAL / COMPATIBILIDADES
+   Pegar al final de ventas.css
+========================================================= */
+
+:root[data-theme='dark'] .sale-compatibility-card {
+  background: linear-gradient(
+    180deg,
+    rgba(15, 23, 42, 0.98),
+    rgba(17, 24, 39, 0.96)
+  );
+  border-color: rgba(96, 165, 250, 0.22);
+}
+
+/* Texto principal: A03 CORE, modelos, nombres */
+:root[data-theme='dark'] .sale-compatibility-copy strong {
+  color: #f8fafc;
+  font-weight: 900;
+}
+
+/* Etiquetas: MODELO PRINCIPAL / COMPATIBLES */
+:root[data-theme='dark'] .sale-compatibility-label {
+  color: #38bdf8;
+}
+
+/* Texto cuando no hay compatibilidades */
+:root[data-theme='dark'] .sale-compatibility-copy p {
+  color: #cbd5e1;
+}
+
+/* Chips de compatibilidad en modo oscuro */
+:root[data-theme='dark'] .sale-compatibility-chip {
+  background: rgba(37, 99, 235, 0.22);
+  color: #bfdbfe;
+  border: 1px solid rgba(96, 165, 250, 0.18);
+}
+
+/* Cuando el usuario selecciona el texto con el mouse */
+:root[data-theme='dark'] .sale-compatibility-copy strong::selection,
+:root[data-theme='dark'] .sale-compatibility-label::selection,
+:root[data-theme='dark'] .sale-compatibility-chip::selection {
+  background: rgba(59, 130, 246, 0.75);
+  color: #ffffff;
 }

@@ -32,6 +32,11 @@ public class CuentaPorCobrarController {
         return service.findById(id);
     }
 
+    @GetMapping("/venta/{ventaId}")
+    public CuentaPorCobrar findByVentaId(@PathVariable Long ventaId) {
+        return service.findByVentaId(ventaId);
+    }
+
     @PostMapping("/{id}/abonos")
     public CuentaPorCobrar abonar(@PathVariable Long id, @Valid @RequestBody AbonoCuentaPorCobrarRequest request) {
         return service.registrarAbono(id, request);

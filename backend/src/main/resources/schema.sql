@@ -119,6 +119,7 @@ CREATE TABLE IF NOT EXISTS lotes_inventario (
     cantidad_inicial INTEGER NOT NULL DEFAULT 0,
     cantidad_disponible INTEGER NOT NULL DEFAULT 0,
     costo_unitario REAL NOT NULL DEFAULT 0,
+    precio_venta_unitario REAL NOT NULL DEFAULT 0,
     subtotal_compra REAL NOT NULL DEFAULT 0,
     estado TEXT NOT NULL,
     compra_id INTEGER,
